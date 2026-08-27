@@ -1,8 +1,8 @@
 import  os
 import sys
-
 import django
 from pathlib import Path
+from decouple import config
 
 from asgiref.sync import sync_to_async
 
@@ -21,7 +21,7 @@ from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert
 
-TOKEN="8862407956:AAHDJUOB0d2eqkNV3LPDABmJ9IdtC_1y3Qc"
+TOKEN=config('TELEGRAM_BOT_TOKEN')
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name=update.effective_user.first_name
