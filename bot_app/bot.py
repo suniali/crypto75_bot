@@ -33,11 +33,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @sync_to_async
 def save_alert_to_db(chat_id,symbol,target_price):
+    is_user_alert_exists=UserAlert.objects.filter(symbol=symbol,target_price=target_price,is_active=True).exists()
+
+    if is_user_alert_exists:
+        return None
+
     return UserAlert.objects.create(
             chat_id=chat_id,
             symbol=symbol,
-            target_price=target_price
-        )
+            target_price=target_price)
 
 async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
