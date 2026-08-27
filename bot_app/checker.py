@@ -4,6 +4,7 @@ import sys
 import django
 import requests
 from pathlib import Path
+from decouple import config
 
 from asgiref.sync import sync_to_async
 from telegram import Bot
@@ -17,7 +18,7 @@ django.setup()
 
 from bot_app.models import UserAlert
 
-TOKEN="8862407956:AAHDJUOB0d2eqkNV3LPDABmJ9IdtC_1y3Qc"
+TOKEN=config('TELEGRAM_BOT_TOKEN')
 
 # Get Price From Binance
 def get_crypto_price(symbol):
