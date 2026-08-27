@@ -17,7 +17,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler, Updater, ApplicationBuilder
+from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert
 
