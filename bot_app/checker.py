@@ -27,7 +27,7 @@ def get_crypto_price(symbol):
         responce=requests.get(url,timeout=5)
         if responce.status_code==200:
             data=responce.json()
-            return float(data["price"])
+            return data["price"]
     except Exception as e:
         print(f"Error fetching price for {symbol}: {e}")
 
@@ -52,6 +52,10 @@ async def check_alerts_loop():
 
         for alert in alerts:
             current_price=get_crypto_price(alert.symbol)
+            if current_price is None:
+                break
+
+            current_price=float(current_price)
             print(f"Checking {alert.symbol}: Current={current_price} | Target={alert.target_price}")
 
             if current_price >= alert.target_price:
