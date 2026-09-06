@@ -50,32 +50,35 @@ async def check_alerts_loop():
     while True:
         alerts=await get_active_alerts()
 
-        for alert in alerts:
-            current_price=get_crypto_price(alert.symbol)
-            if current_price is None:
-                break
+        if alerts:
+            print("Target Alerts:")
+            for alert in alerts:
+                print(f"{alert.symbol} | {alert.target_price}")
+                current_price=get_crypto_price(alert.symbol)
+                if current_price is None:
+                    break
 
-            current_price=float(current_price)
-            print(f"Checking {alert.symbol}: Current={current_price} | Target={alert.target_price}")
+                current_price=float(current_price)
+                print(f"Checking {alert.symbol}: Current={current_price} | Target={alert.target_price}")
 
-            if current_price >= alert.target_price:
-                msg = (
-                    f"🚨 **هشدار قیمت رسید!** 🚨\n\n"
-                    f"📌 نماد: `{alert.symbol}`\n"
-                    f"🎯 قیمت هدف شما: {alert.target_price}\n"
-                    f"📈 قیمت فعلی بازار: {current_price}"
-                )
+                if current_price == alert.target_price:
+                    msg = (
+                        f"🚨 **هشدار قیمت رسید!** 🚨\n\n"
+                        f"📌 نماد: `{alert.symbol}`\n"
+                        f"🎯 قیمت هدف شما: {alert.target_price}\n"
+                        f"📈 قیمت فعلی بازار: {current_price}"
+                    )
 
-                try:
-                    # Send Message To Telegram
-                    await bot.send_message(chat_id=alert.chat_id, text=msg,parse_mode="Markdown")
-                    # Deactivate Alert From Database
-                    await deactive_alert(alert)
-                    print(f"Alert sent to {alert.chat_id} for {alert.symbol}")
-                except Exception as e:
-                    print(f"Error sending telegram message: {e}")
+                    try:
+                        # Send Message To Telegram
+                        await bot.send_message(chat_id=alert.chat_id, text=msg,parse_mode="Markdown")
+                        # Deactivate Alert From Database
+                        await deactive_alert(alert)
+                        print(f"Alert sent to {alert.chat_id} for {alert.symbol}")
+                    except Exception as e:
+                        print(f"Error sending telegram message: {e}")
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(0.5)
 
 if __name__ == "__main__":
     asyncio.run(check_alerts_loop())
