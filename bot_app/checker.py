@@ -17,6 +17,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from bot_app.models import UserAlert
+from bot_app.mt5_service import get_fx_price,debug_symbol_info
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
 
@@ -54,7 +55,11 @@ async def check_alerts_loop():
             print("Target Alerts:")
             for alert in alerts:
                 print(f"{alert.symbol} | {alert.target_price}")
-                current_price=get_crypto_price(alert.symbol)
+                if alert.is_forex:
+                    current_price=get_fx_price(alert.symbol)
+                else:
+                    current_price=get_crypto_price(alert.symbol)
+
                 if current_price is None:
                     break
 
