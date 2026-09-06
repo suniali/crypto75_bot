@@ -4,8 +4,6 @@ from decouple import config
 # تنظیمات اتصال
 MT5_HOST = config("MT5_HOST", default="localhost")
 MT5_PORT = config("MT5_PORT", cast=int, default=18812)
-MT5_PATH = config("MT5_PATH", default="C:\\Program Files\\MetaTrader 5\\terminal64.exe")
-
 conn = None
 mt5 = None
 
@@ -19,7 +17,7 @@ def init_mt5():
         mt5 = conn.modules['MetaTrader5']
 
         # پاس دادن مسیر برای جلوگیری از ارور IPC (-10003)
-        if not mt5.initialize(path=MT5_PATH):
+        if not mt5.initialize():
             print("خطا در initialize متاتریدر:", mt5.last_error())
             shutdown_mt5()  # بستن RPyC در صورت عدم موفقیت initialize
             return False
@@ -30,6 +28,78 @@ def init_mt5():
         shutdown_mt5()
         return False
 
+# def debug_symbol_info(symbol):
+#     """تابع عیب‌یابی برای بررسی وضعیت نماد و دیتای دریافتی"""
+#     if not init_mt5():
+#         print("❌ عدم برقراری اتصال به MT5")
+#         return
+#
+#     try:
+#         # ۱. بررسی اتصال اولیه
+#         terminal_info = mt5.terminal_info()
+#         print("=== 1. Terminal Info ===")
+#         print(terminal_info)
+#
+#         # ۲. فعال‌سازی نماد در Market Watch (ضروری)
+#         selected = mt5.symbol_select(symbol, True)
+#         print(f"\n=== 2. Symbol Select ({symbol}) ===")
+#         print(f"Is Selected: {selected}")
+#
+#         if not selected:
+#             print(f"⚠️ نماد {symbol} در مارکت واچ یافت نشد یا فعال نشد.")
+#             # لیست کردن چند نماد برای بررسی نام‌گذاری بروکر
+#             symbols = mt5.symbols_get()
+#             if symbols:
+#                 sample_symbols = [s.name for s in symbols[:10]]
+#                 print(f"نمونه نمادهای موجود در بروکر: {sample_symbols}")
+#             return
+#
+#         # ۳. دریافت اطلاعات کامل نماد
+#         info = mt5.symbol_info(symbol)
+#         print(f"\n=== 3. Full Symbol Info ({symbol}) ===")
+#         print(info)
+#
+#         # ۴. دریافت آخرین تیک قیمت
+#         tick = mt5.symbol_info_tick(symbol)
+#         print(f"\n=== 4. Tick Data ({symbol}) ===")
+#         print(tick)
+#
+#         if tick:
+#             print(f"\n✅ Bid: {tick.bid} | Ask: {tick.ask} | Time: {tick.time}")
+#         else:
+#             print(
+#                 "❌ Tick value is None (احتمالاً بازار بسته است یا دیتایی دریافت نشده)."
+#             )
+#
+#     except Exception as e:
+#         print(f"❌ Exception during debug: {e}")
+#     finally:
+#         shutdown_mt5()
+
+def check_symbol_info(symbol):
+    try:
+        # ۱. مقداردهی اولیه و اتصال به متاتریدر ۵
+        if not init_mt5():
+            print("❌ اتصال به MetaTrader5 برقرار نشد.")
+            return False
+
+        # ۲. فعال‌سازی نماد در Market Watch
+        selected = mt5.symbol_select(symbol, True)
+        if not selected:
+            # لیست کردن چند نماد برای بررسی نام‌گذاری بروکر
+            symbols = mt5.symbols_get()
+            if symbols:
+                sample_symbols = [s.name for s in symbols[:3]]
+                return sample_symbols
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"❌ Exception during debug: {e}")
+        return False
+    finally:
+        shutdown_mt5()
 
 def shutdown_mt5():
     """بستن ایمن منابع و اتصال RPyC"""

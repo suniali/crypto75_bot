@@ -10,6 +10,10 @@ class UserAlert(models.Model):
     is_active=models.BooleanField(default=True,verbose_name="فعال")
     created_at=models.DateTimeField(auto_now_add=True,verbose_name="تاریخ ثبت")
 
+    @property
+    def is_forex(self):
+        return self.market_type.lower() == 'forex'
+
     def __str__(self):
         return f"{self.chat_id} | {self.symbol} -> {self.target_price}"
 

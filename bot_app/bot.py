@@ -1,6 +1,6 @@
 import  os
 import sys
-
+import asyncio
 import django
 from pathlib import Path
 from decouple import config
@@ -21,6 +21,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert
+from bot_app.mt5_service import check_symbol_info
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
 
@@ -29,9 +30,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"سلام {user_name} عزیز! به ربات دستیار ترید خوش اومدی.\n\n"
         f"برای ثبت هشدار کریپتو قیمت از فرمت زیر استفاده کن:\n"
-        f"/alert BTCUSDT 65000\n"
+        f"/alert btcusdt 65000\n"
         f"برای ثبت هشدار فارکس قیمت از فرمت زیر استفاده کن:\n"
-        f"/falert XAUUSD 2100 \n"
+        f"/falert xauusd-ecn 2100 \n"
     )
 
 @sync_to_async
@@ -51,6 +52,11 @@ def save_alert_to_db(chat_id,symbol,target_price,is_forex):
 
 async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
+        if len(context.args) < 2:
+            await update.message.reply_text(
+                "❌ ورودی ناپیوسته یا ناقص است!\nمثال درست:\n/alert btcusdt 65000"
+            )
+            return
         chat_id = str(update.effective_chat.id)
         symbol = context.args[0].upper()
         target_price = float(context.args[1])
@@ -59,19 +65,40 @@ async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(f"✅ هشدار برای {symbol} روی قیمت {target_price} با موفقیت در دیتابیس ثبت شد.")
     except (IndexError, ValueError  ):
-        await update.message.reply_text("❌ فرمت اشتباهه! مثال درست:\n/alert BTCUSDT 65000")
+        await update.message.reply_text("❌ فرمت اشتباهه! مثال درست:\n/alert btcusdt 65000")
 
 async def set_falert(update:Update,context:ContextTypes.DEFAULT_TYPE):
     try:
+        if len(context.args) < 2:
+            await update.message.reply_text(
+                "❌ ورودی ناپیوسته یا ناقص است!\nمثال درست:\n/falert xauusd-ecn 2100"
+            )
+            return
+
         chat_id = str(update.effective_chat.id)
         symbol = context.args[0].upper()
         target_price = float(context.args[1])
 
-        await save_alert_to_db(chat_id, symbol, target_price, True)
+        # Check if symbol is exists
+        loop= asyncio.get_running_loop()
+        res=await loop.run_in_executor(None,check_symbol_info,symbol)
+        if res is True:
+            await save_alert_to_db(chat_id, symbol, target_price, True)
+            await update.message.reply_text(
+                f"✅ هشدار برای {symbol} روی قیمت {target_price} با موفقیت در دیتابیس ثبت شد.")
+        elif isinstance(res,list):
+            sample_text = "\n".join(res)
+            await update.message.reply_text(
+                f"⚠️ نماد {symbol} در مارکت واچ یافت نشد یا فعال نشد.\n"
+                f"نمونه نمادهای موجود در بروکر: \n{sample_text}"
+            )
+        else:
+            # اگر خطایی در اتصال به MT5 پیش آمد (مقدار False برگشت)
+            await update.message.reply_text("❌ خطا در اتصال به MetaTrader 5. لطفا مطمئن شوید برنامه MT5 باز است.")
 
-        await update.message.reply_text(f"✅ هشدار برای {symbol} روی قیمت {target_price} با موفقیت در دیتابیس ثبت شد.")
+
     except (IndexError, ValueError):
-        await update.message.reply_text("❌ فرمت اشتباهه! مثال درست:\n/falert XAUUSD 2100")
+        await update.message.reply_text("❌ فرمت اشتباهه! مثال درست:\n/falert xauusd-eur 2100")
 
 if __name__ == '__main__':
     app=ApplicationBuilder().token(TOKEN).build()
