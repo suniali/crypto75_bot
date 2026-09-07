@@ -21,7 +21,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert
-from bot_app.mt5_service import check_symbol_info
+from bot_app.mt5_service import check_symbol_info,close_all_positions
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
 
@@ -100,12 +100,17 @@ async def set_falert(update:Update,context:ContextTypes.DEFAULT_TYPE):
     except (IndexError, ValueError):
         await update.message.reply_text("❌ فرمت اشتباهه! مثال درست:\n/falert xauusd-eur 2100")
 
+async def close_all_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    msg = close_all_positions()
+    await update.message.reply_text(msg)
+
 if __name__ == '__main__':
     app=ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("alert", set_alert))
     app.add_handler(CommandHandler('falert',set_falert))
+    app.add_handler(CommandHandler('closeAll', close_all_command))
 
     print("ربات روشن شد و آماده دریافت پیام است...")
     app.run_polling()
