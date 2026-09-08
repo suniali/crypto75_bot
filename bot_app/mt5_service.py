@@ -1,6 +1,18 @@
+from typing import reveal_type
+
 import MetaTrader5 as mt5
 
 ERROR_CANNOT_CONNECT_TO_METATRADER="❌ اتصال به MetaTrader5 برقرار نشد."
+
+TIMEFRAME_TO_MT5_TIMEFRAME = {
+    "1m": mt5.TIMEFRAME_M1,
+    "5m": mt5.TIMEFRAME_M5,
+    "15m": mt5.TIMEFRAME_M15,
+    "30m": mt5.TIMEFRAME_M30,
+    "1h": mt5.TIMEFRAME_H1,
+    "4h": mt5.TIMEFRAME_H4,
+    "1d": mt5.TIMEFRAME_D1,
+}
 
 def init_mt5():
     if not mt5.initialize():
@@ -198,3 +210,20 @@ def get_open_positions():
     except Exception as e:
         mt5.shutdown()
         return False, f"خطا در دریافت پوزیشن‌ها: {e}"
+
+def get_data_for_rsi(symbol,timeframe):
+    if not init_mt5():
+        return False, ERROR_CANNOT_CONNECT_TO_METATRADER
+
+    try:
+        interval = TIMEFRAME_TO_MT5_TIMEFRAME.get(timeframe,mt5.TIMEFRAME_M30)
+        rates=mt5.copy_rates_from_pos(symbol,interval,0,100)
+
+        if rates is None or len(rates) == 0:
+            return None, "دیتایی یافت نشد!"
+
+        return rates, "دیتا با موفقیت دریافت شد."
+    except Exception as e:
+        return False, f" خطا در دریافت داده ها ! {e}"
+    finally:
+        mt5.shutdown()

@@ -22,8 +22,20 @@ from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert,Watchlist
 from bot_app.mt5_service import *
+from bot_app.analysis_service import *
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
+ADMIN_CHAT_ID = config('ADMIN_CHAT_ID')
+
+TIMEFRAME_TO_SECONDS = {
+    "1m": 60,
+    "5m": 300,
+    "15m": 900,
+    "30m": 1800,
+    "1h": 3600,
+    "4h": 14400,
+    "1d": 86400,
+}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name=update.effective_user.first_name
@@ -160,7 +172,19 @@ async def add_to_watchlist_command(update, context):
     symbol=context.args[0].upper()
     timeframe=context.args[1].lower()
     market_type=context.args[2].upper()
+
     await save_watchlist(symbol,timeframe,market_type)
+
+    asyncio.create_task(
+        worker_loop(
+            symbol=symbol,
+            timeframe=timeframe,
+            market_type=market_type,
+            chat_id=update.effective_chat.id,
+            bot=context.bot
+        )
+    )
+
     await update.message.reply_text(
         f"✅ ارز {symbol} با موفقیت در دیتابیس ثبت شد.")
 
@@ -199,24 +223,102 @@ async def remove_from_watchlist_command(update, context):
         f"✅ ارز {symbol} با موفقیت از دیتابیس حذف شد.")
 
 
-if __name__ == '__main__':
-    app=ApplicationBuilder().token(TOKEN).build()
+async def worker_loop(symbol, timeframe, market_type, chat_id, bot):
+    interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
 
+    # پیام زیبای شروع کار لاپ برای این نماد
+    print(f"🚀 [STARTED] پایش RSI برای نماد {symbol} | تایم‌فریم: {timeframe} | بازار: {market_type}")
+
+    while True:
+        try:
+            print(f"🔍 [CHECKING] در حال تحلیل RSI برای {symbol} ({timeframe})...")
+
+            rsi, status = await calculate_rsi(symbol, timeframe, market_type)
+
+            if rsi is not None and status != "NORMAL":
+                # متن زیباسازی‌شده برای پیام تلگرام
+                message_text = (
+                    f"🚨 **هشدار سیگنال RSI**\n\n"
+                    f"📌 **نماد:** `{symbol}`\n"
+                    f"⏳ **تایم‌فریم:** `{timeframe}`\n"
+                    f"🏷 **بازار:** `{market_type}`\n"
+                    f"📊 **مقدار RSI:** `{rsi:.2f}`\n"
+                    f"⚡️ **وضعیت:** `{status}`\n\n"
+                    f"⏰ _زمان ثبت: چند لحظه پیش_"
+                )
+
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=message_text,
+                    parse_mode="Markdown"
+                )
+                print(f"✅ [ALERT SENT] سیگنال {symbol} با موفقیت ارسال شد.")
+            else:
+                print(f"💤 [NORMAL] RSI برای {symbol} در محدوده عادی قرار دارد ({rsi}).")
+
+        except Exception as e:
+            print(f"❌ [ERROR] خطای پایش روی نماد {symbol}: {e}")
+
+        await asyncio.sleep(interval)
+
+
+# ۲. تابعی که پس از ساخت Application اجرا می‌شود
+async def on_startup(app):
+    print("\n" + "=" * 50)
+    print("🚀 [STARTUP] ربات پایش بازار در حال راه‌اندازی است...")
+
+    watchlist = await get_watchlist()
+    total_items = len(watchlist)
+
+    if not watchlist:
+        print("⚠️ [WARNING] هیچ نمادی در واچ‌لیست یافت نشد!")
+        print("=" * 50 + "\n")
+        return
+
+    print(f"📦 [WATCHLIST] تعداد {total_items} نماد با موفقیت بارگذاری شد.")
+    print("🔄 [TASKS] در حال ساخت و اجرای فرآیندهای پس‌زمینه (Tasks)...")
+
+    for item in watchlist:
+        # ساخت task مجزا برای هر آیتم واچ‌لیست
+        asyncio.create_task(
+            worker_loop(
+                symbol=item.symbol,
+                timeframe=item.time_frame,
+                market_type=item.market_type,
+                chat_id=ADMIN_CHAT_ID,
+                bot=app.bot
+            )
+        )
+        print(f"   ├─ 📈 تسک فعال شد: {item.symbol:<10} | تایم‌فریم: {item.time_frame:<5} | بازار: {item.market_type}")
+
+    print(f"✅ [SYSTEM] تمامی {total_items} تسک با موفقیت در پس‌زمینه شروع به کار کردند.")
+    print("=" * 50 + "\n")
+
+if __name__ == '__main__':
+    print("\n" + "=" * 55)
+    print("⚙️ [INIT] در حال پیکربندی و ساخت هسته ربات...")
+
+    app = ApplicationBuilder().token(TOKEN).post_init(on_startup).build()
+
+    # ------------------ دستورات عمومی (General) ------------------
     app.add_handler(CommandHandler("start", start))
 
-    # Alerts
+    # ------------------ هشدارها (Alerts) ------------------
     app.add_handler(CommandHandler("alert", set_alert))
-    app.add_handler(CommandHandler('falert',set_falert))
+    app.add_handler(CommandHandler("falert", set_falert))
 
-    # Position Management
-    app.add_handler(CommandHandler('closeAll', close_all_command))
-    app.add_handler(CommandHandler('trade', trade_command))
-    app.add_handler(CommandHandler('positions', positions_command))
+    # ------------------ مدیریت پوزیشن‌ها (Position Management) ------------------
+    app.add_handler(CommandHandler("trade", trade_command))
+    app.add_handler(CommandHandler("positions", positions_command))
+    app.add_handler(CommandHandler("closeAll", close_all_command))
 
-    # Watchlist
-    app.add_handler(CommandHandler('showWatchlist', show_watchlist_command))
-    app.add_handler(CommandHandler('addWatchlist', add_to_watchlist_command))
-    app.add_handler(CommandHandler('removeWatchlist', remove_from_watchlist_command))
+    # ------------------ واچ‌لیست (Watchlist) ------------------
+    app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
+    app.add_handler(CommandHandler("addWatchlist", add_to_watchlist_command))
+    app.add_handler(CommandHandler("removeWatchlist", remove_from_watchlist_command))
 
-    print("ربات روشن شد و آماده دریافت پیام است...")
+    print("✅ [READY] پیکربندی دستورات تکمیل شد.")
+    print("🤖 [RUNNING] ربات روشن شد و آماده دریافت پیام است...")
+    print("=" * 55 + "\n")
+
     app.run_polling()
