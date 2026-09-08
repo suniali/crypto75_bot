@@ -20,7 +20,7 @@ django.setup()
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
-from bot_app.models import UserAlert
+from bot_app.models import UserAlert,Watchlist
 from bot_app.mt5_service import *
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
@@ -119,16 +119,104 @@ async def positions_command(update, context):
     success, msg = get_open_positions()
     await update.message.reply_text(msg, parse_mode="Markdown")
 
+@sync_to_async()
+def get_watchlist():
+    return list(Watchlist.objects.all())
+
+async def show_watchlist_command(update, context):
+    watchlist = await get_watchlist()
+    if not watchlist:
+        await update.message.reply_text("واچ لیستی یافت نشد!")
+        return
+
+    msg='\n'.join([f"{watch.symbol} | {watch.time_frame}" for watch in watchlist])
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+@sync_to_async()
+def save_watchlist(symbol,timeframe,market_type):
+    is_watchlist_is_exists=Watchlist.objects.filter(
+        symbol=symbol,
+        time_frame=timeframe,
+        market_type=market_type
+    ).exists()
+
+    if is_watchlist_is_exists:
+        return None
+
+    return Watchlist.objects.create(
+        symbol=symbol,
+        time_frame=timeframe,
+        market_type=market_type
+    )
+
+async def add_to_watchlist_command(update, context):
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ ورودی ناپیوسته یا ناقص است!\nمثال درست:\n/addWatchlist btcusdt 15m crypto"
+        )
+        return
+
+    symbol=context.args[0].upper()
+    timeframe=context.args[1].lower()
+    market_type=context.args[2].upper()
+    await save_watchlist(symbol,timeframe,market_type)
+    await update.message.reply_text(
+        f"✅ ارز {symbol} با موفقیت در دیتابیس ثبت شد.")
+
+@sync_to_async()
+def remove_from_watchlist(symbol,timeframe,market_type):
+    watchlist = Watchlist.objects.filter(
+        symbol=symbol,
+        time_frame=timeframe,
+        market_type=market_type
+    )
+
+    if not watchlist.exists():
+        return None
+
+    return watchlist.delete()
+
+async def remove_from_watchlist_command(update, context):
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ ورودی ناپیوسته یا ناقص است!\nمثال درست:\n/removeWatchlist btcusdt 15m crypto"
+        )
+        return
+
+    symbol = context.args[0].upper()
+    timeframe = context.args[1].lower()
+    market_type = context.args[2].upper()
+
+    watchlist=await remove_from_watchlist(symbol,timeframe,market_type)
+    if not watchlist:
+        await update.message.reply_text(
+            "❌ ارز در واچ لیست موجود نمیباشد!"
+        )
+        return
+
+    await update.message.reply_text(
+        f"✅ ارز {symbol} با موفقیت از دیتابیس حذف شد.")
+
 
 if __name__ == '__main__':
     app=ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+
+    # Alerts
     app.add_handler(CommandHandler("alert", set_alert))
     app.add_handler(CommandHandler('falert',set_falert))
+
+    # Position Management
     app.add_handler(CommandHandler('closeAll', close_all_command))
     app.add_handler(CommandHandler('trade', trade_command))
     app.add_handler(CommandHandler('positions', positions_command))
+
+    # Watchlist
+    app.add_handler(CommandHandler('showWatchlist', show_watchlist_command))
+    app.add_handler(CommandHandler('addWatchlist', add_to_watchlist_command))
+    app.add_handler(CommandHandler('removeWatchlist', remove_from_watchlist_command))
 
     print("ربات روشن شد و آماده دریافت پیام است...")
     app.run_polling()

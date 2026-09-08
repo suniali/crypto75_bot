@@ -17,6 +17,14 @@ class UserAlert(models.Model):
     def __str__(self):
         return f"{self.chat_id} | {self.symbol} -> {self.target_price}"
 
+class Watchlist(models.Model):
+    MARKET_CHOICES = [('CRYPTO', 'Crypto'), ('FOREX', 'Forex')]
+
+    symbol=models.CharField(max_length=20,verbose_name="نماد معاملاتی")
+    time_frame=models.CharField(max_length=4,verbose_name="تایم فریم")
+    market_type=models.CharField(max_length=10,choices=MARKET_CHOICES,default='CRYPTO',verbose_name="نوع مارکت")
+    created_at=models.DateTimeField(auto_now_add=True,verbose_name="تاریخ ثبت")
+
 class TradeJournal(models.Model):
     TRADE_TYPES = [('BUY', 'Buy'), ('SELL', 'Sell')]
     RESULT_CHOICES = [('WIN', 'Win'), ('LOSS', 'Loss'), ('PENDING', 'Pending')]
