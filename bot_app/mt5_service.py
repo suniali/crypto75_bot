@@ -147,3 +147,54 @@ def check_symbol_info(symbol):
         return False
     finally:
         mt5.shutdown()
+
+
+def get_open_positions():
+    if not init_mt5():
+        return False, ERROR_CANNOT_CONNECT_TO_METATRADER
+
+    try:
+        # دریافت تمامی پوزیشن‌های باز
+        positions = mt5.positions_get()
+        mt5.shutdown()
+
+        if positions is None:
+            return False, "خطا در دریافت لیست پوزیشن‌ها."
+
+        if len(positions) == 0:
+            return True, "📊 هیچ پوزیشن بازی یافت نشد."
+
+        msg = "📋 **لیست پوزیشن‌های باز:**\n\n"
+        total_profit = 0.0
+
+        for pos in positions:
+            # تشخیص نوع معامله (BUY یا SELL)
+            trade_type = "🟢 BUY" if pos.type == mt5.ORDER_TYPE_BUY else "🔴 SELL"
+
+            # محاسبه سود/زیان کل
+            total_profit += pos.profit
+
+            # تعیین ایموجی سود یا زیان
+            profit_emoji = "🟢" if pos.profit >= 0 else "🔴"
+
+            msg += (
+                f"🔹 **نماد:** `{pos.symbol}`\n"
+                f"▫️ **نوع:** {trade_type}\n"
+                f"▫️ **حجم:** {pos.volume}\n"
+                f"▫️ **قیمت ورود:** {pos.price_open}\n"
+                f"▫️ **قیمت فعلی:** {pos.price_current}\n"
+                f"▫️ **حد ضرر (SL):** {pos.sl if pos.sl > 0 else 'تنظیم نشده'}\n"
+                f"▫️ **حد سود (TP):** {pos.tp if pos.tp > 0 else 'تنظیم نشده'}\n"
+                f"▫️ **سود/زیان:** {profit_emoji} `${pos.profit:.2f}`\n"
+                f"▫️ **تیکت:** `{pos.ticket}`\n"
+                f"───────────────\n"
+            )
+
+        total_emoji = "🟩" if total_profit >= 0 else "🟥"
+        msg += f"\n{total_emoji} **مجموع سود/زیان کل:** `${total_profit:.2f}`"
+
+        return True, msg
+
+    except Exception as e:
+        mt5.shutdown()
+        return False, f"خطا در دریافت پوزیشن‌ها: {e}"

@@ -115,6 +115,11 @@ async def trade_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     success, msg = execute_trade(symbol, action, lot, sl, tp)
     await update.message.reply_text(msg)
 
+async def positions_command(update, context):
+    success, msg = get_open_positions()
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
+
 if __name__ == '__main__':
     app=ApplicationBuilder().token(TOKEN).build()
 
@@ -123,6 +128,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('falert',set_falert))
     app.add_handler(CommandHandler('closeAll', close_all_command))
     app.add_handler(CommandHandler('trade', trade_command))
+    app.add_handler(CommandHandler('positions', positions_command))
 
     print("ربات روشن شد و آماده دریافت پیام است...")
     app.run_polling()
