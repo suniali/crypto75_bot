@@ -21,7 +21,7 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler, ApplicationBuilder
 
 from bot_app.models import UserAlert
-from bot_app.mt5_service import check_symbol_info,close_all_positions
+from bot_app.mt5_service import *
 
 TOKEN=config('TELEGRAM_BOT_TOKEN')
 
@@ -104,6 +104,17 @@ async def close_all_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     msg = close_all_positions()
     await update.message.reply_text(msg)
 
+async def trade_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    if len(context.args) < 5:
+        await update.message.reply_text(
+            "❌ ورودی ناپیوسته یا ناقص است!\nمثال درست:\n/trade buy/sell symbol lot sl tp"
+        )
+        return
+
+    action, symbol, lot ,sl ,tp= context.args[0].upper(), context.args[1].upper(), float(context.args[2]), int(context.args[3]), int(context.args[4])
+    success, msg = execute_trade(symbol, action, lot, sl, tp)
+    await update.message.reply_text(msg)
+
 if __name__ == '__main__':
     app=ApplicationBuilder().token(TOKEN).build()
 
@@ -111,6 +122,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler("alert", set_alert))
     app.add_handler(CommandHandler('falert',set_falert))
     app.add_handler(CommandHandler('closeAll', close_all_command))
+    app.add_handler(CommandHandler('trade', trade_command))
 
     print("ربات روشن شد و آماده دریافت پیام است...")
     app.run_polling()
