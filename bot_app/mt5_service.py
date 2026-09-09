@@ -155,6 +155,61 @@ def close_all_positions():
     mt5.shutdown()
     return f"⚡️ **عملیات بستن پوزیشن‌ها به پایان رسید.**\n\n✅ **تعداد پوزیشن‌های بسته شده:** `{closed_count}`"
 
+def close_position_by_ticket(ticket: int) -> tuple[bool, str]:
+    """بستن یک پوزیشن خاص بر اساس Ticket"""
+    if not init_mt5():
+        return False, "خطا در اتصال به متاتریدر"
+
+    try:
+        # ۱. دریافت اطلاعات پوزیشن مورد نظر
+        positions = mt5.positions_get(ticket=ticket)
+        if not positions:
+            return False, f"پوزیشنی با تیکت {ticket} یافت نشد یا قبلاً بسته شده است."
+
+        position = positions[0]
+        symbol = position.symbol
+        volume = position.volume
+        pos_type = position.type
+
+        # ۲. تعیین نوع معامله معکوس و قیمت مناسب
+        tick = mt5.symbol_info_tick(symbol)
+        if not tick:
+            return False, f"امکان دریافت قیمت لحظه‌ای برای {symbol} وجود ندارد."
+
+        if pos_type == mt5.ORDER_TYPE_BUY:
+            order_type = mt5.ORDER_TYPE_SELL
+            price = tick.bid  # بستن پوزیشن خرید با قیمت Bid
+        elif pos_type == mt5.ORDER_TYPE_SELL:
+            order_type = mt5.ORDER_TYPE_BUY
+            price = tick.ask  # بستن پوزیشن فروش با قیمت Ask
+        else:
+            return False, "نوع پوزیشن معتبر نیست."
+
+        # ۳. تنظیم مشخصات درخواست (Request) برای بستن معامله
+        req = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "position": ticket,
+            "symbol": symbol,
+            "volume": volume,
+            "type": order_type,
+            "price": price,
+            "deviation": 20,
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_FOK,
+        }
+
+        # ۴. ارسال درخواست به متاتریدر
+        result = mt5.order_send(req)
+
+        if result.retcode != mt5.TRADE_RETCODE_DONE:
+            return False, f"خطا در بستن پوزیشن: {result.comment} (کد: {result.retcode})"
+
+        return True, f"✅ پوزیشن `{ticket}` با موفقیت در قیمت `{result.price}` بسته شد."
+
+    except Exception as e:
+        return False, f"خطای پیش‌بینی نشده: {e}"
+    finally:
+        mt5.shutdown()
 
 def check_symbol_info(symbol):
     try:
@@ -181,47 +236,33 @@ def check_symbol_info(symbol):
 
 def get_open_positions():
     if not init_mt5():
-        return False, ERROR_CANNOT_CONNECT_TO_METATRADER
+        return False, "ERROR_CONNECT"
 
     try:
         positions = mt5.positions_get()
-        mt5.shutdown()
-
         if positions is None:
-            return False, "❌ **خطا در دریافت لیست پوزیشن‌ها از سرور.**"
+            return False, "ERROR_FETCH"
 
-        if len(positions) == 0:
-            return True, "📊 **هیچ پوزیشن بازی در حال حاضر وجود ندارد.**"
-
-        msg = "📋 **لیست پوزیشن‌های فعال:**\n\n"
-        total_profit = 0.0
-
+        positions_list = []
         for pos in positions:
-            trade_type = "🟢 BUY" if pos.type == mt5.ORDER_TYPE_BUY else "🔴 SELL"
-            total_profit += pos.profit
-            profit_emoji = "🟢" if pos.profit >= 0 else "🔴"
+            positions_list.append({
+                "ticket": pos.ticket,
+                "symbol": pos.symbol,
+                "type": "BUY" if pos.type == mt5.ORDER_TYPE_BUY else "SELL",
+                "volume": pos.volume,
+                "price_open": pos.price_open,
+                "price_current": pos.price_current,
+                "sl": pos.sl,
+                "tp": pos.tp,
+                "profit": pos.profit,
+            })
 
-            sl_display = f"`{pos.sl}`" if pos.sl > 0 else "❌ _تنظیم نشده_"
-            tp_display = f"`{pos.tp}`" if pos.tp > 0 else "❌ _تنظیم نشده_"
-
-            msg += (
-                f"🔹 **نماد:** `{pos.symbol}` | 🎫 `{pos.ticket}`\n"
-                f"├ 📊 **نوع:** {trade_type} | 📦 **حجم:** `{pos.volume}`\n"
-                f"├ 💵 **ورود:** `{pos.price_open}` ➔ **فعلی:** `{pos.price_current}`\n"
-                f"├ 🛑 **SL:** {sl_display}\n"
-                f"├ 🎯 **TP:** {tp_display}\n"
-                f"└ 💵 **سود/زیان:** {profit_emoji} **`${pos.profit:,.2f}`**\n"
-                f"───────────────\n"
-            )
-
-        total_emoji = "🟩" if total_profit >= 0 else "🟥"
-        msg += f"\n{total_emoji} **مجموع برآیند معاملات:** **`${total_profit:,.2f}`**"
-
-        return True, msg
+        return True, positions_list
 
     except Exception as e:
+        return False, str(e)
+    finally:
         mt5.shutdown()
-        return False, f"🚨 **خطا در دریافت لیست پوزیشن‌ها:**\n`{e}`"
 
 
 def get_data_for_rsi(symbol, timeframe):
