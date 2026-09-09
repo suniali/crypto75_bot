@@ -1,11 +1,12 @@
 import asyncio
+import logging
 import os
 import sys
 from pathlib import Path
 
 import django
-from decouple import config
 from asgiref.sync import sync_to_async
+from decouple import config
 
 # ------------------------------------------------------------------
 # 1. Django Setup
@@ -18,7 +19,28 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 # ------------------------------------------------------------------
-# 2. Imports & Configurations
+# 2. Logging Configuration
+# ------------------------------------------------------------------
+logger = logging.getLogger("telegram_bot")
+logger.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
+# Console Handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+# File Handler
+file_handler = logging.FileHandler("telegram_bot.log", encoding="utf-8")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# ------------------------------------------------------------------
+# 3. Imports & Configurations
 # ------------------------------------------------------------------
 from telegram import (
     InlineKeyboardButton,
@@ -64,7 +86,7 @@ ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌ه�
 
 
 # ------------------------------------------------------------------
-# 3. Database Async Helpers
+# 4. Database Async Helpers
 # ------------------------------------------------------------------
 @sync_to_async
 def save_alert_to_db(chat_id: str, symbol: str, target_price: float, is_forex: bool):
@@ -73,10 +95,13 @@ def save_alert_to_db(chat_id: str, symbol: str, target_price: float, is_forex: b
         symbol=symbol, target_price=target_price, is_active=True
     ).exists()
     if exists:
+        logger.warning("Alert already exists for chat_id %s, symbol %s at target %s", chat_id, symbol, target_price)
         return None
-    return UserAlert.objects.create(
+    alert = UserAlert.objects.create(
         chat_id=chat_id, symbol=symbol, target_price=target_price, market_type=market_type
     )
+    logger.info("Alert created successfully: ID #%s for %s at %s", alert.id, symbol, target_price)
+    return alert
 
 
 @sync_to_async
@@ -89,6 +114,10 @@ def save_watchlist_item(symbol: str, timeframe: str, market_type: str):
     obj, created = Watchlist.objects.get_or_create(
         symbol=symbol, time_frame=timeframe, market_type=market_type
     )
+    if created:
+        logger.info("New watchlist item added: %s | %s | %s", symbol, timeframe, market_type)
+    else:
+        logger.info("Watchlist item already existed: %s | %s | %s", symbol, timeframe, market_type)
     return created
 
 
@@ -97,14 +126,21 @@ def delete_from_watchlist(symbol: str, timeframe: str, market_type: str):
     deleted_count, _ = Watchlist.objects.filter(
         symbol=symbol, time_frame=timeframe, market_type=market_type
     ).delete()
+    if deleted_count > 0:
+        logger.info("Deleted %s from watchlist (%s, %s)", symbol, timeframe, market_type)
+    else:
+        logger.warning("Failed to delete %s from watchlist or item not found", symbol)
     return deleted_count > 0
 
 
 # ------------------------------------------------------------------
-# 4. Command Handlers
+# 5. Command Handlers
 # ------------------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    logger.info("User %s (chat_id: %s) started the bot.", user_name, chat_id)
+
     welcome_text = (
         f"سلام **{user_name}** عزیز! 👋\n"
         f"به **ربات دستیار و پایشگر ترید** خوش آمدید.\n\n"
@@ -136,8 +172,10 @@ async def handle_alert_creation(update: Update, context: ContextTypes.DEFAULT_TY
     """تابع کمکی مشترک برای /alert و /falert"""
     cmd = "/falert" if is_forex else "/alert"
     example = "`/falert XAUUSD-ECN 2100`" if is_forex else "`/alert BTCUSDT 65000`"
+    chat_id = update.effective_chat.id
 
     if len(context.args) < 2:
+        logger.warning("Invalid alert args from chat_id %s: %s", chat_id, context.args)
         await update.message.reply_text(
             f"⚠️ **فرمت دستور ناقص است!**\n\n📌 **فرمت:** `{cmd} <نماد> <قیمت_هدف>`\n💡 **مثال:** {example}",
             parse_mode="Markdown"
@@ -148,9 +186,11 @@ async def handle_alert_creation(update: Update, context: ContextTypes.DEFAULT_TY
         symbol = context.args[0].upper()
         target_price = float(context.args[1])
     except ValueError:
+        logger.warning("Invalid target price format from chat_id %s: %s", chat_id, context.args[1])
         await update.message.reply_text("❌ **قیمت هدف باید یک عدد معتبر باشد.**", parse_mode="Markdown")
         return
 
+    logger.info("Processing alert creation request: %s %s for chat_id %s", symbol, target_price, chat_id)
     status_msg = await update.message.reply_text(f"⏳ **در حال بررسی و ثبت هشدار `{symbol}`...**", parse_mode="Markdown")
 
     if is_forex:
@@ -158,14 +198,16 @@ async def handle_alert_creation(update: Update, context: ContextTypes.DEFAULT_TY
         res = await loop.run_in_executor(None, check_symbol_info, symbol)
         if res is not True:
             if isinstance(res, list):
+                logger.warning("Forex symbol %s not found. Suggestions: %s", symbol, res[:5])
                 suggestions = "\n".join([f"▫️ `{s}`" for s in res[:10]])
                 await status_msg.edit_text(f"⚠️ **نماد `{symbol}` یافت نشد!**\n\n💡 پیشنهادها:\n{suggestions}",
                                            parse_mode="Markdown")
             else:
+                logger.error("Error connecting to MetaTrader 5 while checking symbol %s", symbol)
                 await status_msg.edit_text("🚨 **خطا در اتصال به MetaTrader 5!**", parse_mode="Markdown")
             return
 
-    await save_alert_to_db(str(update.effective_chat.id), symbol, target_price, is_forex)
+    await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
     await status_msg.edit_text(
         f"🔔 **هشدار قیمت ثبت شد**\n\n📌 **نماد:** `{symbol}`\n🎯 **هدف:** `{target_price:,.2f}`",
         parse_mode="Markdown"
@@ -181,10 +223,12 @@ async def set_falert(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ------------------------------------------------------------------
-# 5. Position & Trade Handlers
+# 6. Position & Trade Handlers
 # ------------------------------------------------------------------
 async def trade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     if len(context.args) < 5:
+        logger.warning("Invalid trade args from chat_id %s: %s", chat_id, context.args)
         await update.message.reply_text(
             "⚠️ **فرمت دستور ناقص است!**\n\n"
             "📌 **فرمت:** `/trade <BUY/SELL> <نماد> <حجم> <SL> <TP>`\n"
@@ -199,23 +243,34 @@ async def trade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if action not in ["BUY", "SELL"]:
             raise ValueError
     except ValueError:
+        logger.warning("Invalid numerical or action input for trade command from chat_id %s", chat_id)
         await update.message.reply_text("❌ **ورودی‌های عددی یا نوع معامله (BUY/SELL) نامعتبر است.**",
                                         parse_mode="Markdown")
         return
 
+    logger.info("Executing trade request: %s %s (Lot: %s, SL: %s, TP: %s) by chat_id %s", action, symbol, lot, sl, tp, chat_id)
     msg = await update.message.reply_text("⏳ **در حال ارسال سفارش...**", parse_mode="Markdown")
     success, result_msg = execute_trade(symbol, action, lot, sl, tp)
 
-    title = "🎯 **معامله با موفقیت ثبت شد**" if success else "🚨 **خطا در اجرای معامله!**"
+    if success:
+        logger.info("Trade executed successfully for %s: %s", symbol, result_msg)
+        title = "🎯 **معامله با موفقیت ثبت شد**"
+    else:
+        logger.error("Failed to execute trade for %s: %s", symbol, result_msg)
+        title = "🚨 **خطا در اجرای معامله!**"
+
     await msg.edit_text(f"{title}\n\n📌 **نماد:** `{symbol}`\n💬 `{result_msg}`", parse_mode="Markdown")
 
 
 async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Fetching open positions requested by chat_id %s", update.effective_chat.id)
     success, data = get_open_positions()
     if not success:
+        logger.error("Failed to fetch positions from MetaTrader.")
         await update.message.reply_text("❌ خطا در دریافت اطلاعات از متاتریدر.")
         return
     if not data:
+        logger.info("No open positions found.")
         await update.message.reply_text("📊 **هیچ پوزیشن بازی وجود ندارد.**", parse_mode="Markdown")
         return
 
@@ -250,14 +305,17 @@ async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     ticket = int(query.data.split("_")[2])
+    logger.info("Request to close position ticket #%s from chat_id %s", ticket, update.effective_chat.id)
     await query.edit_message_text(f"⏳ در حال بستن پوزیشن `{ticket}`...", parse_mode="Markdown")
 
     loop = asyncio.get_running_loop()
     _, message = await loop.run_in_executor(None, close_position_by_ticket, ticket)
+    logger.info("Close position #%s result: %s", ticket, message)
     await query.edit_message_text(message, parse_mode="Markdown")
 
 
 async def close_all_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Request to close ALL positions triggered by chat_id %s", update.effective_chat.id)
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -267,6 +325,7 @@ async def close_all_positions_handler(update: Update, context: ContextTypes.DEFA
 
     loop = asyncio.get_running_loop()
     res_msg = await loop.run_in_executor(None, close_all_positions)
+    logger.info("Close ALL positions result: %s", res_msg)
 
     if update.callback_query:
         await msg_target.edit_message_text(res_msg, parse_mode="Markdown")
@@ -275,9 +334,10 @@ async def close_all_positions_handler(update: Update, context: ContextTypes.DEFA
 
 
 # ------------------------------------------------------------------
-# 6. Watchlist & Conversation Handlers
+# 7. Watchlist & Conversation Handlers
 # ------------------------------------------------------------------
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Fetching watchlist for chat_id %s", update.effective_chat.id)
     watchlist = await get_all_watchlist()
     if not watchlist:
         await update.message.reply_text("📭 واچ‌لیست شما خالی است!")
@@ -296,12 +356,14 @@ async def handle_delete_watchlist_callback(update: Update, context: ContextTypes
     await query.answer()
 
     _, symbol, timeframe, market_type = query.data.split("_")
+    logger.info("Deleting item from watchlist: %s (%s, %s)", symbol, timeframe, market_type)
 
     # متوقف ساختن تسک پایش مربوطه
     worker_key = f"{symbol}_{timeframe}_{market_type}"
     if worker_key in ACTIVE_WORKERS:
         ACTIVE_WORKERS[worker_key].cancel()
         del ACTIVE_WORKERS[worker_key]
+        logger.info("Cancelled background worker task for key: %s", worker_key)
 
     await delete_from_watchlist(symbol, timeframe, market_type)
     await query.edit_message_text(f"🗑 نماد `{symbol}` از واچ‌لیست حذف و پایش آن متوقف شد.", parse_mode="Markdown")
@@ -309,18 +371,22 @@ async def handle_delete_watchlist_callback(update: Update, context: ContextTypes
 
 # Conversation steps
 async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Starting addWatchlist conversation for chat_id %s", update.effective_chat.id)
     await update.message.reply_text("📝 لطفاً نام نماد را وارد کنید (مثلاً `BTCUSDT`):", parse_mode="Markdown")
     return ADD_SYMBOL
 
 
 async def get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['symbol'] = update.message.text.upper()
+    symbol = update.message.text.upper()
+    context.user_data['symbol'] = symbol
+    logger.info("AddWatchlist step 1 - Symbol entered: %s", symbol)
+
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("5m", callback_data="5m"), InlineKeyboardButton("15m", callback_data="15m")],
         [InlineKeyboardButton("30m", callback_data="30m"), InlineKeyboardButton("1h", callback_data="1h")],
         [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")]
     ])
-    await update.message.reply_text(f"📌 نماد: `{context.user_data['symbol']}`\n⏱ تایم‌فریم را انتخاب کنید:",
+    await update.message.reply_text(f"📌 نماد: `{symbol}`\n⏱ تایم‌فریم را انتخاب کنید:",
                                     parse_mode="Markdown", reply_markup=keyboard)
     return ADD_TIMEFRAME
 
@@ -328,7 +394,10 @@ async def get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['timeframe'] = query.data
+    timeframe = query.data
+    context.user_data['timeframe'] = timeframe
+    logger.info("AddWatchlist step 2 - Timeframe selected: %s", timeframe)
+
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton("🌐 کریپتو", callback_data="CRYPTO"),
         InlineKeyboardButton("📈 فارکس", callback_data="FOREX")
@@ -344,6 +413,7 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = context.user_data['symbol']
     timeframe = context.user_data['timeframe']
     market_type = query.data
+    logger.info("AddWatchlist step 3 - Market selected: %s for symbol %s", market_type, symbol)
 
     await save_watchlist_item(symbol, timeframe, market_type)
 
@@ -351,28 +421,34 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     worker_key = f"{symbol}_{timeframe}_{market_type}"
     task = asyncio.create_task(worker_loop(symbol, timeframe, market_type, update.effective_chat.id, context.bot))
     ACTIVE_WORKERS[worker_key] = task
+    logger.info("Created new worker task for key: %s", worker_key)
 
     await query.edit_message_text(f"✨ `{symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید.", parse_mode="Markdown")
     return ConversationHandler.END
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
     await update.message.reply_text("❌ عملیات لغو شد.")
     return ConversationHandler.END
 
 
 # ------------------------------------------------------------------
-# 7. Background Worker Loop
+# 8. Background Worker Loop
 # ------------------------------------------------------------------
 async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: int, bot):
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
-    print(f"🚀 [STARTED] پایش RSI: {symbol} | {timeframe} | {market_type}")
+    logger.info("🚀 [STARTED] RSI Monitor task: %s | %s | %s", symbol, timeframe, market_type)
 
     try:
         while True:
             try:
                 rsi, status, divergence = await calculate_rsi(symbol, timeframe, market_type)
+                logger.debug("RSI checked for %s (%s): RSI=%s, Status=%s", symbol, timeframe, rsi, status)
+
                 if rsi is not None and ("NORMAL" not in status or divergence != "بدون واگرایی"):
+                    logger.info("Signal detected for %s (%s)! RSI: %s | Status: %s | Divergence: %s",
+                                symbol, timeframe, rsi, status, divergence)
                     msg = (
                         f"🚨 **هشدار سیگنال RSI**\n\n"
                         f"📌 **نماد:** `{symbol}` | ⏳ `{timeframe}`\n"
@@ -381,18 +457,18 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
                     )
                     await bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
             except Exception as e:
-                print(f"❌ [ERROR] پایش روی {symbol}: {e}")
+                logger.exception("Error during RSI calculation worker for %s: %s", symbol, e)
 
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
-        print(f"🛑 [STOPPED] پایش {symbol} متوقف شد.")
+        logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
 
 
 # ------------------------------------------------------------------
-# 8. Application Startup & Main Execution
+# 9. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
-    print("\n" + "=" * 50 + "\n🚀 [STARTUP] راه‌اندازی ربات...")
+    logger.info("Starting bot initialization and background workers...")
     watchlist = await get_all_watchlist()
 
     for item in watchlist:
@@ -402,10 +478,11 @@ async def on_startup(app):
         )
         ACTIVE_WORKERS[worker_key] = task
 
-    print(f"✅ [SYSTEM] {len(watchlist)} تسک در پس‌زمینه فعال شدند.\n" + "=" * 50)
+    logger.info("Successfully started %d background worker tasks.", len(watchlist))
 
 
 if __name__ == "__main__":
+    logger.info("Initializing Telegram Bot Application...")
     app = ApplicationBuilder().token(TOKEN).post_init(on_startup).build()
 
     # Commands
@@ -441,5 +518,8 @@ if __name__ == "__main__":
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
     app.add_handler(MessageHandler(filters.Regex("^📊 پوزیشن‌های باز$"), show_positions_handler))
 
-    print("🤖 [RUNNING] ربات روشن شد...")
-    app.run_polling()
+    logger.info("🤖 Bot is polling for updates...")
+    try:
+        app.run_polling()
+    except KeyboardInterrupt:
+        logger.info("🛑 Telegram bot stopped manually.")
