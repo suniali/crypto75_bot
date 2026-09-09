@@ -73,7 +73,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     main_keyboard = [
         ["📋 واچ‌لیست", "➕ افزودن به واچ‌لیست"],
-        ["📊 پوزیشن‌های باز", "❌ بستن همه پوزیشن‌ها"]
+        ["📊 پوزیشن‌های باز",]
     ]
 
     replay_markup= ReplyKeyboardMarkup(main_keyboard,resize_keyboard=True)
@@ -210,9 +210,24 @@ async def set_falert(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text(invalid_format_text, parse_mode="Markdown")
 
-async def close_all_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
-    msg = close_all_positions()
-    await update.message.reply_text(msg)
+
+async def close_all_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ۱. مدیریت پیام لودینگ اولیه (بسته به اینکه دستور متنی است یا کلیک روی دکمه)
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        await query.edit_message_text("⏳ در حال بستن تمامی پوزیشن‌ها...", parse_mode="Markdown")
+    else:
+        status_msg = await update.message.reply_text("⏳ در حال بستن تمامی پوزیشن‌ها...", parse_mode="Markdown")
+
+    # ۲. اجرای عملیات
+    msg =  close_all_positions()
+
+    # ۳. نمایش نتیجه نهایی
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
+    else:
+        await status_msg.edit_text(msg, parse_mode="Markdown")
 
 async def trade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # بررسی تعداد ورودی‌ها
@@ -274,9 +289,77 @@ async def trade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ویرایش پیام قبلی با نتیجه نهایی
     await processing_msg.edit_text(result_text, parse_mode="Markdown")
 
-async def positions_command(update, context):
-    success, msg = get_open_positions()
-    await update.message.reply_text(msg, parse_mode="Markdown")
+async def show_positions_handler(update, context):
+    success, data = get_open_positions()
+
+    if not success:
+        await update.message.reply_text("❌ خطا در دریافت اطلاعات از متاتریدر.")
+        return
+
+    if not data:
+        await update.message.reply_text("📊 **هیچ پوزیشن بازی در حال حاضر وجود ندارد.**", parse_mode="Markdown")
+        return
+
+    msg = "📋 **لیست پوزیشن‌های فعال:**\n\n"
+    keyboard = []
+    total_profit = 0.0
+
+    for pos in data:
+        trade_type = "🟢 BUY" if pos["type"] == "BUY" else "🔴 SELL"
+        total_profit += pos["profit"]
+        profit_emoji = "🟢" if pos["profit"] >= 0 else "🔴"
+
+        sl_display = f"`{pos['sl']}`" if pos["sl"] > 0 else "❌ _تنظیم نشده_"
+        tp_display = f"`{pos['tp']}`" if pos["tp"] > 0 else "❌ _تنظیم نشده_"
+
+        msg += (
+            f"🔹 **نماد:** `{pos['symbol']}` | 🎫 `{pos['ticket']}`\n"
+            f"├ 📊 **نوع:** {trade_type} | 📦 **حجم:** `{pos['volume']}`\n"
+            f"├ 💵 **ورود:** `{pos['price_open']}` ➔ **فعلی:** `{pos['price_current']}`\n"
+            f"├ 🛑 **SL:** {sl_display}\n"
+            f"├ 🎯 **TP:** {tp_display}\n"
+            f"└ 💵 **سود/زیان:** {profit_emoji} **`${pos['profit']:,.2f}`**\n"
+            f"───────────────\n"
+        )
+
+        # ساخت دکمه اختصاصی برای بستن این پوزیشن با callback_data حاوی ticket
+        btn = InlineKeyboardButton(
+            text=f"❌ بستن پوزیشن {pos['symbol']} ({pos['ticket']})",
+            callback_data=f"close_pos_{pos['ticket']}"
+        )
+        keyboard.append([btn])
+
+    # اضافه کردن دکمه بستن همه پوزیشن‌ها (اختیاری)
+    keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
+
+    total_emoji = "🟩" if total_profit >= 0 else "🟥"
+    msg += f"\n{total_emoji} **مجموع برآیند معاملات:** **`${total_profit:,.2f}`**"
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+
+
+@sync_to_async
+def async_close_position(ticket: int):
+    return close_position_by_ticket(ticket)
+
+
+async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()  # بستن حالت لودینگ دکمه در تلگرام
+
+    data = query.data
+    if data.startswith("close_pos_"):
+        ticket = int(data.split("_")[2])
+
+        # اطلاع‌رسانی اولیه به کاربر
+        await query.edit_message_text(f"⏳ در حال بستن پوزیشن `{ticket}`...", parse_mode="Markdown")
+
+        # اجرای تابع بستن پوزیشن
+        success, message = await async_close_position(ticket)
+
+        # ویرایش پیام و نمایش نتیجه
+        await query.edit_message_text(message, parse_mode="Markdown")
 
 @sync_to_async()
 def get_watchlist():
@@ -528,9 +611,9 @@ if __name__ == '__main__':
 
     # ------------------ مدیریت پوزیشن‌ها (Position Management) ------------------
     app.add_handler(CommandHandler("trade", trade_command))
-    app.add_handler(CommandHandler("positions", positions_command))
-    app.add_handler(CommandHandler("closeAll", close_all_command))
-
+    app.add_handler(CommandHandler("positions", show_positions_handler))
+    app.add_handler(CallbackQueryHandler(close_position_callback,pattern="^close_pos_"))
+    app.add_handler(CallbackQueryHandler(close_all_positions_handler,pattern="^close_all_positions"))
     # ------------------ واچ‌لیست (Watchlist) ------------------
     app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
     # ثبت کلیک روی دکمه حذف (تشخیص با Pattern الگوی دکمه)
@@ -551,8 +634,7 @@ if __name__ == '__main__':
     app.add_handler(add_watchlist_handler)
     # ------------------ هاندرهای دکمه‌های متنی (Keyboard Handlers) ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
-    app.add_handler(MessageHandler(filters.Regex("^📊 پوزیشن‌های باز$"), positions_command))
-    app.add_handler(MessageHandler(filters.Regex("^❌ بستن همه پوزیشن‌ها$"), close_all_command))
+    app.add_handler(MessageHandler(filters.Regex("^📊 پوزیشن‌های باز$"), show_positions_handler))
 
     print("✅ [READY] پیکربندی دستورات و دکمه‌ها تکمیل شد.")
     print("🤖 [RUNNING] ربات روشن شد و آماده دریافت پیام است...")
