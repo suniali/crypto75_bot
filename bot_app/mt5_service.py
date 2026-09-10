@@ -1,5 +1,4 @@
 import logging
-from typing import reveal_type
 import MetaTrader5 as mt5
 
 # ------------------------------------------------------------------
@@ -211,67 +210,125 @@ def close_all_positions():
     logger.info("Completed close_all_positions. Closed %s out of %s positions.", closed_count, len(positions))
     return f"⚡️ **عملیات بستن پوزیشن‌ها به پایان رسید.**\n\n✅ **تعداد پوزیشن‌های بسته شده:** `{closed_count}`"
 
+def close_position(ticket: int, volume_to_close: float = None):
+    """
+    بستن کامل یا جزئی (Partial Close) یک پوزیشن بر اساس Ticket.
+    اگر volume_to_close تعیین نشود، کل حجم پوزیشن بسته می‌شود.
+    """
+    if not mt5.initialize():
+        return False, "❌ **خطا در اتصال به متاتریدر ۵**"
 
-def close_position_by_ticket(ticket: int) -> tuple[bool, str]:
-    logger.info("Attempting to close position ticket: #%s", ticket)
-    if not init_mt5():
-        return False, "خطا در اتصال به متاتریدر"
+    positions = mt5.positions_get(ticket=ticket)
+    if not positions:
+        logger.error("Position with ticket %d not found.", ticket)
+        return False, f"❌ پوزیشن با تیکت `{ticket}` یافت نشد."
 
-    try:
-        positions = mt5.positions_get(ticket=ticket)
-        if not positions:
-            logger.warning("Position #%s not found.", ticket)
-            return False, f"پوزیشنی با تیکت {ticket} یافت نشد یا قبلاً بسته شده است."
+    pos = positions[0]
+    symbol = pos.symbol
+    total_volume = pos.volume
 
-        position = positions[0]
-        symbol = position.symbol
-        volume = position.volume
-        pos_type = position.type
+    close_vol = volume_to_close if volume_to_close else total_volume
+    if close_vol > total_volume:
+        return False, "❌ حجم درخواستی برای خروج بیشتر از حجم کل پوزیشن است."
 
-        tick = mt5.symbol_info_tick(symbol)
-        if not tick:
-            logger.error("Failed to fetch tick info for %s while closing ticket #%s", symbol, ticket)
-            return False, f"امکان دریافت قیمت لحظه‌ای برای {symbol} وجود ندارد."
+    order_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
+    tick_info = mt5.symbol_info_tick(symbol)
 
-        if pos_type == mt5.ORDER_TYPE_BUY:
-            order_type = mt5.ORDER_TYPE_SELL
-            price = tick.bid
-        elif pos_type == mt5.ORDER_TYPE_SELL:
-            order_type = mt5.ORDER_TYPE_BUY
-            price = tick.ask
-        else:
-            logger.error("Unknown position type %s for ticket #%s", pos_type, ticket)
-            return False, "نوع پوزیشن معتبر نیست."
+    if not tick_info:
+        return False, f"❌ امکان دریافت قیمت لحظه‌ای برای نماد `{symbol}` وجود ندارد."
 
-        req = {
-            "action": mt5.TRADE_ACTION_DEAL,
-            "position": ticket,
-            "symbol": symbol,
-            "volume": volume,
-            "type": order_type,
-            "price": price,
-            "deviation": 20,
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_FOK,
-        }
+    price = tick_info.bid if order_type == mt5.ORDER_TYPE_SELL else tick_info.ask
 
-        result = mt5.order_send(req)
+    request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": close_vol,
+        "type": order_type,
+        "position": ticket,
+        "price": price,
+        "deviation": 20,
+        "comment": "Closed via Telegram Bot",
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_FOK,
+    }
 
-        if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
-            comment = result.comment if result else "No response"
-            retcode = result.retcode if result else "None"
-            logger.error("Failed to close ticket #%s. Retcode: %s, Comment: %s", ticket, retcode, comment)
-            return False, f"خطا در بستن پوزیشن: {comment} (کد: {retcode})"
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.error("Failed to close position %d: %s", ticket, result.comment)
+        return False, f"❌ خطا در بستن پوزیشن: `{result.comment}`"
 
-        logger.info("Successfully closed ticket #%s at price %s", ticket, result.price)
-        return True, f"✅ پوزیشن `{ticket}` با موفقیت در قیمت `{result.price}` بسته شد."
+    logger.info("Successfully closed %s lots for position %d", close_vol, ticket)
+    return True, f"✅ مقدار `{close_vol}` لات از پوزیشن `{ticket}` با موفقیت بسته شد."
 
-    except Exception as e:
-        logger.exception("Unexpected exception while closing ticket #%s: %s", ticket, e)
-        return False, f"خطای پیش‌بینی نشده: {e}"
-    finally:
-        mt5.shutdown()
+def close_position_by_ticket(ticket: int):
+    """تابع کمکی برای بستن کامل پوزیشن با تیکت"""
+    return close_position(ticket, volume_to_close=None)
 
+def set_break_even(ticket: int):
+    """انتقال حد ضرر (SL) به نقطه ورود پوزیشن (Break-Even)"""
+    if not mt5.initialize():
+        return False, "❌ **خطا در اتصال به متاتریدر ۵**"
+
+    positions = mt5.positions_get(ticket=ticket)
+    if not positions:
+        logger.error("Position %d not found for Break-Even.", ticket)
+        return False, f"❌ پوزیشن با تیکت `{ticket}` یافت نشد."
+
+    pos = positions[0]
+    entry_price = pos.price_open
+
+    if pos.sl == entry_price:
+        return True, "ℹ️ حد ضرر از قبل روی نقطه ورود (Break-Even) تنظیم شده است."
+
+    request = {
+        "action": mt5.TRADE_ACTION_SLTP,
+        "position": ticket,
+        "symbol": pos.symbol,
+        "sl": entry_price,
+        "tp": pos.tp,
+    }
+
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.error("Failed Break-Even for position %d: %s", ticket, result.comment)
+        return False, f"❌ خطا در فری‌ریسک کردن: `{result.comment}`"
+
+    logger.info("Break-Even set successfully for position %d at %s", ticket, entry_price)
+    return True, f"🛡 **پوزیشن فری‌ریسک شد!**\nحد ضرر جدید: `{entry_price}`"
+
+def update_position_sltp(ticket: int, sl: float, tp: float):
+    """بروزرسانی SL و TP یک پوزیشن باز"""
+    if not mt5.initialize():
+        return False, "❌ **خطا در اتصال به متاتریدر ۵**"
+
+    # ۱. جستجوی دقیق پوزیشن بر اساس تیکت
+    positions = mt5.positions_get(ticket=ticket)
+
+    if not positions:
+        logger.error("Position with ticket/identifier %d not found in MT5.", ticket)
+        return False, f"❌ پوزیشن با تیکت `{ticket}` در متاتریدر یافت نشد (ممکن است بسته شده باشد)."
+
+    pos = positions[0]
+
+    # اگر 0 پاس داده شده بود، همان مقدار قبلی بماند
+    final_sl = sl if sl != 0 else pos.sl
+    final_tp = tp if tp != 0 else pos.tp
+
+    request = {
+        "action": mt5.TRADE_ACTION_SLTP,
+        "position": ticket,
+        "symbol": pos.symbol,
+        "sl": final_sl,
+        "tp": final_tp
+    }
+
+    result = mt5.order_send(request)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        logger.error("Failed to update SL/TP for position %d: %s", ticket, result.comment)
+        return False, f"❌ خطا در ویرایش SL/TP: `{result.comment}`"
+
+    logger.info("Updated SL/TP for position %d -> SL: %s, TP: %s", ticket, final_sl, final_tp)
+    return True, f"✅ **حد ضرر و حد سود با موفقیت بروزرسانی شد.**\n\n🛑 **SL:** `{final_sl}`\n🎯 **TP:** `{final_tp}`"
 
 # ------------------------------------------------------------------
 # Market Data & Analysis Queries
@@ -356,3 +413,5 @@ def get_data_for_rsi(symbol: str, timeframe: str):
         return False, f"🚨 **خطا در دریافت داده‌های RSI:**\n`{e}`"
     finally:
         mt5.shutdown()
+
+
