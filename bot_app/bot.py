@@ -57,6 +57,8 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.error import NetworkError,TimedOut
+from telegram.request import HTTPXRequest
 
 from bot_app.analysis_service import calculate_rsi
 from bot_app.models import UserAlert, Watchlist
@@ -481,9 +483,24 @@ async def on_startup(app):
     logger.info("Successfully started %d background worker tasks.", len(watchlist))
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # اگر خطای شبکه بود، فقط لاگ هشدار بده و ربات را زنده نگه دار
+    if isinstance(context.error, (NetworkError, TimedOut)):
+        logger.warning("Telegram network connection issue: %s", context.error)
+    else:
+        logger.error("Exception while handling an update:", exc_info=context.error)
+
 if __name__ == "__main__":
     logger.info("Initializing Telegram Bot Application...")
-    app = ApplicationBuilder().token(TOKEN).post_init(on_startup).build()
+
+    request = HTTPXRequest(
+        connect_timeout=20.0,
+        read_timeout=20.0,
+        connection_pool_size=8
+    )
+
+    app = ApplicationBuilder().token(TOKEN).request(request).post_init(on_startup).build()
+    app.add_error_handler(error_handler)
 
     # Commands
     app.add_handler(CommandHandler("start", start))
