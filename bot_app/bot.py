@@ -136,7 +136,7 @@ def delete_from_watchlist(symbol: str, timeframe: str, market_type: str):
 
 
 # ------------------------------------------------------------------
-# 5. Command Handlers
+# 5. Start And Stop Handlers
 # ------------------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
@@ -164,65 +164,141 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     main_keyboard = ReplyKeyboardMarkup(
-        [["📋 واچ‌لیست", "➕ افزودن به واچ‌لیست"], ["📊 پوزیشن‌های باز"]],
+        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "➕ افزودن به واچ‌لیست"], ["📊 پوزیشن‌های باز"]],
         resize_keyboard=True
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=main_keyboard)
 
+# ------------------------------------------------------------------
+# 5.َAlert Handlers
+# ------------------------------------------------------------------
+# تعریف مراحل گفتگو
+SELECT_MARKET, INPUT_SYMBOL, INPUT_PRICE = range(3)
 
-async def handle_alert_creation(update: Update, context: ContextTypes.DEFAULT_TYPE, is_forex: bool):
-    """تابع کمکی مشترک برای /alert و /falert"""
-    cmd = "/falert" if is_forex else "/alert"
-    example = "`/falert XAUUSD-ECN 2100`" if is_forex else "`/alert BTCUSDT 65000`"
-    chat_id = update.effective_chat.id
+async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع فرایند ثبت هشدار و نمایش دکمه انتخاب بازار"""
+    keyboard = [
+        [
+            InlineKeyboardButton("🪙 ارز دیجیتال (Crypto)", callback_data="market_crypto"),
+            InlineKeyboardButton("📊 فارکس (Forex)", callback_data="market_forex"),
+        ],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-    if len(context.args) < 2:
-        logger.warning("Invalid alert args from chat_id %s: %s", chat_id, context.args)
-        await update.message.reply_text(
-            f"⚠️ **فرمت دستور ناقص است!**\n\n📌 **فرمت:** `{cmd} <نماد> <قیمت_هدف>`\n💡 **مثال:** {example}",
-            parse_mode="Markdown"
-        )
-        return
+    await update.message.reply_text(
+        "🔔 **به بخش ثبت هشدار قیمت خوش آمدید.**\n\nلطفاً نوع بازار را انتخاب کنید:",
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    return SELECT_MARKET
 
-    try:
-        symbol = context.args[0].upper()
-        target_price = float(context.args[1])
-    except ValueError:
-        logger.warning("Invalid target price format from chat_id %s: %s", chat_id, context.args[1])
-        await update.message.reply_text("❌ **قیمت هدف باید یک عدد معتبر باشد.**", parse_mode="Markdown")
-        return
+async def market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پردازش انتخاب بازار و درخواست نماد از کاربر"""
+    query = update.callback_query
+    await query.answer()
 
-    logger.info("Processing alert creation request: %s %s for chat_id %s", symbol, target_price, chat_id)
-    status_msg = await update.message.reply_text(f"⏳ **در حال بررسی و ثبت هشدار `{symbol}`...**", parse_mode="Markdown")
+    if query.data == "cancel_alert":
+        await query.edit_message_text("❌ **ثبت هشدار لغو شد.**", parse_mode="Markdown")
+        return ConversationHandler.END
 
+    is_forex = (query.data == "market_forex")
+    context.user_data["is_forex"] = is_forex
+
+    market_name = "فارکس" if is_forex else "ارز دیجیتال"
+    example = "XAUUSD-ECN" if is_forex else "BTCUSDT"
+
+    # دکمه لغو برای مراحل بعدی
+    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+
+    await query.edit_message_text(
+        f"🌐 بازار انتخاب‌شده: **{market_name}**\n\n"
+        f"✍️ لطفاً **نماد** مورد نظر را وارد کنید (مثال: `{example}`):",
+        reply_markup=cancel_keyboard,
+        parse_mode="Markdown"
+    )
+    return INPUT_SYMBOL
+
+
+async def symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت و اعتبارسنجی نماد واردشده"""
+    symbol = update.message.text.strip().upper()
+    is_forex = context.user_data.get("is_forex", False)
+    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+
+    # بررسی صحت نماد فارکس در متاتریدر
     if is_forex:
+        status_msg = await update.message.reply_text("⏳ **در حال بررسی نماد در متاتریدر...**", parse_mode="Markdown")
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, check_symbol_info, symbol)
+
         if res is not True:
             if isinstance(res, list):
                 logger.warning("Forex symbol %s not found. Suggestions: %s", symbol, res[:5])
                 suggestions = "\n".join([f"▫️ `{s}`" for s in res[:10]])
-                await status_msg.edit_text(f"⚠️ **نماد `{symbol}` یافت نشد!**\n\n💡 پیشنهادها:\n{suggestions}",
-                                           parse_mode="Markdown")
+                await status_msg.edit_text(
+                    f"⚠️ **نماد `{symbol}` یافت نشد!**\n\n💡 پیشنهادها:\n{suggestions}\n\nلطفاً نماد را مجدداً ارسال کنید:",
+                    reply_markup=cancel_keyboard,
+                    parse_mode="Markdown"
+                )
             else:
                 logger.error("Error connecting to MetaTrader 5 while checking symbol %s", symbol)
-                await status_msg.edit_text("🚨 **خطا در اتصال به MetaTrader 5!**", parse_mode="Markdown")
-            return
+                await status_msg.edit_text("🚨 **خطا در اتصال به MetaTrader 5!** ثبت هشدار لغو شد.", parse_mode="Markdown")
+                return ConversationHandler.END
+            return INPUT_SYMBOL
 
+        await status_msg.delete()
+
+    context.user_data["symbol"] = symbol
+
+    await update.message.reply_text(
+        f"✅ نماد: `{symbol}`\n\n🎯 حالا **قیمت هدف** مد نظر خود را به عدد وارد کنید:",
+        reply_markup=cancel_keyboard,
+        parse_mode="Markdown"
+    )
+    return INPUT_PRICE
+
+
+async def price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دریافت قیمت هدف و ذخیره نهایی هشدار"""
+    chat_id = update.effective_chat.id
+    symbol = context.user_data.get("symbol")
+    is_forex = context.user_data.get("is_forex", False)
+
+    try:
+        target_price = float(update.message.text.strip())
+    except ValueError:
+        cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+        await update.message.reply_text(
+            "❌ **قیمت هدف باید یک عدد معتبر باشد.**\nلطفاً قیمت را دوباره وارد کنید:",
+            reply_markup=cancel_keyboard,
+            parse_mode="Markdown"
+        )
+        return INPUT_PRICE
+
+    # ذخیره در دیتابیس
     await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
-    await status_msg.edit_text(
-        f"🔔 **هشدار قیمت ثبت شد**\n\n📌 **نماد:** `{symbol}`\n🎯 **هدف:** `{target_price}`",
+
+    logger.info("Alert created successfully: %s at %s for chat_id %s", symbol, target_price, chat_id)
+    await update.message.reply_text(
+        f"🔔 **هشدار قیمت با موفقیت ثبت شد!**\n\n"
+        f"📌 **نماد:** `{symbol}`\n"
+        f"🎯 **قیمت هدف:** `{target_price}`\n"
+        f"🌐 **بازار:** {'فارکس' if is_forex else 'ارز دیجیتال'}",
         parse_mode="Markdown"
     )
 
+    # پاکسازی داده‌های موقت کاربر
+    context.user_data.clear()
+    return ConversationHandler.END
 
-async def set_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await handle_alert_creation(update, context, is_forex=False)
-
-
-async def set_falert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await handle_alert_creation(update, context, is_forex=True)
-
+async def cancel_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو عملیات در صورت کلیک روی دکمه انصراف"""
+    query = update.callback_query
+    await query.answer()
+    context.user_data.clear()
+    await query.edit_message_text("❌ **ثبت هشدار لغو شد.**", parse_mode="Markdown")
+    return ConversationHandler.END
 
 # ------------------------------------------------------------------
 # 6. Position & Trade Handlers
@@ -504,8 +580,6 @@ if __name__ == "__main__":
 
     # Commands
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("alert", set_alert))
-    app.add_handler(CommandHandler("falert", set_falert))
     app.add_handler(CommandHandler("trade", trade_command))
     app.add_handler(CommandHandler("positions", show_positions_handler))
     app.add_handler(CommandHandler("closeAll", close_all_positions_handler))
@@ -530,6 +604,26 @@ if __name__ == "__main__":
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(add_watchlist_handler)
+
+    alert_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("setalert", start_alert_wizard),
+            MessageHandler(filters.Regex("ثبت هشدار قیمت 🔔"),start_alert_wizard),
+        ],
+        states={
+            SELECT_MARKET: [CallbackQueryHandler(market_selected, pattern="^market_|cancel_alert$")],
+            INPUT_SYMBOL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, symbol_received),
+                CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
+            ],
+            INPUT_PRICE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, price_received),
+                CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
+            ],
+        },
+        fallbacks=[CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$")],
+    )
+    app.add_handler(alert_handler)
 
     # Keyboard Handlers
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
