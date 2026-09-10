@@ -81,12 +81,17 @@ async def calculate_rsi(symbol, timeframe, market_type="CRYPTO"):
     try:
         if market_type == "CRYPTO":
             url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={timeframe}&limit=100"
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url)
-                if response.status_code != 200:
-                    logger.warning("Binance API error for symbol %s: status %s", symbol, response.status_code)
-                    return None, None, "⚠️ **خطا در دریافت داده‌ها از بایننس!**"
-                res = response.json()
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(url)
+                    if response.status_code != 200:
+                        logger.warning("Binance API error for symbol %s: status %s", symbol, response.status_code)
+                        return None, None, "⚠️ **خطا در دریافت داده‌ها از بایننس!**"
+                    res = response.json()
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as net_err:
+                logger.error("Network issue/Internet disconnection while fetching Binance data for %s: %s", symbol,
+                             net_err)
+                return None, None, "📡 **خطای اتصال به اینترنت! لطفا وضعیت شبکه را بررسی کنید.**"
 
             if not res or isinstance(res, dict):
                 logger.warning("No data found on Binance for symbol %s", symbol)
