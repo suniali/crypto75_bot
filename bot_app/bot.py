@@ -209,7 +209,7 @@ async def handle_alert_creation(update: Update, context: ContextTypes.DEFAULT_TY
 
     await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
     await status_msg.edit_text(
-        f"🔔 **هشدار قیمت ثبت شد**\n\n📌 **نماد:** `{symbol}`\n🎯 **هدف:** `{target_price:,.2f}`",
+        f"🔔 **هشدار قیمت ثبت شد**\n\n📌 **نماد:** `{symbol}`\n🎯 **هدف:** `{target_price}`",
         parse_mode="Markdown"
     )
 
