@@ -956,18 +956,29 @@ async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAUL
 # 7. Watchlist & Conversation Handlers
 # ------------------------------------------------------------------
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("Fetching watchlist for chat_id %s", update.effective_chat.id)
     watchlist = await get_all_watchlist()
     if not watchlist:
         await update.message.reply_text("📭 واچ‌لیست شما خالی است!")
         return
 
+    msg = "📊 **لیست نمادهای تحت نظر:**\n\n"
+    buttons = []
+
+    # ساخت دکمه‌ها به صورت ۲ تایی در هر سطر برای فشرده‌سازی و زیبایی
+    row = []
     for watch in watchlist:
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton("❌ حذف", callback_data=f"del_{watch.symbol}_{watch.time_frame}_{watch.market_type}")
-        ]])
-        msg = f"📌 **نماد:** `{watch.symbol}` | ⏳ `{watch.time_frame}` | 🏷 `{watch.market_type}`"
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=keyboard)
+        msg += f"• `{watch.symbol}` ({watch.time_frame}) - {watch.market_type}\n"
+        row.append(InlineKeyboardButton(f"❌ {watch.symbol}({watch.time_frame})",
+                                        callback_data=f"del_{watch.symbol}_{watch.time_frame}_{watch.market_type}"))
+
+        if len(row) == 2:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    msg += "\n*جهت حذف هر نماد روی دکمه مربوط به آن کلیک کنید:*"
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
 
 
 async def handle_delete_watchlist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
