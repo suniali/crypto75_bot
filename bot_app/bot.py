@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import sys
+import inspect
 from pathlib import Path
 
 import django
@@ -956,21 +957,37 @@ async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAUL
 # 7. Watchlist & Conversation Handlers
 # ------------------------------------------------------------------
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    watchlist = await get_all_watchlist()
+    query = update.callback_query
+
+    # ۱. پاسخ سریع به تلگرام برای برداشتن لودینگ دکمه
+    if query:
+        await query.answer()
+
+    loop = asyncio.get_running_loop()
+    # ۲. اجرای غیربلاک‌کننده فراخوانی دیتابیس
+    watchlist = await loop.run_in_executor(None, get_all_watchlist) if not inspect.iscoroutinefunction(
+        get_all_watchlist) else await get_all_watchlist()
+
     if not watchlist:
-        await update.message.reply_text("📭 واچ‌لیست شما خالی است!")
+        text = "📭 واچ‌لیست شما خالی است!"
+        if query:
+            await query.edit_message_text(text)
+        else:
+            await update.message.reply_text(text)
         return
 
     msg = "📊 **لیست نمادهای تحت نظر:**\n\n"
     buttons = []
-
-    # ساخت دکمه‌ها به صورت ۲ تایی در هر سطر برای فشرده‌سازی و زیبایی
     row = []
+
     for watch in watchlist:
         msg += f"• `{watch.symbol}` ({watch.time_frame}) - {watch.market_type}\n"
-        row.append(InlineKeyboardButton(f"❌ {watch.symbol}({watch.time_frame})",
-                                        callback_data=f"del_{watch.symbol}_{watch.time_frame}_{watch.market_type}"))
-
+        row.append(
+            InlineKeyboardButton(
+                f"❌ {watch.symbol}({watch.time_frame})",
+                callback_data=f"del_watchlist_{watch.symbol}_{watch.time_frame}_{watch.market_type}"
+            )
+        )
         if len(row) == 2:
             buttons.append(row)
             row = []
@@ -978,25 +995,74 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
         buttons.append(row)
 
     msg += "\n*جهت حذف هر نماد روی دکمه مربوط به آن کلیک کنید:*"
-    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(buttons))
+    reply_markup = InlineKeyboardMarkup(buttons)
 
+    # ۳. مدیریت یکپارچه پاسخ جهت جلوگیری از خطای update.message
+    if query:
+        await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
 
-async def handle_delete_watchlist_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    if query:
+        await query.answer()
 
-    _, symbol, timeframe, market_type = query.data.split("_")
+    _, _, symbol, timeframe, market_type = query.data.split('_')
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ بله، مطمئنم", callback_data=f"confirm_del_watchlist_{symbol}_{timeframe}_{market_type}"),
+            InlineKeyboardButton("❌ انصراف", callback_data="showWatchlist"),
+        ]
+    ])
+
+    text = (
+        "⚠️ **هشدار: آیا اطمینان دارید؟**\n\n"
+        f"با تایید این گزینه نماد `{symbol}` ({timeframe}) از واچ‌لیست حذف خواهد شد!"
+    )
+
+    await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+
+async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    # پاسخ لحظه‌ای به دکمه برای از بین بردن تأخیر ظاهری
+    await query.answer("در حال پردازش...", show_alert=False)
+
+    _, _, _, symbol, timeframe, market_type = query.data.split("_")
     logger.info("Deleting item from watchlist: %s (%s, %s)", symbol, timeframe, market_type)
 
-    # متوقف ساختن تسک پایش مربوطه
+    # متوقف ساختن تسک پایش پس‌زمینه
     worker_key = f"{symbol}_{timeframe}_{market_type}"
     if worker_key in ACTIVE_WORKERS:
         ACTIVE_WORKERS[worker_key].cancel()
         del ACTIVE_WORKERS[worker_key]
         logger.info("Cancelled background worker task for key: %s", worker_key)
 
-    await delete_from_watchlist(symbol, timeframe, market_type)
-    await query.edit_message_text(f"🗑 نماد `{symbol}` از واچ‌لیست حذف و پایش آن متوقف شد.", parse_mode="Markdown")
+    # اجرای غیربلاک‌کننده حذف از دیتابیس
+    loop = asyncio.get_running_loop()
+    if inspect.iscoroutinefunction(delete_from_watchlist):
+        res_msg = await delete_from_watchlist(symbol, timeframe, market_type)
+    else:
+        res_msg = await loop.run_in_executor(None, delete_from_watchlist, symbol, timeframe, market_type)
+
+    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="showWatchlist")]])
+
+    # فقط یک بار ویرایش پیام در انتهای کار (کاهش Requestهای API)
+    if res_msg:
+        await query.edit_message_text(
+            f"🗑 نماد `{symbol}` از واچ‌لیست حذف و پایش آن متوقف شد.",
+            parse_mode="Markdown",
+            reply_markup=back_keyboard
+        )
+    else:
+        await query.edit_message_text(
+            f"❌ خطایی در حذف نماد `{symbol}` رخ داد.",
+            parse_mode="Markdown",
+            reply_markup=back_keyboard
+        )
 
 
 # Conversation steps
@@ -1064,7 +1130,6 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.edit_message_text(f"✨ ` {timeframe} | {symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید. ", parse_mode="Markdown")
     return ConversationHandler.END
-
 
 async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
@@ -1140,7 +1205,6 @@ if __name__ == "__main__":
         connection_pool_size=8
     )
 
-    # 1️⃣ اضافه شدن job_queue() جهت فعال‌سازی آپدیت زنده
     app = (
         ApplicationBuilder()
         .token(TOKEN)
@@ -1227,7 +1291,10 @@ if __name__ == "__main__":
 
     # ------------------ 5️⃣ دکمه‌های شیشه‌ای (Callback Query Handlers) ------------------
     # حذف از واچ لیست
-    app.add_handler(CallbackQueryHandler(handle_delete_watchlist_callback, pattern="^del_"))
+    app.add_handler(CallbackQueryHandler(show_watchlist_command, pattern="^showWatchlist$"))
+    app.add_handler(CallbackQueryHandler(delete_watchlist_handler, pattern="^del_watchlist_"))
+    app.add_handler(CallbackQueryHandler(confirm_delete_watchlist_handler, pattern="^confirm_del_watchlist_"))
+
 
     # مدیریت پوزیشن‌ها و آپدیت لایو
     app.add_handler(CommandHandler("positions", show_positions_handler))
