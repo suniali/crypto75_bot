@@ -991,7 +991,12 @@ async def handle_delete_watchlist_callback(update: Update, context: ContextTypes
 # Conversation steps
 async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Starting addWatchlist conversation for chat_id %s", update.effective_chat.id)
-    await update.message.reply_text("📝 لطفاً نام نماد را وارد کنید (مثلاً `BTCUSDT`):", parse_mode="Markdown")
+    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")]])
+    await update.message.reply_text(
+        "📝 لطفاً نام نماد را وارد کنید (مثلاً `BTCUSDT`):",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard,
+    )
     return ADD_SYMBOL
 
 
@@ -1003,7 +1008,8 @@ async def get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("5m", callback_data="5m"), InlineKeyboardButton("15m", callback_data="15m")],
         [InlineKeyboardButton("30m", callback_data="30m"), InlineKeyboardButton("1h", callback_data="1h")],
-        [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")]
+        [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
     ])
     await update.message.reply_text(f"📌 نماد: `{symbol}`\n⏱ تایم‌فریم را انتخاب کنید:",
                                     parse_mode="Markdown", reply_markup=keyboard)
@@ -1017,10 +1023,11 @@ async def get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['timeframe'] = timeframe
     logger.info("AddWatchlist step 2 - Timeframe selected: %s", timeframe)
 
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🌐 کریپتو", callback_data="CRYPTO"),
-        InlineKeyboardButton("📈 فارکس", callback_data="FOREX")
-    ]])
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 کریپتو", callback_data="CRYPTO"),
+         InlineKeyboardButton("📈 فارکس", callback_data="FOREX")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
+    ])
     await query.edit_message_text("🏷 بازار را انتخاب کنید:", reply_markup=keyboard)
     return ADD_MARKET
 
@@ -1046,9 +1053,12 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
-    await update.message.reply_text("❌ عملیات لغو شد.")
+    query = update.callback_query
+    await query.answer()
+    context.user_data.clear()
+    await query.edit_message_text("❌ **عملیات واچ لیست لغو شد.**",parse_mode="Markdown")
     return ConversationHandler.END
 
 
@@ -1142,11 +1152,20 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex("^➕ افزودن به واچ‌لیست$"), start_add_watchlist),
         ],
         states={
-            ADD_SYMBOL: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_symbol_step)],
-            ADD_TIMEFRAME: [CallbackQueryHandler(get_timeframe_step)],
-            ADD_MARKET: [CallbackQueryHandler(get_market_step)],
+            ADD_SYMBOL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_symbol_step),
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
+            ],
+            ADD_TIMEFRAME: [
+                CallbackQueryHandler(get_timeframe_step,pattern="^(5m|15m|30m|1h|4h|1d)$"),
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
+            ],
+            ADD_MARKET: [
+                CallbackQueryHandler(get_market_step),
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
+            ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[CallbackQueryHandler(cancel_watch_list_callback,pattern="^cancel_watchlist$")],
     )
     app.add_handler(add_watchlist_handler)
 
