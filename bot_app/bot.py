@@ -338,13 +338,15 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
         except BadRequest as e:
             if "message is not modified" not in str(e).lower():
                 logger.warning(f"Failed to edit empty message: {e}")
+                job.schedule_removal()
         except Exception as e:
             logger.error(f"Unexpected error when clearing message: {e}")
+            job.schedule_removal()
 
         job.schedule_removal()  # توقف تایمر
         return
 
-    # ساخت متن جدید با فرمت HTML (ایمن‌تر از Markdown)
+    # ساخت متن جدید با فرمت HTML
     text = "🔄 <b>لیست پوزیشن‌های فعال (بروزرسانی زنده):</b>\n\n"
     total_profit = 0.0
     keyboard = []
@@ -380,7 +382,6 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
 
     # دکمه‌های کنترلی
     keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
-    keyboard.append([InlineKeyboardButton("⏹ توقف آپدیت زنده", callback_data="stop_live_update")])
 
     try:
         await context.bot.edit_message_text(
@@ -391,38 +392,48 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML",
         )
     except BadRequest as e:
-        # اگر پیام تغییری نکرده باشد خطای Message is not modified می‌دهد که مشکلی نیست
-        if "message is not modified" in str(e).lower():
+        err_msg = str(e).lower()
+        if "message is not modified" in err_msg:
             pass
-        elif "message to edit not found" in str(e).lower():
-            # اگر کاربر پیام را پاک کرده باشد، تایمر متوقف می‌شود
-            job.schedule_removal()
         else:
-            logger.error(f"BadRequest on edit_message_text: {e}")
+            # اگر پیام ویرایش نمی‌شود (تغییر ماهیت داده، پاک شده یا کاربر منو را عوض کرده)، تایمر متوقف شود
+            logger.warning(f"Stopping live_pos_job for chat {chat_id} due to BadRequest: {e}")
+            job.schedule_removal()
     except Exception as e:
         logger.error(f"Error updating positions job: {e}")
+        job.schedule_removal()
+
 
 async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار جزییات یک پوزیشن خاص هر چند ثانیه یک‌بار"""
     job = context.job
     chat_id = job.chat_id
-    message_id = job.data.get("message_id")
-    ticket = job.data.get("ticket")
+    job_data = job.data or {}
+    message_id = job_data.get("message_id")
+    ticket = job_data.get("ticket")
+
+    if not message_id or not ticket:
+        job.schedule_removal()
+        return
 
     loop = asyncio.get_running_loop()
-    success, positions = await loop.run_in_executor(None, get_open_positions)
+    try:
+        success, positions = await loop.run_in_executor(None, get_open_positions)
+    except Exception as e:
+        logger.error(f"Error fetching single position in background job: {e}")
+        return
 
     pos = next((p for p in positions if p["ticket"] == ticket), None) if success and positions else None
 
-    # اگر پوزیشن بسته شده باشد، تایمر را متوقف کن
+    # اگر پوزیشن بسته شده باشد، اطلاع بده و تایمر را متوقف کن
     if not pos:
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=f"❌ **پوزیشن `{ticket}` بسته شده است یا یافت نشد.**",
+                text=f"❌ <b>پوزیشن <code>{ticket}</code> بسته شده است یا یافت نشد.</b>",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
-                parse_mode="Markdown",
+                parse_mode="HTML",
             )
         except Exception:
             pass
@@ -433,13 +444,13 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     profit_emoji = "🟢" if pos["profit"] >= 0 else "🔴"
 
     caption = (
-        f"⚙️ **مدیریت پوزیشن `{pos['symbol']}`** (🎫 `{pos['ticket']}`)\n\n"
-        f"🔹 **نوع:** {trade_type} | 📦 **حجم:** `{pos['volume']}` لات\n"
-        f"💵 **قیمت ورود:** `{pos['price_open']}`\n"
-        f"📈 **قیمت لحظه‌ای:** `{pos['price_current']:.5f}`\n"
-        f"🛑 **SL:** `{pos['sl']}` | 🎯 **TP:** `{pos['tp']}`\n"
+        f"⚙️ <b>مدیریت پوزیشن <code>{pos['symbol']}</code></b> (🎫 <code>{pos['ticket']}</code>)\n\n"
+        f"🔹 <b>نوع:</b> {trade_type} | 📦 <b>حجم:</b> <code>{pos['volume']}</code> لات\n"
+        f"💵 <b>قیمت ورود:</b> <code>{pos['price_open']}</code>\n"
+        f"📈 <b>قیمت لحظه‌ای:</b> <code>{pos['price_current']:.5f}</code>\n"
+        f"🛑 <b>SL:</b> <code>{pos['sl']}</code> | 🎯 <b>TP:</b> <code>{pos['tp']}</code>\n"
         f"───────────────────\n"
-        f"📊 **سود/زیان لحظه‌ای:** {profit_emoji} **`${pos['profit']:,.2f}`**"
+        f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>${pos['profit']:,.2f}</code></b>"
     )
 
     keyboard = [
@@ -465,10 +476,19 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
             message_id=message_id,
             text=caption,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
-    except Exception:
-        pass
+    except BadRequest as e:
+        err_msg = str(e).lower()
+        if "message is not modified" in err_msg:
+            pass
+        else:
+            # اگر کاربر دکمه اکشنی زده (مثلا ویرایش SL/TP) و متن تغییر کرده، لایو تک‌پوزیشن فوراً کشته شود
+            logger.info(f"Stopping live_single_pos job for ticket {ticket} due to UI transition.")
+            job.schedule_removal()
+    except Exception as e:
+        logger.error(f"Error in auto_refresh_single_position_job: {e}")
+        job.schedule_removal()
 
 # مراحل ConversationHandler برای دریافت عددی SL/TP یا Partial Close
 INPUT_NEW_SL_TP, INPUT_PARTIAL_LOT = range(2)
@@ -526,7 +546,7 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
 
         text += (
             f"🔹 **تیکت:** `{pos['ticket']}` | **{pos['symbol']}** ({pos['type']})\n"
-            f"📊 **حجم:** `{pos['volume']}` | **ورود:** `{pos['price_open']}`\n"
+            f"📊 **حجم:** `{pos['volume']}` | **ورود:** `{pos['price_open']:.5f}`\n"
             f"📈 **قیمت فعلی:** `{pos['price_current']:.5f}`\n"
             f"{profit_icon} **سود/ضرر:** `{profit}$`\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
@@ -540,7 +560,6 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # اضافه کردن دکمه‌های کنترلی اصلی
     keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
-    keyboard.append([InlineKeyboardButton("⏹ توقف آپدیت زنده", callback_data="stop_live_update")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -563,35 +582,13 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
-async def stop_live_update_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """توقف خودکار آپدیت زنده با کلیک کاربر روی دکمه توقف"""
-    query = update.callback_query
-    await query.answer("آپدیت زنده متوقف شد.")
-
-    chat_id = update.effective_chat.id
-
-    # پیدا کردن و حذف تایمر مربوط به این چت
-    current_jobs = context.job_queue.get_jobs_by_name(f"live_pos_{chat_id}")
-    for job in current_jobs:
-        job.schedule_removal()
-
-    # جایگزینی دکمه «توقف» با دکمه «بروزرسانی مجدد»
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("🔄 بروزرسانی و شروع مجدد لایو", callback_data="refresh_positions_list")],
-            [InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")],
-        ]
-    )
-
-    current_text = query.message.text
-    # حذف خط اولِ مربوط به "بروزرسانی زنده" و جایگزینی با متن ایستاتیک
-    new_text = current_text.replace("🔄 لیست پوزیشن‌های فعال (بروزرسانی زنده):",
-                                    "📋 **لیست پوزیشن‌های فعال (توقف‌یافته):**")
-
-    try:
-        await query.edit_message_text(text=new_text, reply_markup=keyboard, parse_mode="Markdown")
-    except Exception:
-        pass
+async def stop_all_live_jobs(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """تابع کمکی برای حذف تمامی تایمرهای مربوط به یک چت"""
+    if context.job_queue:
+        for job_name in [f"live_pos_{chat_id}", f"live_single_pos_{chat_id}"]:
+            for job in context.job_queue.get_jobs_by_name(job_name):
+                job.schedule_removal()
+                logger.info("Stopped job %s for chat %s", job_name, chat_id)
 
 
 def build_positions_keyboard(data):
@@ -613,12 +610,8 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
     chat_id = update.effective_chat.id
     ticket = int(query.data.split("_")[2])
 
-    # ۱. متوقف کردن تمامی تایمرهای قبلی (لیست کلی و تک پوزیشن)
-    if context.job_queue:
-        for job_name in [f"live_pos_{chat_id}", f"live_single_pos_{chat_id}"]:
-            for job in context.job_queue.get_jobs_by_name(job_name):
-                job.schedule_removal()
-                logger.info("Stopped job %s for chat %s", job_name, chat_id)
+    # ۱. توقف حتمی تایمرهای قبلی
+    await stop_all_live_jobs(chat_id, context)
 
     # ۲. دریافت پوزیشن از متاتریدر به صورت Non-blocking
     loop = asyncio.get_running_loop()
@@ -640,7 +633,7 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
     caption = (
         f"⚙️ **مدیریت پوزیشن `{pos['symbol']}`** (🎫 `{pos['ticket']}`)\n\n"
         f"🔹 **نوع:** {trade_type} | 📦 **حجم:** `{pos['volume']}` لات\n"
-        f"💵 **قیمت ورود:** `{pos['price_open']}`\n"
+        f"💵 **قیمت ورود:** `{pos['price_open']:.5f}`\n"
         f"📈 **قیمت لحظه‌ای:** `{pos['price_current']:.5f}`\n"
         f"🛑 **SL:** `{pos['sl']}` | 🎯 **TP:** `{pos['tp']}`\n"
         f"───────────────────\n"
@@ -685,7 +678,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
     data_parts = query.data.split("_")
 
-    # پشتیبانی همزمان از اکشن‌های action_close_123 و close_pos_123
+    # پشتیبانی از فرمت‌های مختلف: action_close_123 یا close_pos_123 یا action_confirmclose_123
     if len(data_parts) == 3 and data_parts[0] == "action":
         action = data_parts[1]
         ticket = int(data_parts[2])
@@ -698,23 +691,34 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
     chat_id = update.effective_chat.id
 
-    # ۱. متوقف کردن تمامی تایمرهای قبلی (لیست کلی و تک پوزیشن)
-    if context.job_queue:
-        for job_name in [f"live_pos_{chat_id}", f"live_single_pos_{chat_id}"]:
-            for job in context.job_queue.get_jobs_by_name(job_name):
-                job.schedule_removal()
-                logger.info("Stopped job %s for chat %s", job_name, chat_id)
+    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
+    await stop_all_live_jobs(chat_id, context)
 
     loop = asyncio.get_running_loop()
 
-    # ------------------ ۱. بستن کامل پوزیشن ------------------
+    # ------------------ ۱-الف. درخواست بستن (نمایش پیام تأییدیه) ------------------
     if action in ["close", "closepos"]:
+        confirm_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ بله، کاملاً مطمئنم", callback_data=f"action_confirmclose_{ticket}"),
+                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
+            ]
+        ])
+        await query.edit_message_text(
+            f"⚠️ **هشدار بستن پوزیشن `{ticket}`**\n\n"
+            f"آیا از بستن کامل این پوزیشن اطمینان دارید؟",
+            reply_markup=confirm_keyboard,
+            parse_mode="Markdown"
+        )
+
+    # ------------------ ۱-ب. اجرای واقعی بستن پس از تأیید ------------------
+    elif action == "confirmclose":
         await query.edit_message_text(
             f"⏳ در حال بستن کامل پوزیشن `{ticket}`...",
             parse_mode="Markdown"
         )
 
-        # فراخوانی تابع بستن کامل پوزیشن در MT5
+        # فراخوانی تابع بستن کامل پوزیشن در MT5 (به صورت Async/Executor)
         success, msg = await loop.run_in_executor(None, close_position, ticket)
 
         back_keyboard = InlineKeyboardMarkup([
@@ -744,7 +748,6 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
     # ------------------ ۳. خروج ۵۰٪ حجم ------------------
     elif action == "close50":
-        # دریافت اطلاعات پوزیشن جهت محاسبه نصف حجم
         success, positions = await loop.run_in_executor(None, get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
@@ -910,11 +913,7 @@ async def close_all_positions_handler(update: Update, context: ContextTypes.DEFA
         await query.answer()
 
     # ۱. متوقف کردن تمامی تایمرهای قبلی (لیست کلی و تک پوزیشن)
-    if context.job_queue:
-        for job_name in [f"live_pos_{chat_id}", f"live_single_pos_{chat_id}"]:
-            for job in context.job_queue.get_jobs_by_name(job_name):
-                job.schedule_removal()
-                logger.info("Stopped job %s for chat %s", job_name, chat_id)
+    await stop_all_live_jobs(chat_id, context)
 
     # ایجاد کیبورد تاییدیه
     keyboard = [
@@ -939,19 +938,23 @@ async def close_all_positions_handler(update: Update, context: ContextTypes.DEFA
 async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """اجرای واقعی بستن تمامی پوزیشن‌ها پس از تایید کاربر"""
     query = update.callback_query
-    await query.answer()
+    await query.answer("در حال بستن همه پوزیشن‌ها...")
 
-    logger.info("Confirmed close ALL positions triggered by chat_id %s", update.effective_chat.id)
-    await query.edit_message_text("⏳ **در حال بستن تمامی پوزیشن‌ها...**", parse_mode="Markdown")
+    chat_id = update.effective_chat.id
+
+    logger.info("Confirmed close ALL positions triggered by chat_id %s", chat_id)
+    await query.edit_message_text("⏳ <b>در حال بستن تمامی پوزیشن‌ها...</b>", parse_mode="HTML")
 
     loop = asyncio.get_running_loop()
+    # ۲. اجرای غیربلاک‌کننده بستن همه پوزیشن‌ها
     res_msg = await loop.run_in_executor(None, close_all_positions)
     logger.info("Close ALL positions result: %s", res_msg)
 
     # نمایش نتیجه و دکمه بازگشت به لیست
-    back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="refresh_positions_list")]])
-    await query.edit_message_text(f"{res_msg}", reply_markup=back_keyboard, parse_mode="Markdown")
-
+    back_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]
+    ])
+    await query.edit_message_text(f"{res_msg}", reply_markup=back_keyboard, parse_mode="HTML")
 
 # ------------------------------------------------------------------
 # 7. Watchlist & Conversation Handlers
@@ -1299,7 +1302,6 @@ if __name__ == "__main__":
     # مدیریت پوزیشن‌ها و آپدیت لایو
     app.add_handler(CommandHandler("positions", show_positions_handler))
     app.add_handler(CallbackQueryHandler(show_positions_handler, pattern="^refresh_positions_list$"))
-    app.add_handler(CallbackQueryHandler(stop_live_update_handler, pattern="^stop_live_update$"))
     app.add_handler(CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_"))
 
     # اکشن‌های مستقیم پوزیشن‌ها
