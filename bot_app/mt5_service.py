@@ -174,15 +174,21 @@ def close_all_positions():
     if not positions:
         logger.info("No open positions found to close.")
         mt5.shutdown()
-        return "📭 **هیچ پوزیشن بازی برای بستن پیدا نشد.**"
+        return "📭 <b>هیچ پوزیشن بازی جهت بستن یافت نشد.</b>"
 
+    total_positions = len(positions)
     closed_count = 0
+    total_closed_profit = 0.0  # مجموع سود/زیان پوزیشن‌های بسته‌شده
+    details = []
+
     for pos in positions:
+        pos_profit = getattr(pos, 'profit', 0.0)
         action = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
         tick = mt5.symbol_info_tick(pos.symbol)
 
         if not tick:
             logger.warning("Could not fetch tick to close position #%s (%s)", pos.ticket, pos.symbol)
+            details.append(f"❌ <code>{pos.ticket}</code> ({pos.symbol}): عدم دریافت قیمت لحظه‌ای")
             continue
 
         price = tick.bid if pos.type == mt5.ORDER_TYPE_BUY else tick.ask
@@ -201,14 +207,34 @@ def close_all_positions():
         res = mt5.order_send(req)
         if res and res.retcode == mt5.TRADE_RETCODE_DONE:
             closed_count += 1
+            total_closed_profit += pos_profit
+
+            p_icon = "🟢" if pos_profit >= 0 else "🔴"
+            details.append(f"✅ <code>{pos.ticket}</code> ({pos.symbol}) | {p_icon} <code>{pos_profit:.2f}$</code>")
             logger.info("Closed position #%s for %s", pos.ticket, pos.symbol)
         else:
-            comment = res.comment if res else "No response"
+            comment = res.comment if res else "پاسخی دریافت نشد"
+            details.append(f"❌ <code>{pos.ticket}</code> ({pos.symbol}): {comment}")
             logger.error("Failed to close position #%s (%s). Reason: %s", pos.ticket, pos.symbol, comment)
 
     mt5.shutdown()
-    logger.info("Completed close_all_positions. Closed %s out of %s positions.", closed_count, len(positions))
-    return f"⚡️ **عملیات بستن پوزیشن‌ها به پایان رسید.**\n\n✅ **تعداد پوزیشن‌های بسته شده:** `{closed_count}`"
+    logger.info("Completed close_all_positions. Closed %s out of %s positions.", closed_count, total_positions)
+
+    # ------------------ ساخت خروجی شکیل ------------------
+    status_icon = "🎉" if closed_count == total_positions else ("⚠️" if closed_count > 0 else "❌")
+    profit_summary_icon = "🟢" if total_closed_profit >= 0 else "🔴"
+
+    output = (
+        f"{status_icon} <b>نتیجه عملیات بستن تمامی پوزیشن‌ها:</b>\n"
+        f"───────────────────\n"
+        f"📊 <b>موفقیت:</b> <code>{closed_count}</code> از <code>{total_positions}</code> پوزیشن\n"
+        f"{profit_summary_icon} <b>مجموع سود/زیان بسته‌شده:</b> <code>${total_closed_profit:,.2f}</code>\n"
+        f"───────────────────\n"
+        f"📝 <b>جزئیات پوزیشن‌ها:</b>\n"
+    )
+
+    output += "\n".join(details)
+    return output
 
 def close_position(ticket: int, volume_to_close: float = None):
     """
