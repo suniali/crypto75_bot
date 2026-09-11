@@ -1036,6 +1036,8 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    await query.edit_message_text("⏳ **در حال ثبت در واچ لیست...**", parse_mode="Markdown")
+
     symbol = context.user_data['symbol']
     timeframe = context.user_data['timeframe']
     market_type = query.data
@@ -1049,7 +1051,7 @@ async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ACTIVE_WORKERS[worker_key] = task
     logger.info("Created new worker task for key: %s", worker_key)
 
-    await query.edit_message_text(f"✨ `{symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید.", parse_mode="Markdown")
+    await query.edit_message_text(f"✨ ` {timeframe} | {symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید. ", parse_mode="Markdown")
     return ConversationHandler.END
 
 
