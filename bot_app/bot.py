@@ -64,7 +64,7 @@ from telegram.request import HTTPXRequest
 from telegram.warnings import PTBUserWarning
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 
-from bot_app.analysis_service import calculate_rsi
+from bot_app.analysis_service import calculate_rsi,get_ai_market_view
 from bot_app.models import UserAlert, Watchlist
 from bot_app.mt5_service import (
     check_symbol_info,
@@ -1392,11 +1392,17 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
                     logger.info("Signal detected for %s (%s)! RSI: %s | Status: %s | Divergence: %s",
                                 symbol, timeframe, rsi, status, divergence)
 
+                    # دریافت غیربلاک‌کننده تحلیل هوش مصنوعی
+                    loop = asyncio.get_running_loop()
+                    ai_analysis = await get_ai_market_view(symbol, rsi, status, divergence, market_type)
+
                     msg = (
                         f"🚨 <b>هشدار سیگنال RSI</b>\n\n"
                         f"📌 <b>نماد:</b> <code>{symbol}</code> | ⏳ <code>{timeframe}</code>\n"
                         f"📊 <b>RSI:</b> <code>{rsi:.2f}</code> | ⚡️ <b>وضعیت:</b> <code>{status}</code>\n"
-                        f"🔍 <b>واگرایی:</b> {divergence}"
+                        f"🔍 <b>واگرایی:</b> {divergence}\n\n"
+                        f"🤖 <b>دیدگاه هوش مصنوعی (Gemini):</b>\n"
+                        f"<i>{ai_analysis}</i>"
                     )
 
                     # ارسال تصویر به همراه زیرنویس (Caption) در صورت وجود چارت
@@ -1413,7 +1419,6 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
-
 
 # ------------------------------------------------------------------
 # 9. Application Startup & Main Execution

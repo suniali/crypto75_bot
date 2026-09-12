@@ -9,8 +9,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.signal import argrelextrema
+from google import genai
+from google.genai import types
+from decouple import config
 
-from bot_app.mt5_service import get_data_for_rsi
+from bot_app.mt5_service import get_rates_data
 
 # ------------------------------------------------------------------
 # Logging Configuration
@@ -112,7 +115,7 @@ async def calculate_rsi(symbol, timeframe, market_type="CRYPTO"):
             df['close'] = df['close'].astype(float)
 
         elif market_type == "FOREX":
-            rates, msg = get_data_for_rsi(symbol, timeframe)
+            rates, msg = get_rates_data(symbol, timeframe)
             if rates is None:
                 return None, None, msg, None
             df = pd.DataFrame(rates)
@@ -217,3 +220,133 @@ def generate_divergence_chart(df, symbol, timeframe, p1_idx, p2_idx, div_type):
 
     return file_path
 
+
+def get_lower_tf_candles(symbol: str, lower_timeframe: str = "1m", count: int = 8, market_type: str = "FOREX") -> str:
+    """دریافت کندل‌های تایم‌فریم پایین‌تر جهت بررسی الگوها"""
+    logger.info("Fetching lower TF candles | Symbol: %s | TF: %s | Market: %s", symbol, lower_timeframe, market_type)
+    df = None
+
+    try:
+        if market_type == "FOREX":
+            rates, msg = get_rates_data(symbol, lower_timeframe)
+            if rates is None or isinstance(rates, bool) or len(rates) == 0:
+                logger.warning("Failed to get FOREX rates for %s: %s", symbol, msg)
+                return "اطلاعات کندل‌های تایم پایین در دسترس نیست."
+
+            # برش دادن به تعداد مورد نیاز (count)
+            rates = rates[-count:]
+            df = pd.DataFrame(rates)
+            df['time'] = pd.to_datetime(df['time'], unit='s').dt.strftime('%H:%M')
+
+        elif market_type == "CRYPTO":
+            url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={lower_timeframe}&limit={count}"
+            try:
+                with httpx.Client(timeout=5.0) as client:
+                    response = client.get(url)
+                    if response.status_code != 200:
+                        logger.warning("Binance API error for %s (%s): Status %s", symbol, lower_timeframe,
+                                       response.status_code)
+                        return "خطا در دریافت کندل‌های تایم پایین از بایننس."
+                    res = response.json()
+
+                if not res or isinstance(res, dict):
+                    logger.warning("Empty response from Binance for %s", symbol)
+                    return "داده‌ای برای کندل‌های تایم پایین بایننس یافت نشد."
+
+                df = pd.DataFrame(res,
+                                  columns=['time', 'open', 'high', 'low', 'close', 'volume', '_', '_', '_', '_', '_',
+                                           '_'])
+                df['time'] = pd.to_datetime(df['time'], unit='ms').dt.strftime('%H:%M')
+                for col in ['open', 'high', 'low', 'close']:
+                    df[col] = df[col].astype(float)
+
+            except Exception as net_err:
+                logger.error("Network error fetching lower TF candles for %s: %s", symbol, net_err)
+                return "خطای ارتباط با شبکه هنگام دریافت کندل‌های بایننس."
+        else:
+            logger.error("Invalid market type: %s", market_type)
+            return "نوع بازار برای دریافت کندل‌ها نامعتبر است."
+
+        # ساخت متن خروجی برای پرامپت Gemini
+        candles_text = []
+        for idx, row in df.iterrows():
+            candles_text.append(
+                f"کندل {idx + 1} ({row['time']}): Open={row['open']}, High={row['high']}, Low={row['low']}, Close={row['close']}"
+            )
+
+        formatted_result = "\n".join(candles_text)
+        logger.info("Successfully fetched %d lower TF candles for %s", len(df), symbol)
+        return formatted_result
+
+    except Exception as e:
+        logger.exception("Error in get_lower_tf_candles for %s: %s", symbol, e)
+        return "خطا در پردازش کندل‌های تایم پایین."
+
+
+async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_type="FOREX"):
+    try:
+        lower_tf = "1m"
+        loop = asyncio.get_running_loop()
+
+        # اصلاح اصلاحیه مهم: ارسال خود تابع get_lower_tf_candles به عنوان ورودی اول
+        lower_candles = await loop.run_in_executor(
+            None, get_lower_tf_candles, symbol, lower_tf, 8, market_type
+        )
+
+        api_key = config('GEMINI_API_KEY', default='')
+        if not api_key:
+            return "\u200f⚠️ کلید API هوش مصنوعی تنظیم نشده است."
+
+        client = genai.Client(api_key=api_key)
+        prompt = f"""
+تو یک تحلیل‌گر و مدیریت‌کننده ریسک ارشد در بازارهای مالی (Day Trading و Scalping) هستی.
+اطلاعات لحظه‌ای زیر را بر اساس اصول پرایس‌اکشن و الگوهای کندلی تایم پایین تحلیل کن:
+
+📌 اطلاعات دریافتی:
+- نماد: {symbol}
+- مقدار RSI: {rsi_val}
+- وضعیت RSI: {rsi_status}
+- وضعیت واگرایی: {divergence}
+- ۱۰ کندل اخیر (Open, High, Low, Close):
+{lower_candles}
+
+🎯 وظیفه:
+یک توصیه کاملاً جدی، فشرده و عملیاتی (دقیقاً در ۲ جمله) به زبان فارسی ارائه بده:
+جمله ۱: وضعیت دقیق بازار، اعتبارسنجی سیگنال RSI/واگرایی و برچسب‌گذاری الگوهای کندلی بازگشتی دیده شده (مثل پین‌بار، انگالفینگ، دوجی یا عدم الگو).
+جمله ۲: اقدام معامله‌گری صریح (شرط تایید ورود با شکست سطح، حد ضرر، یا هشدار صریح عدم ورود).
+
+دستورالعمل نگارش:
+- فقط متن فارسی بدون هیچ عنوان یا مقدمه‌چینی بنویس.
+- جملات را کاملاً مرتب و روان بگو تا در فرمت راست‌چین تلگرام به شکل کاملاً تمیز دیده شوند.
+"""
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,
+            )
+        )
+        raw_text = response.text.strip()
+        formatted_text = "\u200f" + raw_text.replace("\n", "\n\u200f")
+        return formatted_text
+    except Exception as e:
+        logger.error("AI Analysis generation error: %s", e)
+        return "\u200f⚠️ تحلیل هوش مصنوعی در دسترس نیست."
+
+
+def extract_trade_from_image(image_path):
+    try:
+        client = genai.Client(api_key=config('GEMINI_API_KEY', default=''))
+        from PIL import Image
+        img = Image.open(image_path)
+
+        prompt = "این تصویر یک چارت یا پوزیشن معاملاتی است. مقادیر زیر را استخراج کن و دقیقاً با همین فرمت پاسخ بده:\nSYMBOL: <نام نماد>\nTYPE: <BUY یا SELL>\nENTRY: <قیمت ورود>\nSL: <حد ضرر یا 0>\nTP: <حد سود یا 0>"
+
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[img, prompt]
+        )
+        return response.text
+    except Exception as e:
+        return f"خطا در پردازش تصویر: {e}"
