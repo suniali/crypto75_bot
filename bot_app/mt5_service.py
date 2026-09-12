@@ -440,10 +440,10 @@ def get_open_positions():
         mt5.shutdown()
 
 
-def get_data_for_rsi(symbol: str, timeframe: str):
-    logger.info("Fetching RSI rates for Symbol: %s, Timeframe: %s", symbol, timeframe)
+def get_rates_data(symbol: str, timeframe: str):
+    logger.info("Fetching Data rates for Symbol: %s, Timeframe: %s", symbol, timeframe)
     if not init_mt5():
-        return False, ERROR_CANNOT_CONNECT_TO_METATRADER
+        return False, "ERROR_CANNOT_CONNECT_TO_METATRADER"
 
     try:
         interval = TIMEFRAME_TO_MT5_TIMEFRAME.get(timeframe, mt5.TIMEFRAME_M30)
@@ -456,8 +456,8 @@ def get_data_for_rsi(symbol: str, timeframe: str):
         logger.info("Successfully fetched %s candles for %s", len(rates), symbol)
         return rates, "✅ **داده‌های کندل‌ها با موفقیت دریافت شد.**"
     except Exception as e:
-        logger.exception("Exception during get_data_for_rsi (%s): %s", symbol, e)
-        return False, f"🚨 **خطا در دریافت داده‌های RSI:**\n`{e}`"
+        logger.exception("Exception during get_rates_data (%s): %s", symbol, e)
+        return False, f"🚨 **خطا در دریافت داده‌ها:**\n`{e}`"
     finally:
         mt5.shutdown()
 
