@@ -103,6 +103,7 @@ ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME, ADD_WATCHLIST_MARKET = (
 )
 ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌های پس‌زمینه هنگام حذف
 
+MAIN_MENU_TEXT = "\u200f🏠 **به منوی اصلی بازگشتید.**\n\n💡 _از دکمه‌های زیر جهت دسترسی سریع استفاده کنید:_"
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
         [
             ["ثبت هشدار قیمت 🔔"],
@@ -170,28 +171,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     logger.info("User %s (chat_id: %s) started the bot.", user_name, chat_id)
 
+    # کاراکتر \u200f جهت مرتب‌سازی درست متون فارسی و انگلیسی در تلگرام
     welcome_text = (
-        f"سلام **{user_name}** عزیز! 👋\n"
+        f"\u200fسلام **{user_name}** عزیز! 👋\n"
         f"به **ربات دستیار و پایشگر ترید** خوش آمدید.\n\n"
-        " راهنمای جامع دستورات ربات به شرح زیر است:\n\n"
-        "🔔 **تنظیم هشدارهای قیمت (Price Alerts)**\n"
-        "├ 🔸 کریپتو: `/alert <نماد> <قیمت>`\n"
-        "│   مثال: `/alert BTCUSDT 65000`\n"
-        "├ 🔹 فارکس/فلزات: `/falert <نماد> <قیمت>`\n"
-        "│   مثال: `/falert XAUUSD-ECN 2100`\n\n"
-        "📈 **مدیریت معاملات (Trading & Positions)**\n"
-        "├ 🟢 ثبت معامله: `/trade <BUY/SELL> <نماد> <حجم> <SL> <TP>`\n"
-        "│   مثال: `/trade BUY EURUSD 0.1 300 600`\n"
-        "├ 📊 پوزیشن‌های باز: `/positions`\n"
-        "└ ❌ بستن سریع همه: `/closeAll`\n\n"
-        "📋 **مدیریت واچ‌لیست (Watchlist & RSI Worker)**\n"
-        "├ 👁 مشاهده واچ‌لیست: `/showWatchlist`\n"
-        "├ ➕ افزودن نماد: `/addWatchlist`\n\n"
-        "💡 _برای استفاده سریع‌تر می‌توانید از دکمه‌های زیر استفاده کنید._"
+        "📌 **قابلیت‌های اصلی ربات:**\n\n"
+        "🔔 **هشدارهای قیمت (Price Alerts)**\n"
+        "└ تنظیم و پایش لحظه‌ای قیمت‌های فارکس و کریپتو\n\n"
+        "📈 **مدیریت معاملات و پوزیشن‌ها**\n"
+        "└ مشاهده پوزیشن‌های باز و ورود به معاملات جدید\n\n"
+        "🤖 **پایش هوشمند RSI و تحلیل AI**\n"
+        "├ 📊 سنجش خودکار RSI و تشخیص واگرایی‌ها\n"
+        "└ 🧠 تحلیل الگوهای کندلی و تایم پایین با هوش مصنوعی (Gemini)\n\n"
+        "📝 **استخراج و ژورنال‌نویسی هوشمند**\n"
+        "├ 📸 **استخراج معامله از عکس:** خواندن خودکار مشخصات چارت با هوش مصنوعی\n"
+        "└ ✍️ **ثبت دستی معامله:** قالب‌بندی متنی مشخصات جهت ژورنال شخصی\n\n"
+        "📋 **مدیریت واچ‌لیست (Watchlist)**\n"
+        "└ مدیریت نمادهای تحت نظر برای دریافت هشدارهای تحلیل AI\n\n"
+        "💡 *جهت شروع، از دکمه‌های منوی زیر استفاده کنید:* "
     )
 
-
-    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
+    await update.message.reply_text(
+        welcome_text,
+        parse_mode="Markdown",
+        reply_markup=MAIN_KEYBOARD
+    )
 
 # ------------------------------------------------------------------
 # 5.َAlert Handlers
@@ -324,7 +328,11 @@ async def cancel_alert_callback(update: Update, context: ContextTypes.DEFAULT_TY
     query = update.callback_query
     await query.answer()
     context.user_data.clear()
-    await query.edit_message_text("❌ **ثبت هشدار لغو شد.**", parse_mode="Markdown")
+    await query.edit_message_text(
+        "❌ **ثبت هشدار لغو شد.**",
+        reply_markup=MAIN_KEYBOARD,
+        parse_mode="Markdown",
+    )
     return ConversationHandler.END
 
 # ------------------------------------------------------------------
@@ -1123,15 +1131,27 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def cancel_trade_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """انصراف از ساخت معامله"""
+    """انصراف از ساخت معامله و بازگشت به منوی اصلی"""
+    context.user_data.clear()
+
     query = update.callback_query
     if query:
         await query.answer()
+        # ۱. ویرایش پیام شیشه‌ای و حذف دکمه‌های آن
         await query.edit_message_text("❌ <b>فرآیند ساخت معامله لغو شد.</b>", parse_mode="HTML")
+        # ۲. ارسال پیام جدید برای فعال کردن مجدد کیبورد اصلی
+        await update.effective_chat.send_message(
+        MAIN_MENU_TEXT,
+            reply_markup=MAIN_KEYBOARD
+        )
     else:
-        await update.message.reply_text("❌ <b>فرآیند ساخت معامله لغو شد.</b>", parse_mode="HTML")
+        # اگر انصراف متنی یا کامند /stop بود
+        await update.message.reply_text(
+            "❌ <b>فرآیند ساخت معامله لغو شد.</b>",
+            reply_markup=MAIN_KEYBOARD,
+            parse_mode="HTML"
+        )
 
-    context.user_data.clear()
     return ConversationHandler.END
 
 
@@ -1146,7 +1166,7 @@ async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_
     loop = asyncio.get_running_loop()
     _, message = await loop.run_in_executor(None, close_position_by_ticket, ticket)
     logger.info("Close position #%s result: %s", ticket, message)
-    await query.edit_message_text(message, parse_mode="Markdown")
+    await query.edit_message_text(message,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
 
 
 async def close_all_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1378,14 +1398,33 @@ async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DE
     await query.edit_message_text(f"✨ ` {timeframe} | {symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید. ", parse_mode="Markdown")
     return ConversationHandler.END
 
+
 async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
-    query = update.callback_query
-    await query.answer()
-    context.user_data.clear()
-    await query.edit_message_text("❌ **عملیات واچ لیست لغو شد.**",parse_mode="Markdown")
-    return ConversationHandler.END
 
+    context.user_data.clear()
+
+    query = update.callback_query
+    if query:
+        await query.answer()
+        # ۱. ویرایش پیام شیشه‌ای (حذف دکمه‌های شیشه‌ای قبلی)
+        await query.edit_message_text("❌ **عملیات افزودن به واچ‌لیست لغو شد.**", parse_mode="Markdown")
+
+        # ۲. ارسال پیام جدید برای بازگرداندن کیبورد اصلی
+        await update.effective_chat.send_message(
+            MAIN_MENU_TEXT,
+            parse_mode="Markdown",
+            reply_markup=MAIN_KEYBOARD
+        )
+    else:
+        # پشتیبانی از حالتی که لغو از طریق دستور متنی انجام شود
+        await update.message.reply_text(
+          MAIN_MENU_TEXT,
+            parse_mode="Markdown",
+            reply_markup=MAIN_KEYBOARD
+        )
+
+    return ConversationHandler.END
 
 # ------------------------------------------------------------------
 # 8. Extract Trade From Image
@@ -1499,8 +1538,16 @@ async def start_manual_edit_handler(update: Update, context: ContextTypes.DEFAUL
         "لطفاً متن زیر را کپی کرده، تغییرات لازم (قیمت، نماد و...) را روی آن اعمال کنید و سپس **یک پیام جدید** حاوی متن اصلاح‌شده بفرستید:"
     )
 
+    cancel_inline_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ انصراف", callback_data="confirm_journal_no")]
+    ])
+
     # ارسال متن قبلی در یک پیام جداگانه برای کپی آسان‌تر توسط کاربر
-    await query.message.reply_text(f"```text\n{current_data}\n```", parse_mode="Markdown")
+    await query.message.reply_text(
+        f"```text\n{current_data}\n```",
+        parse_mode="Markdown",
+        reply_markup=cancel_inline_keyboard
+    )
     return EDITING_JOURNAL_DATA
 
 
@@ -1551,7 +1598,7 @@ async def cancel_extract_image_callback(update: Update, context: ContextTypes.DE
     await query.answer()
 
     await query.edit_message_text("❌ عملیات استخراج لغو شد.")
-    await query.message.reply_text("بازگشت به منوی اصلی:", reply_markup=MAIN_KEYBOARD)
+    await query.message.reply_text(MAIN_MENU_TEXT,reply_markup=MAIN_KEYBOARD)
     context.user_data.pop('extracted_journal_data', None)
     return ConversationHandler.END
 
@@ -1567,6 +1614,10 @@ async def cancel_extract_image_callback(update: Update, context: ContextTypes.DE
 
 async def start_manual_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """گام ۱: درخواست ورود اطلاعات معامله به‌صورت متنی"""
+    cancel_inline_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ انصراف", callback_data="confirm_journal_no")]
+    ])
+
     await update.message.reply_text(
         "✍️ **لطفاً اطلاعات معامله خود را وارد کنید:**\n\n"
         "می‌توانید اطلاعات را با فرمت دلخواه (مثلاً نماد، حد سود، حد ضرر و...) ارسال کنید:\n\n"
@@ -1578,7 +1629,8 @@ async def start_manual_trade_wizard(update: Update, context: ContextTypes.DEFAUL
         "SL: 64000\n"
         "TP: 68000\n"
         "```",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=cancel_inline_keyboard
     )
     return WAITING_FOR_MANUAL_TRADE_INPUT
 
@@ -1699,6 +1751,7 @@ if __name__ == "__main__":
 
     # ------------------ 2️⃣ ثبت دستورات اولیه (Commands) ------------------
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
 
     # ------------------ 3️⃣ گفتگوها (Conversation Handlers) ------------------
@@ -1723,7 +1776,9 @@ if __name__ == "__main__":
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
             ],
         },
-        fallbacks=[CallbackQueryHandler(cancel_watch_list_callback,pattern="^cancel_watchlist$")],
+        fallbacks=[
+            CallbackQueryHandler(cancel_watch_list_callback,pattern="^cancel_watchlist$"),
+        ],
         per_message=False,  # اضافه شد جهت حذف هشدار
         per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
         per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
@@ -1747,7 +1802,9 @@ if __name__ == "__main__":
                 CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
             ],
         },
-        fallbacks=[CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$")],
+        fallbacks=[
+            CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$")
+        ],
         per_message=False,  # اضافه شد جهت حذف هشدار
         per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
         per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
@@ -1783,28 +1840,33 @@ if __name__ == "__main__":
         ],
         states={
             NEW_TRADE_SYMBOL: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_symbol_step, pattern="^sym_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_symbol_step),
             ],
             NEW_TRADE_ACTION: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_action_step, pattern="^act_"),
             ],
             NEW_TRADE_LOT: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_lot_step, pattern="^lot_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_lot_step),
             ],
             NEW_TRADE_SL: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_sl_step, pattern="^sl_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_sl_step),
             ],
             NEW_TRADE_TP: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(execute_trade_step, pattern="^tp_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, execute_trade_step),
             ],
         },
         fallbacks=[
             CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
-            CommandHandler("cancel", cancel_trade_handler),
+            MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو)\s*$"), cancel_trade_handler),
         ],
         per_message=False,  # اضافه شد جهت حذف هشدار
         per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
