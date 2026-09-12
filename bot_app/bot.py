@@ -1392,11 +1392,16 @@ async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAU
 WAITING_FOR_TRADE_IMAGE, CONFIRM_JOURNAL_DATA, EDITING_JOURNAL_DATA = range(100, 103)
 
 async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """گام ۱: درخواست تصویر چارت"""
+    """گام ۱: درخواست تصویر چارت همراه با دکمه شیشه‌ای انصراف"""
+    cancel_inline_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade_extraction")]
+    ])
+
     await update.message.reply_text(
         "📸 **لطفاً تصویر چارت یا پوزیشن معاملاتی خود را ارسال کنید:**\n\n"
         "اطلاعات معامله استخراج شده و پس از تأیید شما جهت ژورنال‌نویسی نمایش داده می‌شود.",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=cancel_inline_keyboard
     )
     return WAITING_FOR_TRADE_IMAGE
 
@@ -1839,14 +1844,17 @@ if __name__ == "__main__":
     extract_image_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex(r"^\s*📸 استخراج معامله از عکس$"), start_extract_trade_wizard),
-            MessageHandler(filters.Regex(r"^\s*✍️ ثبت دستی معامله$"), start_manual_trade_wizard)  # ورود دستی
+            MessageHandler(filters.Regex(r"^\s*✍️ ثبت دستی معامله$"), start_manual_trade_wizard)
         ],
         states={
             WAITING_FOR_TRADE_IMAGE: [
-                MessageHandler(filters.PHOTO, process_trade_image_handler)
+                MessageHandler(filters.PHOTO, process_trade_image_handler),
+                # پشتیبانی از دکمه شیشه‌ای انصراف در مرحله ارسال عکس
+                CallbackQueryHandler(cancel_extract_image_callback, pattern="^cancel_trade_extraction$")
             ],
             WAITING_FOR_MANUAL_TRADE_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, process_manual_trade_input)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_manual_trade_input),
+                CallbackQueryHandler(cancel_extract_image_callback, pattern="^cancel_trade_extraction$")
             ],
             CONFIRM_JOURNAL_DATA: [
                 CallbackQueryHandler(confirm_journal_data_handler, pattern="^confirm_journal_yes$"),
@@ -1858,8 +1866,9 @@ if __name__ == "__main__":
             ]
         },
         fallbacks=[
-            MessageHandler(filters.Regex(r"^\s*لغو$"), cancel_extract_image_callback),
-            CallbackQueryHandler(cancel_extract_image_callback, pattern="^confirm_journal_no$")
+            MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو)\s*$"), cancel_extract_image_callback),
+            CallbackQueryHandler(cancel_extract_image_callback,
+                                 pattern="^(confirm_journal_no|cancel_trade_extraction)$")
         ],
         per_chat=True,
         per_user=True,
