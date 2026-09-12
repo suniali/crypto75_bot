@@ -1,4 +1,5 @@
 import os
+import time
 import logging
 import httpx
 import asyncio
@@ -335,18 +336,45 @@ async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_typ
         return "\u200f⚠️ تحلیل هوش مصنوعی در دسترس نیست."
 
 
-def extract_trade_from_image(image_path):
-    try:
-        client = genai.Client(api_key=config('GEMINI_API_KEY', default=''))
-        from PIL import Image
-        img = Image.open(image_path)
+def extract_trade_from_image(image_path: str) -> str:
+    api_key = config('GEMINI_API_KEY', default='')
+    if not api_key:
+        return "‏⚠️ کلید API هوش مصنوعی تنظیم نشده است."
 
-        prompt = "این تصویر یک چارت یا پوزیشن معاملاتی است. مقادیر زیر را استخراج کن و دقیقاً با همین فرمت پاسخ بده:\nSYMBOL: <نام نماد>\nTYPE: <BUY یا SELL>\nENTRY: <قیمت ورود>\nSL: <حد ضرر یا 0>\nTP: <حد سود یا 0>"
+    client = genai.Client(api_key=api_key)
+    from PIL import Image
+    img = Image.open(image_path)
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[img, prompt]
-        )
-        return response.text
-    except Exception as e:
-        return f"خطا در پردازش تصویر: {e}"
+    prompt = """
+این تصویر یک چارت یا پوزیشن معاملاتی است. 
+دقیقاً مقادیر زیر را استخراج کن و بدون هیچ مقدمه یا توضیح اضافی، فقط فرمت زیر را خروجی بده:
+
+SYMBOL: <نام نماد>
+TYPE: <BUY یا SELL>
+ENTRY: <قیمت ورود>
+SL: <حد ضرر یا 0>
+TP: <حد سود یا 0>
+"""
+
+    # لیست مدل‌ها جهت Fallback در صورت ترافیک بالا
+    models_to_try = ['gemini-2.5-flash', 'gemini-1.5-flash']
+
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[img, prompt],
+                config=types.GenerateContentConfig(temperature=0.1)
+            )
+            raw_text = response.text.strip()
+            return "\u200f" + raw_text.replace("\n", "\n\u200f")
+        except Exception as e:
+            if "503" in str(e):
+                logger.warning(f"Model {model_name} busy (503). Retrying with backup model...")
+                time.sleep(1)  # وقفه کوتاه قبل از تلاش مجدد
+                continue
+            else:
+                logger.error("Error extracting trade from image: %s", e)
+                return "‏⚠️ خطا در پردازش تصویر چارت."
+
+    return "‏⚠️ سرورهای هوش مصنوعی در حال حاضر شلوغ هستند. لطفاً چند لحظه بعد مجدداً تلاش کنید."

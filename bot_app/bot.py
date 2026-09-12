@@ -5,6 +5,7 @@ import sys
 import inspect
 from pathlib import Path
 
+from PIL import Image
 import django
 from asgiref.sync import sync_to_async
 from decouple import config
@@ -64,7 +65,11 @@ from telegram.request import HTTPXRequest
 from telegram.warnings import PTBUserWarning
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 
-from bot_app.analysis_service import calculate_rsi,get_ai_market_view
+from bot_app.analysis_service import (
+    calculate_rsi,
+    get_ai_market_view,
+    extract_trade_from_image
+)
 from bot_app.models import UserAlert, Watchlist
 from bot_app.mt5_service import (
     check_symbol_info,
@@ -176,7 +181,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     main_keyboard = ReplyKeyboardMarkup(
-        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"], ["📊 پوزیشن‌های باز","📈 معامله جدید"]],
+        [
+            ["ثبت هشدار قیمت 🔔"],
+            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
+            ["📊 پوزیشن‌های باز","📈 معامله جدید"],
+            ["📸 استخراج معامله از عکس"]
+        ],
         resize_keyboard=True
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=main_keyboard)
@@ -1376,7 +1386,200 @@ async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAU
 
 
 # ------------------------------------------------------------------
-# 8. Background Worker Loop
+# 8. Extract Trade From Image
+# ------------------------------------------------------------------
+
+WAITING_FOR_TRADE_IMAGE, CONFIRM_JOURNAL_DATA, EDITING_JOURNAL_DATA = range(100, 103)
+
+async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۱: درخواست تصویر چارت"""
+    await update.message.reply_text(
+        "📸 **لطفاً تصویر چارت یا پوزیشن معاملاتی خود را ارسال کنید:**\n\n"
+        "اطلاعات معامله استخراج شده و پس از تأیید شما جهت ژورنال‌نویسی نمایش داده می‌شود.",
+        parse_mode="Markdown"
+    )
+    return WAITING_FOR_TRADE_IMAGE
+
+
+async def process_trade_image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۲: دریافت تصویر، استخراج داده‌ها با هندلینگ کامل خطا"""
+
+    # کیبورد اصلی برای بازگشت در صورت بروز خطا
+    main_keyboard = ReplyKeyboardMarkup(
+        [
+            ["ثبت هشدار قیمت 🔔"],
+            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
+            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
+            ["📸 استخراج معامله از عکس"]
+        ],
+        resize_keyboard=True
+    )
+
+    await update.message.chat.send_action(action="typing")
+    status_msg = await update.message.reply_text("⏳ در حال دریافت و پردازش تصویر چارت...")
+
+    temp_image_path = f"temp_trade_{update.effective_user.id}.jpg"
+
+    try:
+        # ۱. دانلود عکس
+        photo = update.message.photo[-1]
+        file = await photo.get_file()
+        await file.download_to_drive(temp_image_path)
+
+        # ۲. فشرده‌سازی تصویر
+        try:
+            with Image.open(temp_image_path) as img:
+                img.thumbnail((1024, 1024))
+                img.save(temp_image_path, "JPEG", quality=85)
+        except Exception as img_err:
+            logger.warning("Image optimization warning: %s", img_err)
+
+        await status_msg.edit_text("🤖 هوش مصنوعی در حال خواندن قیمت‌ها و نماد است...")
+
+        # ۳. فراخوانی هوش مصنوعی
+        loop = asyncio.get_running_loop()
+        extracted_text = await loop.run_in_executor(None, extract_trade_from_image, temp_image_path)
+
+        # ۴. بررسی پیام‌های خطای خروجی از تابع استخراج
+        if not extracted_text or extracted_text.startswith("⚠️") or "خطا" in extracted_text:
+            raise ValueError(extracted_text or "پاسخ نامعتبر از هوش مصنوعی")
+
+        # اگر تا اینجا خطایی نبود، پاکسازی فایل موقت و ادامه فرآیند
+        if os.path.exists(temp_image_path):
+            os.remove(temp_image_path)
+
+        context.user_data['extracted_journal_data'] = extracted_text
+
+        # ساخت دکمه‌های شیشه‌ای تأیید فقط در صورت موفقیت کامل
+        confirm_keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ تأیید و نمایش نهایی", callback_data="confirm_journal_yes")],
+            [InlineKeyboardButton("✏️ ویرایش دستی", callback_data="edit_journal_manual")],
+            [InlineKeyboardButton("❌ لغو", callback_data="confirm_journal_no")]
+        ])
+
+        msg = (
+            f"🔍 **اطلاعات استخراج‌شده از تصویر:**\n\n"
+            f"```text\n{extracted_text}\n```\n"
+            f"آیا اطلاعات بالا مورد تأیید است؟"
+        )
+
+        await status_msg.delete()
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=confirm_keyboard)
+        return CONFIRM_JOURNAL_DATA
+
+    except Exception as e:
+        logger.error("Error during trade extraction: %s", e)
+
+        # پاکسازی فایل موقت در صورت وجود
+        if os.path.exists(temp_image_path):
+            os.remove(temp_image_path)
+
+        context.user_data.pop('extracted_journal_data', None)
+
+        # اعلام خطا به کاربر و بازگشت مستقیم به منوی اصلی بدون نشان دادن دکمه‌های شیشه‌ای
+        error_text = str(e) if str(e).startswith(
+            "⚠️") else "⚠️ خطا در پردازش و استخراج اطلاعات تصویر. لطفاً مجدداً تلاش کنید."
+
+        await status_msg.delete()
+        await update.message.reply_text(
+            f"{error_text}\n\nعملیات لغو شد.",
+            reply_markup=main_keyboard
+        )
+
+        # خاتمه دادن به گفتگو و لغو حالت Conversation
+        return ConversationHandler.END
+
+
+async def start_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۳-ب: درخواست ارسال متن اصلاح‌شده از کاربر"""
+    query = update.callback_query
+    await query.answer()
+
+    current_data = context.user_data.get('extracted_journal_data', '')
+
+    await query.edit_message_text(
+        "✏️ **حالت ویرایش دستی:**\n\n"
+        "لطفاً متن زیر را کپی کرده، تغییرات لازم (قیمت، نماد و...) را روی آن اعمال کنید و سپس **یک پیام جدید** حاوی متن اصلاح‌شده بفرستید:"
+    )
+
+    # ارسال متن قبلی در یک پیام جداگانه برای کپی آسان‌تر توسط کاربر
+    await query.message.reply_text(f"```text\n{current_data}\n```", parse_mode="Markdown")
+    return EDITING_JOURNAL_DATA
+
+
+async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۳-ج: دریافت متن اصلاح‌شده کاربر و نمایش دکمه‌های تأیید مجدد"""
+    edited_text = update.message.text.strip()
+    context.user_data['extracted_journal_data'] = edited_text
+
+    confirm_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ تأیید و نمایش نهایی", callback_data="confirm_journal_yes")],
+        [InlineKeyboardButton("✏️ ویرایش مجدد", callback_data="edit_journal_manual")],
+        [InlineKeyboardButton("❌ لغو", callback_data="confirm_journal_no")]
+    ])
+
+    msg = (
+        f"✍️ **اطلاعات ویرایش‌شده توسط شما:**\n\n"
+        f"```text\n{edited_text}\n```\n"
+        f"آیا اطلاعات جدید مورد تأیید است؟"
+    )
+
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=confirm_keyboard)
+    return CONFIRM_JOURNAL_DATA
+
+
+async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام نهایی: نمایش متن نهایی تأییدشده جهت ژورنال‌نویسی"""
+    query = update.callback_query
+    await query.answer()
+
+    data = context.user_data.get('extracted_journal_data', 'اطلاعاتی یافت نشد.')
+
+    main_keyboard = ReplyKeyboardMarkup(
+        [
+            ["ثبت هشدار قیمت 🔔"],
+            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
+            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
+            ["📸 استخراج معامله از عکس"]
+        ],
+        resize_keyboard=True
+    )
+
+    await query.edit_message_text("✅ *داده‌ها تأیید شدند.*", parse_mode="Markdown")
+
+    final_msg = (
+        f"📝 **دیتا آماده جهت ژورنال‌نویسی:**\n\n"
+        f"```text\n{data}\n```\n\n"
+        f"📌 *می‌توانید متن بالا را کپی کرده و در ژورنال شخصی خود استفاده کنید.*"
+    )
+
+    await query.message.reply_text(final_msg, parse_mode="Markdown", reply_markup=main_keyboard)
+    context.user_data.pop('extracted_journal_data', None)
+    return ConversationHandler.END
+
+
+async def cancel_extract_image_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو فرآیند"""
+    query = update.callback_query
+    await query.answer()
+
+    main_keyboard = ReplyKeyboardMarkup(
+        [
+            ["ثبت هشدار قیمت 🔔"],
+            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
+            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
+            ["📸 استخراج معامله از عکس"]
+        ],
+        resize_keyboard=True
+    )
+
+    await query.edit_message_text("❌ عملیات استخراج لغو شد.")
+    await query.message.reply_text("بازگشت به منوی اصلی:", reply_markup=main_keyboard)
+    context.user_data.pop('extracted_journal_data', None)
+    return ConversationHandler.END
+
+# ------------------------------------------------------------------
+# 9. Background Worker Loop
 # ------------------------------------------------------------------
 async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: int, bot):
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
@@ -1421,7 +1624,7 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
 
 # ------------------------------------------------------------------
-# 9. Application Startup & Main Execution
+# 10. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
     logger.info("Starting bot initialization and background workers...")
@@ -1578,6 +1781,34 @@ if __name__ == "__main__":
         per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
     )
     app.add_handler(trade_wizard_handler)
+
+    # استخراج اطلاعات ترید از عکس
+    extract_image_handler = ConversationHandler(
+        entry_points=[
+            MessageHandler(filters.Regex(r"^\s*📸 استخراج معامله از عکس$"), start_extract_trade_wizard)
+        ],
+        states={
+            WAITING_FOR_TRADE_IMAGE: [
+                MessageHandler(filters.PHOTO, process_trade_image_handler)
+            ],
+            CONFIRM_JOURNAL_DATA: [
+                CallbackQueryHandler(confirm_journal_data_handler, pattern="^confirm_journal_yes$"),
+                CallbackQueryHandler(start_manual_edit_handler, pattern="^edit_journal_manual$"),
+                CallbackQueryHandler(cancel_extract_image_callback, pattern="^confirm_journal_no$")
+            ],
+            EDITING_JOURNAL_DATA: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, save_manual_edit_handler)
+            ]
+        },
+        fallbacks=[
+            MessageHandler(filters.Regex(r"^\s*لغو$"), cancel_extract_image_callback),
+            CallbackQueryHandler(cancel_extract_image_callback, pattern="^confirm_journal_no$")
+        ],
+        per_chat=True,
+        per_user=True,
+        per_message=False
+    )
+    app.add_handler(extract_image_handler)
 
     # ------------------ 4️⃣ کلیدهای میانبر کیبورد (Keyboard Handlers) ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
