@@ -103,6 +103,16 @@ ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME, ADD_WATCHLIST_MARKET = (
 )
 ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌های پس‌زمینه هنگام حذف
 
+MAIN_KEYBOARD = ReplyKeyboardMarkup(
+        [
+            ["ثبت هشدار قیمت 🔔"],
+            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
+            ["📊 پوزیشن‌های باز","📈 معامله جدید"],
+            ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"]
+        ],
+        resize_keyboard=True
+    )
+
 
 # ------------------------------------------------------------------
 # 4. Database Async Helpers
@@ -180,16 +190,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💡 _برای استفاده سریع‌تر می‌توانید از دکمه‌های زیر استفاده کنید._"
     )
 
-    main_keyboard = ReplyKeyboardMarkup(
-        [
-            ["ثبت هشدار قیمت 🔔"],
-            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
-            ["📊 پوزیشن‌های باز","📈 معامله جدید"],
-            ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"]
-        ],
-        resize_keyboard=True
-    )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=main_keyboard)
+
+    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
 
 # ------------------------------------------------------------------
 # 5.َAlert Handlers
@@ -1409,16 +1411,6 @@ async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAU
 async def process_trade_image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """گام ۲: دریافت تصویر، استخراج داده‌ها با هندلینگ کامل خطا"""
 
-    # کیبورد اصلی برای بازگشت در صورت بروز خطا
-    main_keyboard = ReplyKeyboardMarkup(
-        [
-            ["ثبت هشدار قیمت 🔔"],
-            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
-            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
-            ["📸 استخراج معامله از عکس"]
-        ],
-        resize_keyboard=True
-    )
 
     await update.message.chat.send_action(action="typing")
     status_msg = await update.message.reply_text("⏳ در حال دریافت و پردازش تصویر چارت...")
@@ -1488,7 +1480,7 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
         await status_msg.delete()
         await update.message.reply_text(
             f"{error_text}\n\nعملیات لغو شد.",
-            reply_markup=main_keyboard
+            reply_markup=MAIN_KEYBOARD
         )
 
         # خاتمه دادن به گفتگو و لغو حالت Conversation
@@ -1540,16 +1532,6 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
 
     data = context.user_data.get('extracted_journal_data', 'اطلاعاتی یافت نشد.')
 
-    main_keyboard = ReplyKeyboardMarkup(
-        [
-            ["ثبت هشدار قیمت 🔔"],
-            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
-            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
-            ["📸 استخراج معامله از عکس"]
-        ],
-        resize_keyboard=True
-    )
-
     await query.edit_message_text("✅ *داده‌ها تأیید شدند.*", parse_mode="Markdown")
 
     final_msg = (
@@ -1558,7 +1540,7 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
         f"📌 *می‌توانید متن بالا را کپی کرده و در ژورنال شخصی خود استفاده کنید.*"
     )
 
-    await query.message.reply_text(final_msg, parse_mode="Markdown", reply_markup=main_keyboard)
+    await query.message.reply_text(final_msg, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
     context.user_data.pop('extracted_journal_data', None)
     return ConversationHandler.END
 
@@ -1568,18 +1550,8 @@ async def cancel_extract_image_callback(update: Update, context: ContextTypes.DE
     query = update.callback_query
     await query.answer()
 
-    main_keyboard = ReplyKeyboardMarkup(
-        [
-            ["ثبت هشدار قیمت 🔔"],
-            ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
-            ["📊 پوزیشن‌های باز", "📈 معامله جدید"],
-            ["📸 استخراج معامله از عکس"]
-        ],
-        resize_keyboard=True
-    )
-
     await query.edit_message_text("❌ عملیات استخراج لغو شد.")
-    await query.message.reply_text("بازگشت به منوی اصلی:", reply_markup=main_keyboard)
+    await query.message.reply_text("بازگشت به منوی اصلی:", reply_markup=MAIN_KEYBOARD)
     context.user_data.pop('extracted_journal_data', None)
     return ConversationHandler.END
 
