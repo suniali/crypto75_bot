@@ -43,6 +43,7 @@ logger.addHandler(file_handler)
 # ------------------------------------------------------------------
 # 3. Imports & Configurations
 # ------------------------------------------------------------------
+import warnings
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -60,6 +61,8 @@ from telegram.ext import (
 )
 from telegram.error import NetworkError,TimedOut,BadRequest
 from telegram.request import HTTPXRequest
+from telegram.warnings import PTBUserWarning
+warnings.filterwarnings("ignore", category=PTBUserWarning)
 
 from bot_app.analysis_service import calculate_rsi
 from bot_app.models import UserAlert, Watchlist
@@ -173,7 +176,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     main_keyboard = ReplyKeyboardMarkup(
-        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"], ["📈 معامله جدید","📊 پوزیشن‌های باز"]],
+        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"], ["📊 پوزیشن‌های باز","📈 معامله جدید"]],
         resize_keyboard=True
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=main_keyboard)
@@ -1382,19 +1385,28 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
     try:
         while True:
             try:
-                rsi, status, divergence = await calculate_rsi(symbol, timeframe, market_type)
+                rsi, status, divergence, chart_path = await calculate_rsi(symbol, timeframe, market_type)
                 logger.debug("RSI checked for %s (%s): RSI=%s, Status=%s", symbol, timeframe, rsi, status)
 
                 if rsi is not None and ("NORMAL" not in status or divergence != "بدون واگرایی"):
                     logger.info("Signal detected for %s (%s)! RSI: %s | Status: %s | Divergence: %s",
                                 symbol, timeframe, rsi, status, divergence)
+
                     msg = (
-                        f"🚨 **هشدار سیگنال RSI**\n\n"
-                        f"📌 **نماد:** `{symbol}` | ⏳ `{timeframe}`\n"
-                        f"📊 **RSI:** `{rsi:.2f}` | ⚡️ **وضعیت:** `{status}`\n"
-                        f"🔍 **واگرایی:** {divergence}"
+                        f"🚨 <b>هشدار سیگنال RSI</b>\n\n"
+                        f"📌 <b>نماد:</b> <code>{symbol}</code> | ⏳ <code>{timeframe}</code>\n"
+                        f"📊 <b>RSI:</b> <code>{rsi:.2f}</code> | ⚡️ <b>وضعیت:</b> <code>{status}</code>\n"
+                        f"🔍 <b>واگرایی:</b> {divergence}"
                     )
-                    await bot.send_message(chat_id=chat_id, text=msg, parse_mode="Markdown")
+
+                    # ارسال تصویر به همراه زیرنویس (Caption) در صورت وجود چارت
+                    if chart_path and os.path.exists(chart_path):
+                        with open(chart_path, "rb") as photo:
+                            await bot.send_photo(chat_id=chat_id, photo=photo, caption=msg, parse_mode="HTML")
+                        os.remove(chart_path)  # حذف عکس پس از ارسال
+                    else:
+                        await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+
             except Exception as e:
                 logger.exception("Error during RSI calculation worker for %s: %s", symbol, e)
 
@@ -1457,7 +1469,7 @@ if __name__ == "__main__":
     add_watchlist_handler = ConversationHandler(
         entry_points=[
             CommandHandler("addWatchlist", start_add_watchlist),
-            MessageHandler(filters.Regex("^➕ افزودن به واچ‌لیست$"), start_add_watchlist),
+            MessageHandler(filters.Text(["✨ افزودن به واچ‌لیست"]), start_add_watchlist),
         ],
         states={
             ADD_WATCHLIST_SYMBOL: [
@@ -1474,6 +1486,9 @@ if __name__ == "__main__":
             ],
         },
         fallbacks=[CallbackQueryHandler(cancel_watch_list_callback,pattern="^cancel_watchlist$")],
+        per_message=False,  # اضافه شد جهت حذف هشدار
+        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
+        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
     )
     app.add_handler(add_watchlist_handler)
 
@@ -1495,6 +1510,9 @@ if __name__ == "__main__":
             ],
         },
         fallbacks=[CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$")],
+        per_message=False,  # اضافه شد جهت حذف هشدار
+        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
+        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
     )
     app.add_handler(alert_handler)
 
@@ -1511,8 +1529,9 @@ if __name__ == "__main__":
             CallbackQueryHandler(show_positions_handler, pattern="^refresh_positions_list$"),
             CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_")
         ],
-        per_chat=True,
-        per_user=True
+        per_message=False,  # اضافه شد جهت حذف هشدار
+        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
+        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
     )
     app.add_handler(pos_management_conv)
 
@@ -1549,6 +1568,9 @@ if __name__ == "__main__":
             CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
             CommandHandler("cancel", cancel_trade_handler),
         ],
+        per_message=False,  # اضافه شد جهت حذف هشدار
+        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
+        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
     )
     app.add_handler(trade_wizard_handler)
 
