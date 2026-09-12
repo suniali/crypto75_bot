@@ -72,6 +72,7 @@ from bot_app.mt5_service import (
     close_position,
     set_break_even,
     update_position_sltp,
+    get_market_watch_symbols,
 )
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
@@ -87,7 +88,11 @@ TIMEFRAME_TO_SECONDS = {
     "1d": 86400,
 }
 
-ADD_SYMBOL, ADD_TIMEFRAME, ADD_MARKET = range(3)
+ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME, ADD_WATCHLIST_MARKET = (
+    "ADD_WATCHLIST_SYMBOL",
+    "ADD_WATCHLIST_TIMEFRAME",
+    "ADD_WATCHLIST_MARKET"
+)
 ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌های پس‌زمینه هنگام حذف
 
 
@@ -168,7 +173,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     main_keyboard = ReplyKeyboardMarkup(
-        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "➕ افزودن به واچ‌لیست"], ["📊 پوزیشن‌های باز"]],
+        [["ثبت هشدار قیمت 🔔"],["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"], ["📈 معامله جدید","📊 پوزیشن‌های باز"]],
         resize_keyboard=True
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=main_keyboard)
@@ -176,8 +181,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ------------------------------------------------------------------
 # 5.َAlert Handlers
 # ------------------------------------------------------------------
-# تعریف مراحل گفتگو
-SELECT_MARKET, INPUT_SYMBOL, INPUT_PRICE = range(3)
+ADD_ALERT_MARKET, ADD_ALERT_SYMBOL, ADD_ALERT_PRICE = (
+    "ADD_ALERT_MARKET",
+    "ADD_ALERT_SYMBOL",
+    "ADD_ALERT_PRICE"
+)
 
 async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع فرایند ثبت هشدار و نمایش دکمه انتخاب بازار"""
@@ -195,9 +203,9 @@ async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
-    return SELECT_MARKET
+    return ADD_ALERT_MARKET
 
-async def market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پردازش انتخاب بازار و درخواست نماد از کاربر"""
     query = update.callback_query
     await query.answer()
@@ -221,10 +229,10 @@ async def market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=cancel_keyboard,
         parse_mode="Markdown"
     )
-    return INPUT_SYMBOL
+    return ADD_ALERT_SYMBOL
 
 
-async def symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت و اعتبارسنجی نماد واردشده"""
     symbol = update.message.text.strip().upper()
     is_forex = context.user_data.get("is_forex", False)
@@ -249,7 +257,7 @@ async def symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error("Error connecting to MetaTrader 5 while checking symbol %s", symbol)
                 await status_msg.edit_text("🚨 **خطا در اتصال به MetaTrader 5!** ثبت هشدار لغو شد.", parse_mode="Markdown")
                 return ConversationHandler.END
-            return INPUT_SYMBOL
+            return ADD_ALERT_SYMBOL
 
         await status_msg.delete()
 
@@ -260,10 +268,10 @@ async def symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=cancel_keyboard,
         parse_mode="Markdown"
     )
-    return INPUT_PRICE
+    return ADD_ALERT_PRICE
 
 
-async def price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت قیمت هدف و ذخیره نهایی هشدار"""
     chat_id = update.effective_chat.id
     symbol = context.user_data.get("symbol")
@@ -278,7 +286,7 @@ async def price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=cancel_keyboard,
             parse_mode="Markdown"
         )
-        return INPUT_PRICE
+        return ADD_ALERT_PRICE
 
     # ذخیره در دیتابیس
     await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
@@ -489,9 +497,6 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in auto_refresh_single_position_job: {e}")
         job.schedule_removal()
-
-# مراحل ConversationHandler برای دریافت عددی SL/TP یا Partial Close
-INPUT_NEW_SL_TP, INPUT_PARTIAL_LOT = range(2)
 
 
 async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -830,7 +835,8 @@ async def process_new_sltp_input(update: Update, context: ContextTypes.DEFAULT_T
     )
     return ConversationHandler.END
 
-
+# مراحل ConversationHandler برای دریافت عددی SL/TP یا Partial Close
+INPUT_NEW_SL_TP, INPUT_PARTIAL_LOT = ("INPUT_NEW_SL_TP","INPUT_PARTIAL_LOT")
 async def process_partial_close_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت حجم خروج جزئی دلخواه"""
     ticket = context.user_data.get("action_ticket")
@@ -854,41 +860,264 @@ async def process_partial_close_input(update: Update, context: ContextTypes.DEFA
     )
     return ConversationHandler.END
 
-async def trade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    if len(context.args) < 5:
-        logger.warning("Invalid trade args from chat_id %s: %s", chat_id, context.args)
-        await update.message.reply_text(
-            "⚠️ **فرمت دستور ناقص است!**\n\n"
-            "📌 **فرمت:** `/trade <BUY/SELL> <نماد> <حجم> <SL> <TP>`\n"
-            "💡 **مثال:** `/trade BUY EURUSD 0.1 300 600`",
-            parse_mode="Markdown"
-        )
-        return
+
+# تعریف مراحل Conversation New Trade
+NEW_TRADE_SYMBOL, NEW_TRADE_ACTION, NEW_TRADE_LOT, NEW_TRADE_SL, NEW_TRADE_TP = (
+    "NEW_TRADE_SYMBOL",
+    "NEW_TRADE_ACTION",
+    "NEW_TRADE_LOT",
+    "NEW_TRADE_SL",
+    "NEW_TRADE_TP"
+)
+
+async def start_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۱: دریافت پویای نمادها از Market Watch و ساخت دکمه‌ها"""
+    context.user_data.clear()
+
+    # ارسال فیدبک سریع در صورت کلیک روی دکمه شیشه‌ای
+    if update.callback_query:
+        await update.callback_query.answer()
+
+    # دریافت نمادهای واچ‌لیست از متاتریدر در Executor (غیربلاک‌کننده)
+    loop = asyncio.get_running_loop()
+    symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+
+    # چیدمان پویا: ایجاد دکمه‌های ۲ تایی در هر سطر
+    keyboard = []
+    row = []
+    for sym in symbols:
+        row.append(InlineKeyboardButton(sym, callback_data=f"sym_{sym}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    # افزودن دکمه انصراف در انتهای کیبورد
+    keyboard.append([InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    msg_text = (
+        "📊 <b>ایجاد معامله جدید (مرحله ۱ از ۵)</b>\n\n"
+        "لطفاً نماد مورد نظر را از <b>واچ‌لیست متاتریدر</b> انتخاب کنید یا نام آن را تایپ نمایید:"
+    )
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg_text, reply_markup=reply_markup, parse_mode="HTML")
+    elif update.message:
+        await update.message.reply_text(msg_text, reply_markup=reply_markup, parse_mode="HTML")
+
+    return NEW_TRADE_SYMBOL
+
+
+async def new_trade_get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۲: دریافت نماد و انتخاب جهت معامله (BUY/SELL)"""
+
+    # ۱. برقراری ایمنی کامل برای CallbackQuery و Message
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        symbol = query.data.replace("sym_", "").strip().upper()
+    elif update.message and update.message.text:
+        symbol = update.message.text.strip().upper()
+    else:
+        # اگر ورودی غیرمتنی فرستاده شد
+        return NEW_TRADE_SYMBOL
+
+    # ۲. ذخیره نماد انتخاب‌شده
+    context.user_data["trade_symbol"] = symbol
+
+    # ۳. دکمه‌های انتخاب جهت معامله (BUY / SELL)
+    keyboard = [
+        [
+            InlineKeyboardButton("🟢 BUY (خرید)", callback_data="act_BUY"),
+            InlineKeyboardButton("🔴 SELL (فروش)", callback_data="act_SELL")
+        ],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    text = (
+        f"📌 <b>نماد انتخاب شده:</b> <code>{symbol}</code>\n\n"
+        "<b>مرحله ۲ از ۵:</b> جهت معامله را انتخاب کنید:"
+    )
+
+    # ۴. ارسال یا ادیت پیام متناسب با نوع ورودی
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+
+    return NEW_TRADE_ACTION
+
+
+async def new_trade_get_action_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۳: ذخیره جهت و دریافت حجم (Lot)"""
+    query = update.callback_query
+    await query.answer()
+
+    action = query.data.replace("act_", "")
+    context.user_data["trade_action"] = action
+
+    # دکمه‌های میانبر برای حجم‌های رایج
+    keyboard = [
+        [InlineKeyboardButton("0.01", callback_data="lot_0.01"), InlineKeyboardButton("0.05", callback_data="lot_0.05"),
+         InlineKeyboardButton("0.10", callback_data="lot_0.10")],
+        [InlineKeyboardButton("0.50", callback_data="lot_0.50"),
+         InlineKeyboardButton("1.00", callback_data="lot_1.00")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
+    ]
+
+    text = (
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>جهت:</b> <code>{action}</code>\n\n"
+        "<b>مرحله ۳ از ۵:</b> حجم معامله (Lot) را وارد کنید یا از دکمه‌ها انتخاب کنید:"
+    )
+
+    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    return NEW_TRADE_LOT
+
+
+async def new_trade_get_lot_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۴: ذخیره حجم و دریافت میزان حد ضرر (SL) به پیپ"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        lot_str = query.data.replace("lot_", "")
+    else:
+        lot_str = update.message.text.strip()
 
     try:
-        action, symbol = context.args[0].upper(), context.args[1].upper()
-        lot, sl, tp = float(context.args[2]), int(context.args[3]), int(context.args[4])
-        if action not in ["BUY", "SELL"]:
+        lot = float(lot_str)
+        if lot <= 0:
             raise ValueError
     except ValueError:
-        logger.warning("Invalid numerical or action input for trade command from chat_id %s", chat_id)
-        await update.message.reply_text("❌ **ورودی‌های عددی یا نوع معامله (BUY/SELL) نامعتبر است.**",
-                                        parse_mode="Markdown")
-        return
+        await update.effective_message.reply_text("❌ <b>حجم وارد شده نامعتبر است. لطفاً یک عدد مثبت وارد کنید:</b>",
+                                                  parse_mode="HTML")
+        return NEW_TRADE_LOT
 
-    logger.info("Executing trade request: %s %s (Lot: %s, SL: %s, TP: %s) by chat_id %s", action, symbol, lot, sl, tp, chat_id)
-    msg = await update.message.reply_text("⏳ **در حال ارسال سفارش...**", parse_mode="Markdown")
-    success, result_msg = execute_trade(symbol, action, lot, sl, tp)
+    context.user_data["trade_lot"] = lot
+
+    keyboard = [[InlineKeyboardButton("⏭ بدون حد ضرر (0)", callback_data="sl_0")],
+                [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]]
+
+    text = (
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>جهت:</b> <code>{context.user_data['trade_action']}</code> | <b>حجم:</b> <code>{lot}</code>\n\n"
+        "<b>مرحله ۴ از ۵:</b> حد ضرر (SL) را به <b>پیپ/پوینت</b> وارد کنید (مثلاً <code>300</code>):\n"
+        "<i>(در صورت عدم نیاز عدد 0 را ارسال یا دکمه رد کردن را بزنید)</i>"
+    )
+
+    if update.callback_query:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    return NEW_TRADE_SL
+
+
+async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۵: ذخیره SL و دریافت حد سود (TP)"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        sl_str = query.data.replace("sl_", "")
+    else:
+        sl_str = update.message.text.strip()
+
+    try:
+        sl = int(sl_str)
+        if sl < 0:
+            raise ValueError
+    except ValueError:
+        await update.effective_message.reply_text("❌ <b>حد ضرر باید یک عدد صحیح (پیپ/پوینت) باشد:</b>",
+                                                  parse_mode="HTML")
+        return NEW_TRADE_SL
+
+    context.user_data["trade_sl"] = sl
+
+    keyboard = [[InlineKeyboardButton("⏭ بدون حد سود (0)", callback_data="tp_0")],
+                [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]]
+
+    text = (
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>حجم:</b> <code>{context.user_data['trade_lot']}</code>\n"
+        f"🛑 <b>SL:</b> <code>{sl}</code> پیپ\n\n"
+        "<b>مرحله ۵ از ۵:</b> حد سود (TP) را به <b>پیپ/پوینت</b> وارد کنید (مثلاً <code>600</code>):"
+    )
+
+    if update.callback_query:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+
+    return NEW_TRADE_TP
+
+
+async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله نهایی: جمع‌آوری اطلاعات و اجرای معامله"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        tp_str = query.data.replace("tp_", "")
+    else:
+        tp_str = update.message.text.strip()
+
+    try:
+        tp = int(tp_str)
+        if tp < 0:
+            raise ValueError
+    except ValueError:
+        await update.effective_message.reply_text("❌ <b>حد سود باید یک عدد صحیح (پیپ/پوینت) باشد:</b>",
+                                                  parse_mode="HTML")
+        return NEW_TRADE_TP
+
+    symbol = context.user_data["trade_symbol"]
+    action = context.user_data["trade_action"]
+    lot = context.user_data["trade_lot"]
+    sl = context.user_data["trade_sl"]
+
+    # ارسال پیام در حال انجام
+    if update.callback_query:
+        msg = await query.edit_message_text("⏳ <b>در حال ارسال سفارش به متاتریدر...</b>", parse_mode="HTML")
+    else:
+        msg = await update.message.reply_text("⏳ <b>در حال ارسال سفارش به متاتریدر...</b>", parse_mode="HTML")
+
+    # اجرای غیربلاک‌کننده معامله در Executor
+    loop = asyncio.get_running_loop()
+    success, result_msg = await loop.run_in_executor(None, execute_trade, symbol, action, lot, sl, tp)
 
     if success:
-        logger.info("Trade executed successfully for %s: %s", symbol, result_msg)
-        title = "🎯 **معامله با موفقیت ثبت شد**"
+        title = "🎯 <b>معامله با موفقیت ثبت شد</b>"
+        status_icon = "✅"
     else:
-        logger.error("Failed to execute trade for %s: %s", symbol, result_msg)
-        title = "🚨 **خطا در اجرای معامله!**"
+        title = "🚨 <b>خطا در اجرای معامله!</b>"
+        status_icon = "❌"
 
-    await msg.edit_text(f"{title}\n\n📌 **نماد:** `{symbol}`\n💬 `{result_msg}`", parse_mode="Markdown")
+    summary_text = (
+        f"{title}\n"
+        f"───────────────────\n"
+        f"📌 <b>نماد:</b> <code>{symbol}</code>\n"
+        f"📊 <b>جهت:</b> <code>{action}</code> | 📦 <b>حجم:</b> <code>{lot}</code>\n"
+        f"🛑 <b>SL:</b> <code>{sl}</code> | 🎯 <b>TP:</b> <code>{tp}</code>\n"
+        f"───────────────────\n"
+        f"{status_icon} <b>نتیجه:</b> {result_msg}"
+    )
+
+    await msg.edit_text(summary_text, parse_mode="HTML")
+    context.user_data.clear()
+    return ConversationHandler.END
+
+
+async def cancel_trade_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """انصراف از ساخت معامله"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        await query.edit_message_text("❌ <b>فرآیند ساخت معامله لغو شد.</b>", parse_mode="HTML")
+    else:
+        await update.message.reply_text("❌ <b>فرآیند ساخت معامله لغو شد.</b>", parse_mode="HTML")
+
+    context.user_data.clear()
+    return ConversationHandler.END
 
 
 async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1077,10 +1306,10 @@ async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE
         parse_mode="Markdown",
         reply_markup=cancel_keyboard,
     )
-    return ADD_SYMBOL
+    return ADD_WATCHLIST_SYMBOL
 
 
-async def get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     symbol = update.message.text.upper()
     context.user_data['symbol'] = symbol
     logger.info("AddWatchlist step 1 - Symbol entered: %s", symbol)
@@ -1093,10 +1322,10 @@ async def get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
     await update.message.reply_text(f"📌 نماد: `{symbol}`\n⏱ تایم‌فریم را انتخاب کنید:",
                                     parse_mode="Markdown", reply_markup=keyboard)
-    return ADD_TIMEFRAME
+    return ADD_WATCHLIST_TIMEFRAME
 
 
-async def get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     timeframe = query.data
@@ -1109,10 +1338,10 @@ async def get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
     ])
     await query.edit_message_text("🏷 بازار را انتخاب کنید:", reply_markup=keyboard)
-    return ADD_MARKET
+    return ADD_WATCHLIST_MARKET
 
 
-async def get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -1220,7 +1449,6 @@ if __name__ == "__main__":
 
     # ------------------ 2️⃣ ثبت دستورات اولیه (Commands) ------------------
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("trade", trade_command))
     app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
 
     # ------------------ 3️⃣ گفتگوها (Conversation Handlers) ------------------
@@ -1232,16 +1460,16 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex("^➕ افزودن به واچ‌لیست$"), start_add_watchlist),
         ],
         states={
-            ADD_SYMBOL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, get_symbol_step),
+            ADD_WATCHLIST_SYMBOL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
             ],
-            ADD_TIMEFRAME: [
-                CallbackQueryHandler(get_timeframe_step,pattern="^(5m|15m|30m|1h|4h|1d)$"),
+            ADD_WATCHLIST_TIMEFRAME: [
+                CallbackQueryHandler(add_watchlist_get_timeframe_step,pattern="^(5m|15m|30m|1h|4h|1d)$"),
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
             ],
-            ADD_MARKET: [
-                CallbackQueryHandler(get_market_step),
+            ADD_WATCHLIST_MARKET: [
+                CallbackQueryHandler(add_watchlist_get_market_step),
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
             ],
         },
@@ -1256,13 +1484,13 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex("^ثبت هشدار قیمت 🔔$"), start_alert_wizard),
         ],
         states={
-            SELECT_MARKET: [CallbackQueryHandler(market_selected, pattern="^market_|cancel_alert$")],
-            INPUT_SYMBOL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, symbol_received),
+            ADD_ALERT_MARKET: [CallbackQueryHandler(add_alert_market_selected, pattern="^market_|cancel_alert$")],
+            ADD_ALERT_SYMBOL: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_alert_symbol_received),
                 CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
             ],
-            INPUT_PRICE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, price_received),
+            ADD_ALERT_PRICE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_alert_price_received),
                 CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
             ],
         },
@@ -1287,6 +1515,42 @@ if __name__ == "__main__":
         per_user=True
     )
     app.add_handler(pos_management_conv)
+
+    # اضافه کردن ترید جدید
+    trade_wizard_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("newtrade", start_trade_wizard),
+            CommandHandler("trade", start_trade_wizard),
+            CallbackQueryHandler(start_trade_wizard, pattern="^start_new_trade$"),
+            MessageHandler(filters.Regex(r"^\s*📈 معامله جدید$"), start_trade_wizard),
+        ],
+        states={
+            NEW_TRADE_SYMBOL: [
+                CallbackQueryHandler(new_trade_get_symbol_step, pattern="^sym_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_symbol_step),
+            ],
+            NEW_TRADE_ACTION: [
+                CallbackQueryHandler(new_trade_get_action_step, pattern="^act_"),
+            ],
+            NEW_TRADE_LOT: [
+                CallbackQueryHandler(new_trade_get_lot_step, pattern="^lot_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_lot_step),
+            ],
+            NEW_TRADE_SL: [
+                CallbackQueryHandler(new_trade_get_sl_step, pattern="^sl_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_sl_step),
+            ],
+            NEW_TRADE_TP: [
+                CallbackQueryHandler(execute_trade_step, pattern="^tp_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, execute_trade_step),
+            ],
+        },
+        fallbacks=[
+            CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
+            CommandHandler("cancel", cancel_trade_handler),
+        ],
+    )
+    app.add_handler(trade_wizard_handler)
 
     # ------------------ 4️⃣ کلیدهای میانبر کیبورد (Keyboard Handlers) ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
