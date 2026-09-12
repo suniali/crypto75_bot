@@ -185,7 +185,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ["ثبت هشدار قیمت 🔔"],
             ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
             ["📊 پوزیشن‌های باز","📈 معامله جدید"],
-            ["📸 استخراج معامله از عکس"]
+            ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"]
         ],
         resize_keyboard=True
     )
@@ -1579,7 +1579,60 @@ async def cancel_extract_image_callback(update: Update, context: ContextTypes.DE
     return ConversationHandler.END
 
 # ------------------------------------------------------------------
-# 9. Background Worker Loop
+# 10. Manuel Extract Trade
+# ------------------------------------------------------------------
+(
+    WAITING_FOR_TRADE_IMAGE,
+    CONFIRM_JOURNAL_DATA,
+    EDITING_JOURNAL_DATA,
+    WAITING_FOR_MANUAL_TRADE_INPUT
+) = range(100, 104)
+
+async def start_manual_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۱: درخواست ورود اطلاعات معامله به‌صورت متنی"""
+    await update.message.reply_text(
+        "✍️ **لطفاً اطلاعات معامله خود را وارد کنید:**\n\n"
+        "می‌توانید اطلاعات را با فرمت دلخواه (مثلاً نماد، حد سود، حد ضرر و...) ارسال کنید:\n\n"
+        "مثال:\n"
+        "```text\n"
+        "SYMBOL: BTCUSDT\n"
+        "TYPE: BUY\n"
+        "ENTRY: 65000\n"
+        "SL: 64000\n"
+        "TP: 68000\n"
+        "```",
+        parse_mode="Markdown"
+    )
+    return WAITING_FOR_MANUAL_TRADE_INPUT
+
+
+async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """گام ۲: دریافت متن ورودی و نمایش دکمه‌های تأیید/ویرایش/لغو"""
+    user_text = update.message.text.strip()
+
+    if not user_text:
+        await update.message.reply_text("⚠️ متن ارسالی خالی است. لطفاً اطلاعات معامله را ارسال کنید.")
+        return WAITING_FOR_MANUAL_TRADE_INPUT
+
+    context.user_data['extracted_journal_data'] = user_text
+
+    confirm_keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ تأیید و نمایش نهایی", callback_data="confirm_journal_yes")],
+        [InlineKeyboardButton("✏️ ویرایش دستی", callback_data="edit_journal_manual")],
+        [InlineKeyboardButton("❌ لغو", callback_data="confirm_journal_no")]
+    ])
+
+    msg = (
+        f"🔍 **اطلاعات ثبت‌شده:**\n\n"
+        f"```text\n{user_text}\n```\n"
+        f"آیا اطلاعات بالا مورد تأیید است؟"
+    )
+
+    await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=confirm_keyboard)
+    return CONFIRM_JOURNAL_DATA
+
+# ------------------------------------------------------------------
+# 11. Background Worker Loop
 # ------------------------------------------------------------------
 async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: int, bot):
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
@@ -1624,7 +1677,7 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
 
 # ------------------------------------------------------------------
-# 10. Application Startup & Main Execution
+# 12. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
     logger.info("Starting bot initialization and background workers...")
@@ -1785,11 +1838,15 @@ if __name__ == "__main__":
     # استخراج اطلاعات ترید از عکس
     extract_image_handler = ConversationHandler(
         entry_points=[
-            MessageHandler(filters.Regex(r"^\s*📸 استخراج معامله از عکس$"), start_extract_trade_wizard)
+            MessageHandler(filters.Regex(r"^\s*📸 استخراج معامله از عکس$"), start_extract_trade_wizard),
+            MessageHandler(filters.Regex(r"^\s*✍️ ثبت دستی معامله$"), start_manual_trade_wizard)  # ورود دستی
         ],
         states={
             WAITING_FOR_TRADE_IMAGE: [
                 MessageHandler(filters.PHOTO, process_trade_image_handler)
+            ],
+            WAITING_FOR_MANUAL_TRADE_INPUT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_manual_trade_input)
             ],
             CONFIRM_JOURNAL_DATA: [
                 CallbackQueryHandler(confirm_journal_data_handler, pattern="^confirm_journal_yes$"),
