@@ -681,7 +681,8 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
     keyboard = [
         [
             InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
-            InlineKeyboardButton("✂️ خروج ۵۰٪", callback_data=f"action_close50_{ticket}"),
+            InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
+            InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
         ],
         [
             InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
@@ -783,7 +784,33 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             parse_mode="Markdown"
         )
 
-    # ------------------ ۳. خروج ۵۰٪ حجم ------------------
+    # ------------------ ۳. خروج 25% حجم ------------------
+    elif action == "close25":
+        success, positions = await loop.run_in_executor(None, get_open_positions)
+        pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
+
+        if not pos:
+            await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
+            return
+
+        sm_vol = round(pos['volume'] / 3, 2)
+        if sm_vol < 0.01:
+            await query.edit_message_text(
+                "⚠️ **حجم پوزیشن برای خروج 25٪ بسیار کوچک است (کمتر از 0.01).**",
+                parse_mode="Markdown"
+            )
+            return
+
+        await query.edit_message_text(f"⏳ در حال بستن `{sm_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
+        _, msg = await loop.run_in_executor(None, close_position, ticket, sm_vol)
+        await query.edit_message_text(
+            f"{msg}",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]
+            ]),
+            parse_mode="Markdown"
+        )
+        # ------------------ ۳. خروج ۵۰٪ حجم ------------------
     elif action == "close50":
         success, positions = await loop.run_in_executor(None, get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
@@ -2138,7 +2165,7 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_"))
 
     # اکشن‌های مستقیم پوزیشن‌ها
-    app.add_handler(CallbackQueryHandler(handle_position_actions, pattern="^action_(be|close50)_"))
+    app.add_handler(CallbackQueryHandler(handle_position_actions, pattern="^action_(be|close25|close50)_"))
     app.add_handler(CallbackQueryHandler(handle_position_actions, pattern="^(action_|close_pos_)"))
     app.add_handler(CallbackQueryHandler(close_all_positions_handler, pattern="^close_all_positions$"))
     app.add_handler(CallbackQueryHandler(confirm_close_all_handler, pattern="^confirm_close_all$"))
