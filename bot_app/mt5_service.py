@@ -1,6 +1,7 @@
+import time
 import logging
 import MetaTrader5 as mt5
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # ------------------------------------------------------------------
 # Logging Configuration
@@ -489,3 +490,50 @@ def get_trades_history(days: int):
     return trades, None
 
 
+def check_recent_closed_positions(hours_back=12):
+    """دریافت پوزیشن‌های بسته‌شده با بازه زمانی مطمئن جهت پوشش اختلاف تایم‌زون بروکر"""
+    if not init_mt5():
+        logger.error("❌ MT5 Terminal is not connected!")
+        return []
+
+    # برای حل مشکل اختلاف تایم‌زون سرور بروکر با UTC، بازه آینده را تا ۱۲ ساعت جلوتر می‌بریم
+    now_utc = datetime.now(timezone.utc)
+    from_date = now_utc - timedelta(hours=hours_back)
+    to_date = now_utc + timedelta(hours=12) # حتما 12+ ساعت آینده برای به دام انداختن معاملات جدید
+
+    deals = mt5.history_deals_get(from_date, to_date)
+
+    if not deals:
+        return []
+
+    closed_alerts = []
+
+    for deal in deals:
+        # خروج از پوزیشن: entry می تواند OUT (1) یا INOUT (2) باشد
+        if deal.entry in (1, 2, mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT):
+            comment = str(deal.comment).lower()
+            reason = deal.reason
+
+            exit_type = None
+
+            if reason == mt5.DEAL_REASON_TP or reason == 5 or "tp" in comment:
+                exit_type = "🎯 TP (حد سود)"
+            elif reason == mt5.DEAL_REASON_SL or reason == 4 or "sl" in comment:
+                exit_type = "🛑 SL (حد ضرر)"
+            elif reason == mt5.DEAL_REASON_SO or reason == 6:
+                exit_type = "💥 Stop Out (کال مارجین)"
+            elif reason == 3 or reason == mt5.DEAL_REASON_CLIENT:
+                exit_type = "✋ بسته‌شدن دستی / کلوز پوزیشن"
+
+            if exit_type:
+                closed_alerts.append({
+                    "deal_id": deal.ticket,
+                    "position_id": deal.position_id,
+                    "symbol": deal.symbol,
+                    "profit": deal.profit + deal.swap + deal.commission,
+                    "volume": deal.volume,
+                    "exit_price": deal.price,
+                    "exit_type": exit_type
+                })
+
+    return closed_alerts

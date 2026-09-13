@@ -83,6 +83,7 @@ from bot_app.mt5_service import (
     update_position_sltp,
     get_market_watch_symbols,
     get_trades_history,
+    check_recent_closed_positions,
 )
 from bot_app.report_service import generate_pdf_report
 
@@ -1772,49 +1773,127 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
     logger.info("🚀 [STARTED] RSI Monitor task: %s | %s | %s", symbol, timeframe, market_type)
 
+    last_signal_state = None  # جلوگیری از ارسال سیگنال تکراری پشت سر هم
+
     try:
         while True:
+            chart_path = None
             try:
                 rsi, status, divergence, chart_path = await calculate_rsi(symbol, timeframe, market_type)
                 logger.debug("RSI checked for %s (%s): RSI=%s, Status=%s", symbol, timeframe, rsi, status)
 
+                # ۱. بررسی وجود سیگنال
                 if rsi is not None and ("NORMAL" not in status or divergence != "بدون واگرایی"):
-                    logger.info("Signal detected for %s (%s)! RSI: %s | Status: %s | Divergence: %s",
-                                symbol, timeframe, rsi, status, divergence)
 
-                    # دریافت غیربلاک‌کننده تحلیل هوش مصنوعی
-                    loop = asyncio.get_running_loop()
-                    ai_analysis = await get_ai_market_view(symbol, rsi, status, divergence, market_type)
+                    # ۲. جلوگیری از ارسال پیام‌های کاملاً تکراری در کندل‌های متوالی
+                    current_state = f"{status}_{divergence}"
+                    if current_state != last_signal_state:
+                        logger.info("Signal detected for %s (%s)! RSI: %s | Status: %s | Divergence: %s",
+                                    symbol, timeframe, rsi, status, divergence)
 
-                    msg = (
-                        f"🚨 <b>هشدار سیگنال RSI</b>\n\n"
-                        f"📌 <b>نماد:</b> <code>{symbol}</code> | ⏳ <code>{timeframe}</code>\n"
-                        f"📊 <b>RSI:</b> <code>{rsi:.2f}</code> | ⚡️ <b>وضعیت:</b> <code>{status}</code>\n"
-                        f"🔍 <b>واگرایی:</b> {divergence}\n\n"
-                        f"🤖 <b>دیدگاه هوش مصنوعی (Gemini):</b>\n"
-                        f"<i>{ai_analysis}</i>"
-                    )
+                        # دریافت غیربلاک‌کننده تحلیل Gemini
+                        ai_analysis = await get_ai_market_view(symbol, rsi, status, divergence, market_type)
 
-                    # ارسال تصویر به همراه زیرنویس (Caption) در صورت وجود چارت
-                    if chart_path and os.path.exists(chart_path):
-                        with open(chart_path, "rb") as photo:
-                            await bot.send_photo(chat_id=chat_id, photo=photo, caption=msg, parse_mode="HTML")
-                        os.remove(chart_path)  # حذف عکس پس از ارسال
-                    else:
-                        await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+                        msg = (
+                            f"🚨 <b>هشدار سیگنال RSI</b>\n\n"
+                            f"📌 <b>نماد:</b> <code>{symbol}</code> | ⏳ <code>{timeframe}</code>\n"
+                            f"📊 <b>RSI:</b> <code>{rsi:.2f}</code> | ⚡️ <b>وضعیت:</b> <code>{status}</code>\n"
+                            f"🔍 <b>واگرایی:</b> {divergence}\n\n"
+                            f"🤖 <b>دیدگاه هوش مصنوعی (Gemini):</b>\n"
+                            f"<i>{ai_analysis}</i>"
+                        )
+
+                        # ارسال به تلگرام
+                        if chart_path and os.path.exists(chart_path):
+                            with open(chart_path, "rb") as photo:
+                                await bot.send_photo(chat_id=chat_id, photo=photo, caption=msg, parse_mode="HTML")
+                        else:
+                            await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+
+                        last_signal_state = current_state
+                else:
+                    # ریست کردن حالت قبلی اگر بازار به وضعیت نرمال برگشت
+                    last_signal_state = None
 
             except Exception as e:
                 logger.exception("Error during RSI calculation worker for %s: %s", symbol, e)
 
+            finally:
+                # 📌 تضمین حذف عکس حتی در صورت بروز خطا در ارسال تلگرام
+                if chart_path and os.path.exists(chart_path):
+                    try:
+                        os.remove(chart_path)
+                    except Exception as cleanup_err:
+                        logger.error("Failed to delete temp chart %s: %s", chart_path, cleanup_err)
+
             await asyncio.sleep(interval)
+
     except asyncio.CancelledError:
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
+
+
+async def sl_tp_monitor_loop(chat_id: int, bot):
+    logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
+    loop = asyncio.get_running_loop()
+
+    # ۱. در لحظه روشن شدن ربات، معاملات ۱۲ ساعت گذشته را می خوانیم
+    # و به عنوان قدیمی علامت می‌زنیم تا فقط معاملات "جدید" اطلاع‌رسانی شوند.
+    initial_deals = await loop.run_in_executor(None, check_recent_closed_positions, 12)
+    notified_deals = {deal["deal_id"] for deal in initial_deals}
+    logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals.")
+
+    try:
+        while True:
+            try:
+                # چک کردن معاملات با بازه مطمئن
+                closed_deals = await loop.run_in_executor(None, check_recent_closed_positions, 12)
+
+                for deal in closed_deals:
+                    deal_id = deal["deal_id"]
+
+                    # اگر معامله جدیدی رخ داده باشد که در notified_deals نیست:
+                    if deal_id not in notified_deals:
+                        profit = deal["profit"]
+                        profit_icon = "🟢" if profit >= 0 else "🔴"
+
+                        msg = (
+                            f"🔔 <b>هشدار بسته‌شدن پوزیشن!</b>\n\n"
+                            f"🎫 <b>تیکت پوزیشن:</b> <code>{deal['position_id']}</code>\n"
+                            f"📌 <b>نماد:</b> <b>{deal['symbol']}</b>\n"
+                            f"📌 <b>علت خروج:</b> {deal['exit_type']}\n"
+                            f"📊 <b>حجم:</b> <code>{deal['volume']}</code> لات\n"
+                            f"🏁 <b>قیمت خروج:</b> <code>{deal['exit_price']}</code>\n"
+                            f"{profit_icon} <b>سود/زیان نهایی:</b> <code>${profit:,.2f}</code>"
+                        )
+
+                        await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+                        logger.info(f"✅ Alert sent for NEW Deal {deal_id}")
+
+                        # ثبت آی‌دی جدید
+                        notified_deals.add(deal_id)
+
+            except Exception as e:
+                logger.error("Error in SL/TP monitor loop: %s", e)
+
+            # چک کردن هر ۵ ثانیه
+            await asyncio.sleep(5)
+
+    except asyncio.CancelledError:
+        logger.info("🛑 [STOPPED] Global SL/TP Monitor Task")
 
 # ------------------------------------------------------------------
 # 14. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
     logger.info("Starting bot initialization and background workers...")
+
+    # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت
+    sl_tp_task = asyncio.create_task(
+        sl_tp_monitor_loop(ADMIN_CHAT_ID, app.bot)
+    )
+    ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
+
+    # ۲. استارت ورکرهای RSI برای نمادهای واچ‌لیست
     watchlist = await get_all_watchlist()
 
     for item in watchlist:
@@ -1824,7 +1903,7 @@ async def on_startup(app):
         )
         ACTIVE_WORKERS[worker_key] = task
 
-    logger.info("Successfully started %d background worker tasks.", len(watchlist))
+    logger.info("Successfully started SL/TP monitor and %d RSI worker tasks.", len(watchlist))
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
