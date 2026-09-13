@@ -1,31 +1,48 @@
-# Python cache files
-__pycache__/
+# Django / Python standard ignore
+*.pyc
 *.py[cod]
 *$py.class
+__pycache__/
+.python-version
 
-# Environment variables (SECURITY RISK if committed)
+# Database
+*.sqlite3
+*.sqlite3-journal
+*.db
+
+# Media & Static local files
+/media/
+/staticfiles/
+/static_collected/
+
+# Environment variables & secrets
 .env
-.env.*
+.env.local
+.env.*.local
+*.pem
+*.key
 
-# Virtual Environments
+# Virtual environments
 venv/
 .venv/
 env/
 ENV/
+env.bak/
+venv.bak/
 
-# Django files
-*.log
-db.sqlite3
-db.sqlite3-journal
-media/
-staticfiles/
-
-# IDE / Editor settings
-.vscode/
+# IDEs & Editors
 .idea/
+.vscode/
 *.swp
 *.swo
-
-# OS generated files
 .DS_Store
-Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage / Testing reports
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
