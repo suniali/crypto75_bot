@@ -1,3 +1,4 @@
+import io
 import os
 import time
 import logging
@@ -15,6 +16,8 @@ from google.genai import types
 from decouple import config
 
 from bot_app.mt5_service import get_rates_data
+
+API_KEY = config('GEMINI_API_KEY', default='')
 
 # ------------------------------------------------------------------
 # Logging Configuration
@@ -283,6 +286,220 @@ def get_lower_tf_candles(symbol: str, lower_timeframe: str = "1m", count: int = 
         logger.exception("Error in get_lower_tf_candles for %s: %s", symbol, e)
         return "خطا در پردازش کندل‌های تایم پایین."
 
+def generate_equity_chart(trades: list) -> io.BytesIO:
+    """رسم نمودار Equity Curve و خروجی در قالب BytesIO بدون ذخیره روی دیسک"""
+    if not trades:
+        return None
+
+    # ۱. مرتب‌سازی بر اساس زمان و محاسبه سود انباشته
+    sorted_trades = sorted(trades, key=lambda x: x['time'])
+    cumulative_profit = []
+    current_total = 0.0
+
+    # نقطه شروع صفر
+    cumulative_profit.append(0.0)
+
+    for t in sorted_trades:
+        current_total += t['profit']
+        cumulative_profit.append(current_total)
+
+    # ۲. ساخت نمودار با Matplotlib (تِم دارک و حرفه‌ای)
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(7, 3.2), dpi=150)
+
+    # تعیین رنگ نمودار بر اساس سودده یا زیان‌ده بودن کل
+    line_color = '#00E676' if current_total >= 0 else '#FF5252'
+    fill_color = '#00E676' if current_total >= 0 else '#FF5252'
+
+    ax.plot(cumulative_profit, color=line_color, linewidth=2, label="سود/زیان انباشته ($)")
+    ax.fill_between(range(len(cumulative_profit)), cumulative_profit, color=fill_color, alpha=0.15)
+
+    # تنظیمات استایل و عناوین
+    ax.set_title("Equity Curve (رشد انباشته حساب)", fontsize=11, color='white', pad=10)
+    ax.set_xlabel("تعداد معاملات", fontsize=9, color='#CCCCCC')
+    ax.set_ylabel("سود/زیان ($)", fontsize=9, color='#CCCCCC')
+    ax.grid(True, linestyle='--', alpha=0.3, color='#555555')
+    ax.axhline(0, color='white', linewidth=0.8, linestyle=':')
+
+    plt.tight_layout()
+
+    # ۳. ذخیره نمودار در حافظه موقت RAM
+    img_buf = io.BytesIO()
+    plt.savefig(img_buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor())
+    img_buf.seek(0)
+    plt.close(fig) # بستن شکل برای آزادسازی حافظه
+
+    return img_buf
+
+
+import numpy as np
+
+
+def calculate_trading_metrics(trades: list) -> dict:
+    if not trades:
+        return {}
+
+    profits = [t['profit'] for t in trades]
+    wins = [p for p in profits if p > 0]
+    losses = [abs(p) for p in profits if p < 0]
+
+    total_profit_gross = sum(wins)
+    total_loss_gross = sum(losses)
+
+    # 1. Profit Factor & Payoff
+    profit_factor = (total_profit_gross / total_loss_gross) if total_loss_gross > 0 else total_profit_gross
+    avg_win = sum(wins) / len(wins) if wins else 0.0
+    avg_loss = sum(losses) / len(losses) if losses else 0.0
+    payoff_ratio = (avg_win / avg_loss) if avg_loss > 0 else avg_win
+
+    # 2. Sharpe Ratio & Sortino Ratio (تنظیم سالانه صوری برای دیتای معاملاتی)
+    returns = np.array(profits)
+    std_dev = np.std(returns) if len(returns) > 1 else 0.0
+    sharpe_ratio = (np.mean(returns) / std_dev * np.sqrt(252)) if std_dev > 0 else 0.0
+
+    downside_returns = returns[returns < 0]
+    downside_std = np.std(downside_returns) if len(downside_returns) > 1 else 0.0
+    sortino_ratio = (np.mean(returns) / downside_std * np.sqrt(252)) if downside_std > 0 else 0.0
+
+    # 3. Max Drawdown & Max Drawdown %
+    sorted_trades = sorted(trades, key=lambda x: x['time'])
+    cumulative = 0.0
+    peak = 0.0
+    max_dd = 0.0
+
+    for t in sorted_trades:
+        cumulative += t['profit']
+        if cumulative > peak:
+            peak = cumulative
+        dd = peak - cumulative
+        if dd > max_dd:
+            max_dd = dd
+
+    return {
+        "profit_factor": round(profit_factor, 2),
+        "max_drawdown": round(max_dd, 2),
+        "payoff_ratio": round(payoff_ratio, 2),
+        "sharpe_ratio": round(sharpe_ratio, 2),
+        "sortino_ratio": round(sortino_ratio, 2),
+        "avg_win": round(avg_win, 2),
+        "avg_loss": round(avg_loss, 2),
+        "expectancy": round((sum(profits) / len(trades)), 2)  # امید ریاضی هر معامله
+    }
+
+def calculate_symbol_breakdown(trades: list) -> list:
+    """محاسبه آمار تفکیکی معاملات بر اساس جفت‌ارزها"""
+    if not trades:
+        return []
+
+    breakdown = {}
+    for t in trades:
+        sym = t['symbol']
+        profit = t['profit']
+
+        if sym not in breakdown:
+            breakdown[sym] = {
+                "count": 0,
+                "wins": 0,
+                "total_profit": 0.0,
+            }
+
+        breakdown[sym]["count"] += 1
+        breakdown[sym]["total_profit"] += profit
+        if profit > 0:
+            breakdown[sym]["wins"] += 1
+
+    # تبدیل به لیست و محاسبه وین‌ریت و مرتب‌سازی بر اساس مجموع سود
+    result = []
+    for sym, data in breakdown.items():
+        win_rate = (data["wins"] / data["count"]) * 100 if data["count"] > 0 else 0.0
+        result.append({
+            "symbol": sym,
+            "count": data["count"],
+            "win_rate": round(win_rate, 1),
+            "profit": round(data["total_profit"], 2)
+        })
+
+    # مرتب‌سازی بر اساس بیشترین سود/زیان
+    return sorted(result, key=lambda x: x['profit'], reverse=True)
+
+# ------------------------------------------------------------------
+# Reporting Functions
+# ------------------------------------------------------------------
+def generate_report_charts(trades: list) -> dict:
+    if not trades:
+        return {}
+
+    plt.style.use('dark_background')
+    charts = {}
+
+    # 📈 نمودار ۱: Equity Curve & Drawdown
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(7, 4), sharex=True, gridspec_kw={'height_ratios': [3, 1]})
+    sorted_trades = sorted(trades, key=lambda x: x['time'])
+    cum_profits = np.cumsum([t['profit'] for t in sorted_trades])
+    peaks = np.maximum.accumulate(cum_profits)
+    drawdowns = cum_profits - peaks
+
+    ax1.plot(cum_profits, color='#00E676', linewidth=1.5, label='Equity')
+    ax1.set_title("Equity Curve & Drawdown Analysis", fontsize=10, color='white')
+    ax1.grid(True, linestyle='--', alpha=0.2)
+
+    ax2.fill_between(range(len(drawdowns)), drawdowns, color='#FF5252', alpha=0.5)
+    ax2.set_ylabel("DD ($)", fontsize=7, color='#CCCCCC')
+    ax2.grid(True, linestyle='--', alpha=0.2)
+
+    plt.tight_layout()
+    buf1 = io.BytesIO()
+    plt.savefig(buf1, format='png', dpi=150, bbox_inches='tight')
+    buf1.seek(0)
+    plt.close()
+    charts['equity'] = buf1
+
+    # 📊 نمودار ۲: وین‌ریت و تعداد معاملات به تفکیک نماد
+    breakdown = calculate_symbol_breakdown(trades)
+    if breakdown:
+        fig, ax = plt.subplots(figsize=(7, 2.5))
+        symbols = [item['symbol'] for item in breakdown]
+        win_rates = [item['win_rate'] for item in breakdown]
+
+        bars = ax.bar(symbols, win_rates, color='#29B6F6', width=0.4)
+        ax.set_title("Win Rate by Symbol (%)", fontsize=10, color='white')
+        ax.set_ylim(0, 100)
+        ax.grid(axis='y', linestyle='--', alpha=0.2)
+
+        for bar in bars:
+            yval = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, yval + 2, f"{yval}%", ha='center', va='bottom', fontsize=8,
+                    color='white')
+
+        plt.tight_layout()
+        buf2 = io.BytesIO()
+        plt.savefig(buf2, format='png', dpi=150, bbox_inches='tight')
+        buf2.seek(0)
+        plt.close()
+        charts['win_rate_symbol'] = buf2
+
+    # ⚖️ نمودار ۳: توزیع سود و زیان (PnL Distribution)
+    fig, ax = plt.subplots(figsize=(7, 2.5))
+    profits = [t['profit'] for t in trades]
+    colors_list = ['#00E676' if p > 0 else '#FF5252' for p in profits]
+
+    ax.bar(range(len(profits)), profits, color=colors_list, alpha=0.8)
+    ax.axhline(0, color='white', linewidth=0.8, linestyle='--')
+    ax.set_title("Trade-by-Trade PnL Distribution ($)", fontsize=10, color='white')
+    ax.grid(True, linestyle='--', alpha=0.2)
+
+    plt.tight_layout()
+    buf3 = io.BytesIO()
+    plt.savefig(buf3, format='png', dpi=150, bbox_inches='tight')
+    buf3.seek(0)
+    plt.close()
+    charts['pnl_dist'] = buf3
+
+    return charts
+
+# ------------------------------------------------------------------
+# AI Functions
+# ------------------------------------------------------------------
 
 async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_type="FOREX"):
     try:
@@ -294,11 +511,10 @@ async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_typ
             None, get_lower_tf_candles, symbol, lower_tf, 8, market_type
         )
 
-        api_key = config('GEMINI_API_KEY', default='')
-        if not api_key:
+        if not API_KEY:
             return "\u200f⚠️ کلید API هوش مصنوعی تنظیم نشده است."
 
-        client = genai.Client(api_key=api_key)
+        client = genai.Client(api_key=API_KEY)
         prompt = f"""
 تو یک تحلیل‌گر و مدیریت‌کننده ریسک ارشد در بازارهای مالی (Day Trading و Scalping) هستی.
 اطلاعات لحظه‌ای زیر را بر اساس اصول پرایس‌اکشن و الگوهای کندلی تایم پایین تحلیل کن:
@@ -337,11 +553,10 @@ async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_typ
 
 
 def extract_trade_from_image(image_path: str) -> str:
-    api_key = config('GEMINI_API_KEY', default='')
-    if not api_key:
+    if not API_KEY:
         return "‏⚠️ کلید API هوش مصنوعی تنظیم نشده است."
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=API_KEY)
     from PIL import Image
     img = Image.open(image_path)
 
@@ -378,3 +593,55 @@ TP: <حد سود یا 0>
                 return "‏⚠️ خطا در پردازش تصویر چارت."
 
     return "‏⚠️ سرورهای هوش مصنوعی در حال حاضر شلوغ هستند. لطفاً چند لحظه بعد مجدداً تلاش کنید."
+
+
+def analyze_trades_with_gemini(trades: list, period_name: str) -> str:
+
+    if not trades:
+        return "هیچ معامله‌ای برای تحلیل در این بازه یافت نشد."
+
+    metrics = calculate_trading_metrics(trades)
+    total_trades = len(trades)
+    win_trades = sum(1 for t in trades if t['profit'] > 0)
+    total_profit = sum(t['profit'] for t in trades)
+    win_rate = (win_trades / total_trades) * 100 if total_trades > 0 else 0
+
+    # استخراج سودده‌ترین و زیان‌ده‌ترین نماد
+    symbols_summary = calculate_symbol_breakdown(trades)
+    best_sym = symbols_summary[0]['symbol'] if symbols_summary else "N/A"
+    worst_sym = symbols_summary[-1]['symbol'] if symbols_summary else "N/A"
+
+    prompt = f"""
+    تو یک تحلیل‌گر و مربی ارشد ترید هستی. گزارش عملکرد معامله‌گر را در بازه ({period_name}) بررسی کن.
+
+    📊 **آمارهای کلیدی:**
+    - تعداد کل معاملات: {total_trades}
+    - وین‌ریت: {win_rate:.1f}%
+    - سود/زیان خالص: ${total_profit:.2f}
+    - ضریب سودآوری (Profit Factor): {metrics['profit_factor']}
+    - بیشترین افت حساب (Max Drawdown): ${metrics['max_drawdown']}
+    - نسبت میانگین سود به زیان (Payoff Ratio): {metrics['payoff_ratio']}
+    - میانگین سود: ${metrics['avg_win']} | میانگین زیان: ${metrics['avg_loss']}
+
+    📌 **آمار نمادها:**
+    - سودده‌ترین نماد: {best_sym}
+    - پرریسک‌ترین/زیان‌ده‌ترین نماد: {worst_sym}
+
+    لطفاً تحلیل روان‌شناختی و فنی خود را در ۳ بخش زیر ارائه بده:
+    ۱. **ارزیابی پایداری استراتژی** (با توجه به Profit Factor و Max Drawdown)
+    ۲. **مدیریت ریسک و R:R** (با توجه به Payoff Ratio، وین‌ریت و میانگین سود/زیان)
+    ۳. **تحلیل نمادها و توصیه کلیدی برای بازه بعدی** (تمرکز روی {best_sym} و کنترل زیان در {worst_sym})
+
+    پاسخ را فشرده، کاربردی، بدون مقدمه‌چینی اضافی و کاملاً به زبان فارسی بنویس.
+    """
+
+    try:
+        # 📌 اصلاح اصلی: ساخت کلاینت بر اساس نسخه جدید SDK
+        client = genai.Client(api_key=API_KEY)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        return response.text.strip()
+    except Exception as e:
+        return f"خطا در دریافت تحلیل: {str(e)}"

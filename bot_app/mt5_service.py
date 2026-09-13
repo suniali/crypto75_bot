@@ -1,5 +1,6 @@
 import logging
 import MetaTrader5 as mt5
+from datetime import datetime, timedelta
 
 # ------------------------------------------------------------------
 # Logging Configuration
@@ -460,5 +461,31 @@ def get_rates_data(symbol: str, timeframe: str):
         return False, f"🚨 **خطا در دریافت داده‌ها:**\n`{e}`"
     finally:
         mt5.shutdown()
+
+def get_trades_history(days: int):
+    """دریافت هیستوری معاملات بسته شده از متاتریدر ۵"""
+    if not mt5.initialize():
+        return None, "اتصال به متاتریدر برقرار نشد."
+
+    from_date = datetime.now() - timedelta(days=days)
+    to_date = datetime.now()
+
+    history = mt5.history_deals_get(from_date, to_date)
+    if history is None or len(history) == 0:
+        return [], "هیچ معامله‌ای در این بازه پیدا نشد."
+
+    trades = []
+    for deal in history:
+        # فقط معاملات خروج از پوزیشن (ORDER_ENTRY_OUT) و مربوط به ترید
+        if deal.entry == mt5.DEAL_ENTRY_OUT and deal.type in (mt5.DEAL_TYPE_BUY, mt5.DEAL_TYPE_SELL):
+            trades.append({
+                "ticket": deal.ticket,
+                "symbol": deal.symbol,
+                "type": "BUY" if deal.type == mt5.DEAL_TYPE_BUY else "SELL",
+                "volume": deal.volume,
+                "profit": deal.profit + deal.swap + deal.commission,
+                "time": datetime.fromtimestamp(deal.time).strftime('%Y-%m-%d %H:%M')
+            })
+    return trades, None
 
 
