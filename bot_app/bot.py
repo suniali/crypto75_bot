@@ -68,7 +68,8 @@ warnings.filterwarnings("ignore", category=PTBUserWarning)
 from bot_app.analysis_service import (
     calculate_rsi,
     get_ai_market_view,
-    extract_trade_from_image
+    extract_trade_from_image,
+    analyze_trades_with_gemini,
 )
 from bot_app.models import UserAlert, Watchlist
 from bot_app.mt5_service import (
@@ -81,7 +82,9 @@ from bot_app.mt5_service import (
     set_break_even,
     update_position_sltp,
     get_market_watch_symbols,
+    get_trades_history,
 )
+from bot_app.report_service import generate_pdf_report
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
@@ -109,7 +112,8 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
             ["ثبت هشدار قیمت 🔔"],
             ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
             ["📊 پوزیشن‌های باز","📈 معامله جدید"],
-            ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"]
+            ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"],
+            ["📊 دریافت گزارش (PDF)"]
         ],
         resize_keyboard=True
     )
@@ -180,14 +184,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "└ تنظیم و پایش لحظه‌ای قیمت‌های فارکس و کریپتو\n\n"
         "📈 **مدیریت معاملات و پوزیشن‌ها**\n"
         "└ مشاهده پوزیشن‌های باز و ورود به معاملات جدید\n\n"
+        "📊 **گزارش‌گیری هوشمند (PDF)**\n"
+        "└ دریافت فایل PDF کارنامه ترید، نمودار Equity و تحلیل AI\n\n"
         "🤖 **پایش هوشمند RSI و تحلیل AI**\n"
         "├ 📊 سنجش خودکار RSI و تشخیص واگرایی‌ها\n"
         "└ 🧠 تحلیل الگوهای کندلی و تایم پایین با هوش مصنوعی (Gemini)\n\n"
         "📝 **استخراج و ژورنال‌نویسی هوشمند**\n"
-        "├ 📸 **استخراج معامله از عکس:** خواندن خودکار مشخصات چارت با هوش مصنوعی\n"
-        "└ ✍️ **ثبت دستی معامله:** قالب‌بندی متنی مشخصات جهت ژورنال شخصی\n\n"
+        "├ 📸 **استخراج معامله از عکس:** خواندن خودکار مشخصات چارت با Gemini\n"
+        "└ ✍️ **ثبت دستی معامله:** قالب‌بندی متنی مشخصات جهت ژورنال\n\n"
         "📋 **مدیریت واچ‌لیست (Watchlist)**\n"
-        "└ مدیریت نمادهای تحت نظر برای دریافت هشدارهای تحلیل AI\n\n"
+        "└ مدیریت نمادهای تحت نظر جهت دریافت هشدارهای تحلیل AI\n\n"
         "💡 *جهت شروع، از دکمه‌های منوی زیر استفاده کنید:* "
     )
 
@@ -1661,7 +1667,106 @@ async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAU
     return CONFIRM_JOURNAL_DATA
 
 # ------------------------------------------------------------------
-# 11. Background Worker Loop
+# 12. Background Worker Loop
+# ------------------------------------------------------------------
+SELECT_REPORT_PERIOD = range(104, 105)
+
+
+async def start_report_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شروع فرآیند دریافت گزارش"""
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📅 روزانه (۲۴ ساعت)", callback_data="rep_1"),
+         InlineKeyboardButton("📆 هفتگی (۷ روز)", callback_data="rep_7")],
+        [InlineKeyboardButton("🗓 ماهانه (۳۰ روز)", callback_data="rep_30"),
+         InlineKeyboardButton("📊 ۶ ماهه (۱۸۰ روز)", callback_data="rep_180")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_report")]
+    ])
+
+    msg_text = "📊 **انتخاب بازه زمانی گزارش عملکرد:**\n\nلطفاً بازه زمانی مورد نظر خود را برای دریافت فایل PDF و تحلیل هوش مصنوعی انتخاب کنید:"
+
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(msg_text, parse_mode="Markdown", reply_markup=keyboard)
+    else:
+        await update.message.reply_text(msg_text, parse_mode="Markdown", reply_markup=keyboard)
+
+    return SELECT_REPORT_PERIOD
+
+
+async def process_report_generation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پردازش، فراخوانی Gemini و ارسال PDF"""
+    query = update.callback_query
+    await query.answer()
+
+    days_map = {
+        "rep_1": (1, "روزانه"),
+        "rep_7": (7, "هفتگی"),
+        "rep_30": (30, "ماهانه"),
+        "rep_180": (180, "شش ماهه")
+    }
+
+    days, period_name = days_map.get(query.data, (7, "هفتگی"))
+
+    await query.edit_message_text(
+        f"⏳ **در حال استخراج معاملات و تحلیل هوش مصنوعی برای بازه {period_name}...**\nلطفاً چند لحظه شکیبا باشید.")
+
+    loop = asyncio.get_running_loop()
+
+    # ۱. استخراج دیتای MT5
+    trades, error = await loop.run_in_executor(None, get_trades_history, days)
+
+    if error or not trades:
+        await query.edit_message_text(f"⚠️ {error or 'هیچ معامله‌ای یافت نشد.'}")
+        await update.effective_chat.send_message("🏠 **به منوی اصلی بازگشتید.**", reply_markup=MAIN_KEYBOARD,
+                                                 parse_mode="Markdown")
+        return ConversationHandler.END
+
+    # ۲. تحلیل Gemini
+    ai_analysis = await loop.run_in_executor(None, analyze_trades_with_gemini, trades, period_name)
+
+    # ۳. تولید فایل PDF
+    pdf_filename = f"Trade_Report_{update.effective_user.id}_{days}d.pdf"
+    await loop.run_in_executor(None, generate_pdf_report, pdf_filename, period_name, trades, ai_analysis)
+
+    # ۴. ارسال فایل برای کاربر
+    await query.edit_message_text("✅ **گزارش با موفقیت آماده شد. در حال ارسال فایل...**")
+
+    with open(pdf_filename, 'rb') as doc_file:
+        await update.effective_chat.send_document(
+            document=doc_file,
+            filename=f"Report_{period_name}.pdf",
+            caption=f"📄 **گزارش عملکرد معامله‌گری ({period_name})**\n🤖 همراه با تحلیل هوشمند Gemini",
+            parse_mode="Markdown"
+        )
+
+    # پاکسازی فایل موقت
+    if os.path.exists(pdf_filename):
+        os.remove(pdf_filename)
+
+    await update.effective_chat.send_message(
+        "\u200f🏠 **به منوی اصلی بازگشتید.**\n\n👇 _لطفاً یکی از گزینه‌های زیر را انتخاب کنید:_",
+        reply_markup=MAIN_KEYBOARD,
+        parse_mode="Markdown"
+    )
+
+    return ConversationHandler.END
+
+
+async def cancel_report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """لغو گزارش‌گیری"""
+    query = update.callback_query
+    if query:
+        await query.answer()
+        await query.edit_message_text("❌ **عملیات گزارش‌گیری لغو شد.**", parse_mode="Markdown")
+
+    await update.effective_chat.send_message(
+        "\u200f🏠 **به منوی اصلی بازگشتید.**\n\n👇 _لطفاً یکی از گزینه‌های زیر را انتخاب کنید:_",
+        reply_markup=MAIN_KEYBOARD,
+        parse_mode="Markdown"
+    )
+    return ConversationHandler.END
+# ------------------------------------------------------------------
+# 13. Background Worker Loop
 # ------------------------------------------------------------------
 async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: int, bot):
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
@@ -1706,7 +1811,7 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
 
 # ------------------------------------------------------------------
-# 12. Application Startup & Main Execution
+# 14. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
     logger.info("Starting bot initialization and background workers...")
@@ -1909,6 +2014,31 @@ if __name__ == "__main__":
         per_message=False
     )
     app.add_handler(extract_image_handler)
+
+    #
+    # ریپورت گیری
+    report_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("report", start_report_wizard),
+            MessageHandler(filters.Regex(r"^\s*📊 دریافت گزارش \(PDF\)\s*$"), start_report_wizard)
+        ],
+        states={
+            SELECT_REPORT_PERIOD: [
+                CallbackQueryHandler(cancel_report_callback, pattern="^cancel_report$"),
+                CallbackQueryHandler(process_report_generation, pattern="^rep_")
+            ]
+        },
+        fallbacks=[
+            CommandHandler("stop", cancel_report_callback),
+            CallbackQueryHandler(cancel_report_callback, pattern="^cancel_report$"),
+            MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو|/stop)\s*$"), cancel_report_callback)
+        ],
+        per_message=False,
+        per_chat=True,
+        per_user=True
+    )
+
+    app.add_handler(report_handler)
 
     # ------------------ 4️⃣ کلیدهای میانبر کیبورد (Keyboard Handlers) ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
