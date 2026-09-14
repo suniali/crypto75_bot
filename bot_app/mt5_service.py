@@ -71,100 +71,94 @@ def get_forex_price(symbol: str):
 # ------------------------------------------------------------------
 # Trade Operations
 # ------------------------------------------------------------------
-def execute_trade(symbol: str, action: str, lot: float = 0.01, sl_pips: int = 0, tp_pips: int = 0):
-    logger.info("Initiating trade request - Symbol: %s, Action: %s, Lot: %s, SL_pips: %s, TP_pips: %s",
-                symbol, action, lot, sl_pips, tp_pips)
+def execute_trade(symbol: str, action: str, lot: float = 0.01, entry_price="MARKET", sl_price: float = 0.0, tp_price: float = 0.0):
+    logger.info("Initiating trade request - Symbol: %s, Action: %s, Lot: %s, Price: %s, SL: %s, TP: %s",
+                symbol, action, lot, entry_price, sl_price, tp_price)
 
     if not init_mt5():
-        return False, ERROR_CANNOT_CONNECT_TO_METATRADER
+        return False, ERROR_CANNOT_CONNECT_TO_METATRADER, None
 
     try:
-        # ۱. فعال‌سازی نماد
         if not mt5.symbol_select(symbol, True):
-            logger.warning("Symbol %s not found in Market Watch.", symbol)
-            mt5.shutdown()
-            return False, (
-                f"⚠️ **نماد یافت نشد!**\n\n"
-                f"نماد `{symbol}` در لیست Market Watch فعال یا موجود نیست."
-            )
+            return False, f"⚠️ **نماد `{symbol}` در لیست Market Watch فعال نیست.**", None
 
-        # ۲. دریافت اطلاعات تیک و مشخصات نماد
         tick = mt5.symbol_info_tick(symbol)
         symbol_info = mt5.symbol_info(symbol)
 
         if tick is None or symbol_info is None:
-            logger.error("Failed to fetch tick or symbol_info for %s", symbol)
-            mt5.shutdown()
-            return False, f"⚠️ **خطا در دریافت قیمت لحظه‌ای نماد `{symbol}`!**"
+            return False, f"⚠️ **خطا در دریافت قیمت لحظه‌ای نماد `{symbol}`!**", None
 
-        point = symbol_info.point
         is_buy = action.upper() == "BUY"
-        trade_type = mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL
-        price = tick.ask if is_buy else tick.bid
 
-        # ۳. محاسبه قیمت SL و TP
-        sl = 0.0
-        tp = 0.0
+        # ۱. تعیین قیمت ورود و نوع سفارش
+        if entry_price == "MARKET":
+            trade_action_type = mt5.TRADE_ACTION_DEAL
+            trade_type = mt5.ORDER_TYPE_BUY if is_buy else mt5.ORDER_TYPE_SELL
+            execution_price = tick.ask if is_buy else tick.bid
+        else:
+            trade_action_type = mt5.TRADE_ACTION_PENDING
+            execution_price = float(entry_price)
+            current_market_price = tick.ask if is_buy else tick.bid
 
-        if is_buy:
-            if sl_pips > 0:
-                sl = price - (sl_pips * point * 10)
-            if tp_pips > 0:
-                tp = price + (tp_pips * point * 10)
-        else:  # SELL
-            if sl_pips > 0:
-                sl = price + (sl_pips * point * 10)
-            if tp_pips > 0:
-                tp = price - (tp_pips * point * 10)
+            if is_buy:
+                trade_type = mt5.ORDER_TYPE_BUY_LIMIT if execution_price < current_market_price else mt5.ORDER_TYPE_BUY_STOP
+            else:
+                trade_type = mt5.ORDER_TYPE_SELL_LIMIT if execution_price > current_market_price else mt5.ORDER_TYPE_SELL_STOP
 
-        # ۴. تنظیم ساختار درخواست معامله
+        # ۲. محاسبه نسبت Risk to Reward (R/R)
+        rr_ratio = None
+        if sl_price > 0 and tp_price > 0:
+            if is_buy:
+                risk = execution_price - sl_price
+                reward = tp_price - execution_price
+            else:  # SELL
+                risk = sl_price - execution_price
+                reward = execution_price - tp_price
+
+            if risk > 0 and reward > 0:
+                rr_ratio = reward / risk
+
+        # ۳. ساخت Request برای MT5
         request = {
-            "action": mt5.TRADE_ACTION_DEAL,
+            "action": trade_action_type,
             "symbol": symbol,
             "volume": float(lot),
             "type": trade_type,
-            "price": price,
-            "sl": round(sl, symbol_info.digits),
-            "tp": round(tp, symbol_info.digits),
+            "price": round(execution_price, symbol_info.digits),
+            "sl": round(sl_price, symbol_info.digits) if sl_price > 0 else 0.0,
+            "tp": round(tp_price, symbol_info.digits) if tp_price > 0 else 0.0,
             "deviation": 20,
-            "comment": "Sent from Telegram Bot",
+            "comment": "Telegram Bot Trade",
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_FOK,
         }
 
-        logger.debug("Sending order_send request: %s", request)
         result = mt5.order_send(request)
-        mt5.shutdown()
 
         if result is None:
-            logger.error("order_send returned None for symbol %s", symbol)
-            return False, "🚨 **خطای غیرمنتظره:** هیچ پاسخی از سرور متاتریدر دریافت نشد."
+            return False, "🚨 **خطای غیرمنتظره:** هیچ پاسخی از سرور متاتریدر دریافت نشد.", rr_ratio
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             logger.error("Trade failed for %s. Retcode: %s, Comment: %s", symbol, result.retcode, result.comment)
-            return False, (
-                f"🚨 **خطا در ثبت معامله در بروکر!**\n\n"
-                f"❌ **علت:** `{result.comment}`\n"
-                f"🔢 **کد خطا:** `{result.retcode}`"
-            )
+            return False, f"🚨 **خطا در ثبت معامله در بروکر!**\n\n❌ **علت:** `{result.comment}`\n🔢 **کد خطا:** `{result.retcode}`", rr_ratio
 
         action_icon = "🟢" if is_buy else "🔴"
-        logger.info("Trade successfully executed for %s (Ticket: %s, Price: %s)", symbol, result.order, result.price)
+        rr_text = f"`1:{rr_ratio:.2f}`" if rr_ratio else "`نامشخص`"
+
         return True, (
-            f"🎯 **معامله با موفقیت اجرا شد**\n\n"
+            f"🎯 **سفارش با موفقیت ثبت شد**\n\n"
             f"📌 **نماد:** `{symbol}`\n"
-            f"📊 **نوع معامله:** {action_icon} `{action.upper()}`\n"
-            f"📦 **حجم (Lot):** `{lot}`\n"
-            f"💵 **قیمت ورود:** `{price}`\n"
-            f"🛑 **حد زیان (SL):** `{sl_pips} pips` (`{round(sl, symbol_info.digits)}`)\n"
-            f"🎯 **حد سود (TP):** `{tp_pips} pips` (`{round(tp, symbol_info.digits)}`)"
-        )
+            f"📊 **نوع:** {action_icon} `{action.upper()}`\n"
+            f"📦 **حجم:** `{lot}`\n"
+            f"💵 **قیمت اجرا:** `{round(execution_price, symbol_info.digits)}`\n"
+            f"🛑 **حد زیان (SL):** `{sl_price if sl_price > 0 else 'تعیین نشده'}`\n"
+            f"🎯 **حد سود (TP):** `{tp_price if tp_price > 0 else 'تعیین نشده'}`\n"
+            f"⚖️ **نسبت R/R:** {rr_text}"
+        ), rr_ratio
 
     except Exception as e:
-        logger.exception("Unexpected error during trade execution for %s: %s", symbol, e)
-        mt5.shutdown()
-        return False, f"🚨 **خطایی در فرآیند اجرای معامله رخ داد:**\n`{e}`"
-
+        logger.exception("Unexpected error during trade execution: %s", e)
+        return False, f"🚨 **خطایی در فرآیند اجرای معامله رخ داد:**\n`{e}`", None
 
 def close_all_positions():
     logger.info("Request received to close ALL open positions.")

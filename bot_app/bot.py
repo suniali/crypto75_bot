@@ -989,10 +989,11 @@ async def process_partial_close_input(update: Update, context: ContextTypes.DEFA
 
 
 # تعریف مراحل Conversation New Trade
-NEW_TRADE_SYMBOL, NEW_TRADE_ACTION, NEW_TRADE_LOT, NEW_TRADE_SL, NEW_TRADE_TP = (
+NEW_TRADE_SYMBOL, NEW_TRADE_ACTION, NEW_TRADE_LOT,NEW_TRADE_PRICE, NEW_TRADE_SL, NEW_TRADE_TP = (
     "NEW_TRADE_SYMBOL",
     "NEW_TRADE_ACTION",
     "NEW_TRADE_LOT",
+    "NEW_TRADE_PRICE",
     "NEW_TRADE_SL",
     "NEW_TRADE_TP"
 )
@@ -1106,7 +1107,7 @@ async def new_trade_get_action_step(update: Update, context: ContextTypes.DEFAUL
 
 
 async def new_trade_get_lot_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۴: ذخیره حجم و دریافت میزان حد ضرر (SL) به پیپ"""
+    """مرحله ۴: ذخیره حجم و درخواست قیمت ورود (یا معامله مارکت)"""
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -1119,31 +1120,88 @@ async def new_trade_get_lot_step(update: Update, context: ContextTypes.DEFAULT_T
         if lot <= 0:
             raise ValueError
     except ValueError:
-        await update.effective_message.reply_text("❌ <b>حجم وارد شده نامعتبر است. لطفاً یک عدد مثبت وارد کنید:</b>",
-                                                  parse_mode="HTML")
+        msg = "❌ <b>حجم وارد شده نامعتبر است. لطفاً یک عدد مثبت وارد کنید:</b>"
+        if update.callback_query:
+            await update.callback_query.message.reply_text(msg, parse_mode="HTML")
+        else:
+            await update.message.reply_text(msg, parse_mode="HTML")
         return NEW_TRADE_LOT
 
     context.user_data["trade_lot"] = lot
 
-    keyboard = [[InlineKeyboardButton("⏭ بدون حد ضرر (0)", callback_data="sl_0")],
-                [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]]
+    # دکمه ورود با قیمت لحظه‌ای (Market Price)
+    keyboard = [
+        [InlineKeyboardButton("⚡ ورود با قیمت لحظه‌ای (Market)", callback_data="price_market")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     text = (
-        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>جهت:</b> <code>{context.user_data['trade_action']}</code> | <b>حجم:</b> <code>{lot}</code>\n\n"
-        "<b>مرحله ۴ از ۵:</b> حد ضرر (SL) را به <b>پیپ/پوینت</b> وارد کنید (مثلاً <code>300</code>):\n"
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
+        f"<b>جهت:</b> <code>{context.user_data['trade_action']}</code> | "
+        f"<b>حجم:</b> <code>{lot}</code>\n\n"
+        "<b>مرحله ۴ از ۶:</b> لطفاً <b>قیمت ورود مد نظر (Pending Order)</b> را تایپ کنید "
+        "یا دکمه <b>ورود با قیمت لحظه‌ای</b> را بزنید:"
+    )
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+
+    return NEW_TRADE_PRICE
+
+async def new_trade_get_price_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۵: ذخیره قیمت ورود و درخواست قیمت حد ضرر (SL)"""
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+
+        if query.data == "price_market":
+            entry_price = "MARKET"
+        else:
+            return NEW_TRADE_PRICE
+    else:
+        price_str = update.message.text.strip()
+        try:
+            entry_price = float(price_str)
+            if entry_price <= 0:
+                raise ValueError
+        except ValueError:
+            await update.message.reply_text(
+                "❌ <b>قیمت وارد شده نامعتبر است. لطفاً یک عدد معتبر وارد کنید:</b>",
+                parse_mode="HTML"
+            )
+            return NEW_TRADE_PRICE
+
+    context.user_data["trade_price"] = entry_price
+    price_display = "قیمت لحظه‌ای (Market)" if entry_price == "MARKET" else entry_price
+
+    keyboard = [
+        [InlineKeyboardButton("⏭ بدون حد ضرر (0)", callback_data="sl_0")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    text = (
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
+        f"<b>جهت:</b> <code>{context.user_data['trade_action']}</code> | "
+        f"<b>حجم:</b> <code>{context.user_data['trade_lot']}</code> | "
+        f"<b>ورود:</b> <code>{price_display}</code>\n\n"
+        "<b>مرحله ۵ از ۶:</b> <b>قیمت دقیق حد ضرر (SL)</b> را وارد کنید (مثلاً <code>1.08500</code> یا <code>2650.50</code>):\n"
         "<i>(در صورت عدم نیاز عدد 0 را ارسال یا دکمه رد کردن را بزنید)</i>"
     )
 
     if update.callback_query:
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
     else:
-        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
 
     return NEW_TRADE_SL
 
 
 async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۵: ذخیره SL و دریافت حد سود (TP)"""
+    """مرحله ۶: ذخیره قیمت SL و دریافت قیمت حد سود (TP)"""
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -1152,23 +1210,29 @@ async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TY
         sl_str = update.message.text.strip()
 
     try:
-        sl = int(sl_str)
+        sl = float(sl_str)
         if sl < 0:
             raise ValueError
     except ValueError:
-        await update.effective_message.reply_text("❌ <b>حد ضرر باید یک عدد صحیح (پیپ/پوینت) باشد:</b>",
-                                                  parse_mode="HTML")
+        await update.effective_message.reply_text(
+            "❌ <b>قیمت حد ضرر نامعتبر است. لطفاً یک عدد معتبر وارد کنید:</b>",
+            parse_mode="HTML"
+        )
         return NEW_TRADE_SL
 
     context.user_data["trade_sl"] = sl
+    sl_display = sl if sl > 0 else "بدون SL"
 
-    keyboard = [[InlineKeyboardButton("⏭ بدون حد سود (0)", callback_data="tp_0")],
-                [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]]
+    keyboard = [
+        [InlineKeyboardButton("⏭ بدون حد سود (0)", callback_data="tp_0")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
+    ]
 
     text = (
-        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>حجم:</b> <code>{context.user_data['trade_lot']}</code>\n"
-        f"🛑 <b>SL:</b> <code>{sl}</code> پیپ\n\n"
-        "<b>مرحله ۵ از ۵:</b> حد سود (TP) را به <b>پیپ/پوینت</b> وارد کنید (مثلاً <code>600</code>):"
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
+        f"<b>حجم:</b> <code>{context.user_data['trade_lot']}</code>\n"
+        f"🛑 <b>قیمت SL:</b> <code>{sl_display}</code>\n\n"
+        "<b>مرحله ۶ از ۶:</b> <b>قیمت دقیق حد سود (TP)</b> را وارد کنید (مثلاً <code>1.09500</code> یا <code>2700.00</code>):"
     )
 
     if update.callback_query:
@@ -1180,7 +1244,7 @@ async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TY
 
 
 async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله نهایی: جمع‌آوری اطلاعات و اجرای معامله"""
+    """مرحله نهایی: جمع‌آوری تمامی اطلاعات و اجرای معامله"""
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -1189,28 +1253,31 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         tp_str = update.message.text.strip()
 
     try:
-        tp = int(tp_str)
+        tp = float(tp_str)
         if tp < 0:
             raise ValueError
     except ValueError:
-        await update.effective_message.reply_text("❌ <b>حد سود باید یک عدد صحیح (پیپ/پوینت) باشد:</b>",
-                                                  parse_mode="HTML")
+        await update.effective_message.reply_text(
+            "❌ <b>قیمت حد سود نامعتبر است. لطفاً یک عدد معتبر وارد کنید:</b>",
+            parse_mode="HTML"
+        )
         return NEW_TRADE_TP
 
     symbol = context.user_data["trade_symbol"]
     action = context.user_data["trade_action"]
     lot = context.user_data["trade_lot"]
+    entry_price = context.user_data["trade_price"]
     sl = context.user_data["trade_sl"]
 
-    # ارسال پیام در حال انجام
     if update.callback_query:
         msg = await query.edit_message_text("⏳ <b>در حال ارسال سفارش به متاتریدر...</b>", parse_mode="HTML")
     else:
         msg = await update.message.reply_text("⏳ <b>در حال ارسال سفارش به متاتریدر...</b>", parse_mode="HTML")
 
-    # اجرای غیربلاک‌کننده معامله در Executor
     loop = asyncio.get_running_loop()
-    success, result_msg = await loop.run_in_executor(None, execute_trade, symbol, action, lot, sl, tp)
+    success, result_msg, rr_ratio = await loop.run_in_executor(
+        None, execute_trade, symbol, action, lot, entry_price, sl, tp
+    )
 
     if success:
         title = "🎯 <b>معامله با موفقیت ثبت شد</b>"
@@ -1219,12 +1286,19 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
         title = "🚨 <b>خطا در اجرای معامله!</b>"
         status_icon = "❌"
 
+    price_disp = "قیمت لحظه‌ای (Market)" if entry_price == "MARKET" else entry_price
+    sl_disp = sl if sl > 0 else "تعیین نشده"
+    tp_disp = tp if tp > 0 else "تعیین نشده"
+    rr_disp = f"1:{rr_ratio:.2f}" if rr_ratio else "نامشخص"
+
     summary_text = (
         f"{title}\n"
         f"───────────────────\n"
         f"📌 <b>نماد:</b> <code>{symbol}</code>\n"
         f"📊 <b>جهت:</b> <code>{action}</code> | 📦 <b>حجم:</b> <code>{lot}</code>\n"
-        f"🛑 <b>SL:</b> <code>{sl}</code> | 🎯 <b>TP:</b> <code>{tp}</code>\n"
+        f"💵 <b>ورود:</b> <code>{price_disp}</code>\n"
+        f"🛑 <b>SL:</b> <code>{sl_disp}</code> | 🎯 <b>TP:</b> <code>{tp_disp}</code>\n"
+        f"⚖️ <b>نسبت R/R:</b> <code>{rr_disp}</code>\n"
         f"───────────────────\n"
         f"{status_icon} <b>نتیجه:</b> {result_msg}"
     )
@@ -2172,6 +2246,10 @@ if __name__ == "__main__":
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_lot_step, pattern="^lot_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_lot_step),
+            ],
+            NEW_TRADE_PRICE: [  # 👈 اضافه شدن هندلرهای مرحله قیمت
+                CallbackQueryHandler(new_trade_get_price_step, pattern="^(price_market|cancel_trade)"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_price_step),
             ],
             NEW_TRADE_SL: [
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
