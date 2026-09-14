@@ -361,23 +361,19 @@ def update_position_sltp(ticket: int, sl: float, tp: float):
 # Market Data & Analysis Queries
 # ------------------------------------------------------------------
 def get_market_watch_symbols():
-    """دریافت لیست نمادهای موجود در مارکت واچ (Market Watch) متاتریدر"""
+    """دریافت لیست نمادهای موجود در مارکت واچ متاتریدر"""
     if not init_mt5():
         return []
 
-    # دریافت تمام نمادهایی که در مارکت واچ فعال یا قابل مشاهده هستند
     symbols = mt5.symbols_get()
-    mt5.shutdown()
-
     if not symbols:
         return []
 
-    # فیلتر کردن نمادهایی که در مارکت واچ قرار دارند (visible == True)
+    # فیلتر کردن نمادهای active/visible در مارکت‌واچ
     watch_symbols = [s.name for s in symbols if s.visible]
 
-    # اگر مارکت واچ خالی بود یا چیزی پیدا نشد، نمادهای اصلی را پیش‌فرض می‌دهد
     if not watch_symbols:
-        watch_symbols = [s.name for s in symbols[:8]]  # 8 نماد اول
+        watch_symbols = [s.name for s in symbols[:8]]
 
     return watch_symbols
 
