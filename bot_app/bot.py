@@ -252,7 +252,7 @@ async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ADD_ALERT_MARKET
 
 async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """پردازش انتخاب بازار و درخواست نماد از کاربر"""
+    """پردازش انتخاب بازار و ساخت کیبورد شیشه‌ای واچ‌لیست برای فارکس"""
     query = update.callback_query
     await query.answer()
 
@@ -266,54 +266,104 @@ async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAUL
     market_name = "فارکس" if is_forex else "ارز دیجیتال"
     example = "XAUUSD-ECN" if is_forex else "BTCUSDT"
 
-    # دکمه لغو برای مراحل بعدی
-    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+    symbol_buttons = []
 
-    await query.edit_message_text(
+    # اگر فارکس باشد، نمادهای مارکت‌واچ متاتریدر را می‌گیریم
+    if is_forex:
+        loop = asyncio.get_running_loop()
+        symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+
+        # ساخت دکمه‌های ۲ ستونه برای واچ‌لیست
+        row = []
+        for sym in symbols:
+            row.append(InlineKeyboardButton(sym, callback_data=f"select_sym:{sym}"))
+            if len(row) == 2:
+                symbol_buttons.append(row)
+                row = []
+        if row:
+            symbol_buttons.append(row)
+
+    # افزودن دکمه انصراف در انتها
+    symbol_buttons.append([InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")])
+    reply_markup = InlineKeyboardMarkup(symbol_buttons)
+
+    text = (
         f"🌐 بازار انتخاب‌شده: **{market_name}**\n\n"
-        f"✍️ لطفاً **نماد** مورد نظر را وارد کنید (مثال: `{example}`):",
-        reply_markup=cancel_keyboard,
-        parse_mode="Markdown"
+        f"👇 می‌توانید **نماد** را از لیست زیر انتخاب کرده یا آن را **تایپ کنید** (مثال: `{example}`):"
     )
+
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
     return ADD_ALERT_SYMBOL
 
 
 async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت و اعتبارسنجی نماد واردشده"""
-    symbol = update.message.text.strip().upper()
-    is_forex = context.user_data.get("is_forex", False)
+    """دریافت نماد انتخاب‌شده (تایپ متنی یا دکمه شیشه‌ای) و اعتبارسنجی آن"""
     cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+    is_forex = context.user_data.get("is_forex", False)
 
-    # بررسی صحت نماد فارکس در متاتریدر
+    # ۱. استخراج نماد بر اساس نوع ورودی (کلیک روی دکمه یا تایپ متنی)
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+
+        if query.data == "cancel_alert":
+            await query.edit_message_text("❌ **ثبت هشدار لغو شد.**", parse_mode="Markdown")
+            return ConversationHandler.END
+
+        if query.data.startswith("select_sym:"):
+            symbol = query.data.split(":")[1]
+        else:
+            return ADD_ALERT_SYMBOL
+
+    elif update.message and update.message.text:
+        symbol = update.message.text.strip().upper()
+    else:
+        return ADD_ALERT_SYMBOL
+
+    # ۲. اعتبارسنجی نماد در صورت انتخاب فارکس
     if is_forex:
-        status_msg = await update.message.reply_text("⏳ **در حال بررسی نماد در متاتریدر...**", parse_mode="Markdown")
+        if update.callback_query:
+            status_msg = await update.callback_query.edit_message_text("⏳ **در حال بررسی نماد در متاتریدر...**", parse_mode="Markdown")
+        else:
+            status_msg = await update.message.reply_text("⏳ **در حال بررسی نماد در متاتریدر...**", parse_mode="Markdown")
+
         loop = asyncio.get_running_loop()
         res = await loop.run_in_executor(None, check_symbol_info, symbol)
 
         if res is not True:
             if isinstance(res, list):
                 logger.warning("Forex symbol %s not found. Suggestions: %s", symbol, res[:5])
-                suggestions = "\n".join([f"▫️ `{s}`" for s in res[:10]])
+
+                # تبدیل پیشنهادها به دکمه‌های کلیک‌پذیر
+                suggestion_buttons = [
+                    [InlineKeyboardButton(s, callback_data=f"select_sym:{s}")] for s in res[:6]
+                ]
+                suggestion_buttons.append([InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")])
+                sug_keyboard = InlineKeyboardMarkup(suggestion_buttons)
+
                 await status_msg.edit_text(
-                    f"⚠️ **نماد `{symbol}` یافت نشد!**\n\n💡 پیشنهادها:\n{suggestions}\n\nلطفاً نماد را مجدداً ارسال کنید:",
-                    reply_markup=cancel_keyboard,
+                    f"⚠️ **نماد `{symbol}` یافت نشد!**\n\n💡 پیشنهادها را انتخاب کنید یا نماد جدیدی بنویسید:",
+                    reply_markup=sug_keyboard,
                     parse_mode="Markdown"
                 )
             else:
                 logger.error("Error connecting to MetaTrader 5 while checking symbol %s", symbol)
                 await status_msg.edit_text("🚨 **خطا در اتصال به MetaTrader 5!** ثبت هشدار لغو شد.", parse_mode="Markdown")
                 return ConversationHandler.END
+
             return ADD_ALERT_SYMBOL
 
         await status_msg.delete()
 
+    # ۳. ذخیره نماد و رفتن به مرحله بعد
     context.user_data["symbol"] = symbol
+    next_msg = f"✅ نماد انتخاب‌شده: `{symbol}`\n\n🎯 حالا **قیمت هدف** مد نظر خود را به عدد وارد کنید:"
 
-    await update.message.reply_text(
-        f"✅ نماد: `{symbol}`\n\n🎯 حالا **قیمت هدف** مد نظر خود را به عدد وارد کنید:",
-        reply_markup=cancel_keyboard,
-        parse_mode="Markdown"
-    )
+    if update.callback_query:
+        await update.callback_query.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
+
     return ADD_ALERT_PRICE
 
 
@@ -2060,10 +2110,12 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex("^ثبت هشدار قیمت 🔔$"), start_alert_wizard),
         ],
         states={
-            ADD_ALERT_MARKET: [CallbackQueryHandler(add_alert_market_selected, pattern="^market_|cancel_alert$")],
+            ADD_ALERT_MARKET: [
+                CallbackQueryHandler(add_alert_market_selected, pattern="^(market_crypto|market_forex|cancel_alert)$")
+            ],
             ADD_ALERT_SYMBOL: [
+                CallbackQueryHandler(add_alert_symbol_received, pattern="^(select_sym:|cancel_alert)"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_alert_symbol_received),
-                CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$"),
             ],
             ADD_ALERT_PRICE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_alert_price_received),
