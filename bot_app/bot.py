@@ -2011,6 +2011,7 @@ if __name__ == "__main__":
         .token(TOKEN)
         .request(request)
         .post_init(on_startup)
+        .post_shutdown(on_shutdown)
         .build()
     )
 
