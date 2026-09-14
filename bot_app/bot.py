@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import inspect
+import httpx
 from pathlib import Path
 
 from PIL import Image
@@ -86,6 +87,7 @@ from bot_app.mt5_service import (
     check_recent_closed_positions,
 )
 from bot_app.report_service import generate_pdf_report
+from bot_app.checker import fetch_active_alerts,process_alert
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
@@ -205,6 +207,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=MAIN_KEYBOARD
     )
+
+
+async def on_shutdown(app):
+    logger.info("🛑 Stopping background workers...")
+
+    # لغو تمامی تسک‌های فعال
+    for worker_key, task in ACTIVE_WORKERS.items():
+        if not task.done():
+            task.cancel()
+            logger.info("Cancelling worker: %s", worker_key)
+
+    # منتظر ماندن برای بسته شدن کامل تسک‌ها
+    await asyncio.gather(*ACTIVE_WORKERS.values(), return_exceptions=True)
+    ACTIVE_WORKERS.clear()
+
+    logger.info("✅ All background workers stopped cleanly.")
 
 # ------------------------------------------------------------------
 # 5.َAlert Handlers
@@ -1697,7 +1715,7 @@ async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAU
     return CONFIRM_JOURNAL_DATA
 
 # ------------------------------------------------------------------
-# 12. Background Worker Loop
+# 12. Reporting
 # ------------------------------------------------------------------
 SELECT_REPORT_PERIOD = range(104, 105)
 
@@ -1798,6 +1816,36 @@ async def cancel_report_callback(update: Update, context: ContextTypes.DEFAULT_T
 # ------------------------------------------------------------------
 # 13. Background Worker Loop
 # ------------------------------------------------------------------
+async def check_alerts_loop(bot) -> None:
+    logger.info("🚀 Price Monitoring Worker started...")
+
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                alerts = await fetch_active_alerts()
+                if alerts:
+                    # اجرا و دریافت خروجی تمام تسک‌ها هم‌زمان
+                    tasks = [process_alert(client, alert) for alert in alerts]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                    # پیمایش روی نتایج و ارسال پیام در صورت وجود خروجی
+                    for alert, result in zip(alerts, results):
+                        if isinstance(result, str):  # یعنی متن پیام برگشته است
+                            try:
+                                await bot.send_message(
+                                    chat_id=alert.chat_id,
+                                    text=result,
+                                    parse_mode="Markdown"
+                                )
+                                logger.info("Telegram notification sent to %s", alert.chat_id)
+                            except Exception as e:
+                                logger.exception("Failed to send msg to %s: %s", alert.chat_id, e)
+
+            except Exception as e:
+                logger.exception("Unexpected error in main alert loop: %s", e)
+
+            await asyncio.sleep(2)
+
 async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: int, bot):
     interval = TIMEFRAME_TO_SECONDS.get(timeframe, 1800)
     logger.info("🚀 [STARTED] RSI Monitor task: %s | %s | %s", symbol, timeframe, market_type)
@@ -1922,7 +1970,13 @@ async def on_startup(app):
     )
     ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
 
-    # ۲. استارت ورکرهای RSI برای نمادهای واچ‌لیست
+    # ۲. استارت ورکر آلرت قیمت (Price Alerts)
+    price_alert_task = asyncio.create_task(
+        check_alerts_loop(app.bot)
+    )
+    ACTIVE_WORKERS["price_alert_monitor"] = price_alert_task
+
+    # ۳. استارت ورکرهای RSI برای نمادهای واچ‌لیست
     watchlist = await get_all_watchlist()
 
     for item in watchlist:
