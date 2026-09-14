@@ -56,7 +56,6 @@ def init_mt5() -> bool:
 
 
 def get_forex_price(symbol: str):
-    logger.info("Fetching price for symbol: %s", symbol)
     if not init_mt5():
         return None
     try:
