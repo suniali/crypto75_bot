@@ -166,64 +166,88 @@ async def calculate_rsi(symbol, timeframe, market_type="CRYPTO"):
 
 def generate_divergence_chart(df, symbol, timeframe, p1_idx, p2_idx, div_type):
     """
-    رسم چارت کندل‌استیک به همراه RSI و خطوط واگرایی قیمت و اندیکاتور
+    رسم چارت مطمئن بدون صفحه مشکی/سفید با مدیریت دقیق اندیس‌ها
     """
-    # ساخت یک کپی از ۳۰ کندل اخیر
-    df_plot = df.tail(35).copy().reset_index(drop=True)
+    fig = None
+    try:
+        # ۱. آماده‌سازی دیتافریم ۳۵ کندل اخیر
+        df_plot = df.tail(35).copy().reset_index(drop=True)
 
-    # تنظیم ابعاد چارت
-    fig, (ax_price, ax_rsi) = plt.subplots(2, 1, figsize=(10, 7), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-    fig.patch.set_facecolor('#1e1e1e')
+        # ۲. ساخت بوم و محورها با تنظیم مستقیم رنگ‌ها (بدون style.use)
+        fig, (ax_price, ax_rsi) = plt.subplots(
+            2, 1,
+            figsize=(10, 6),
+            sharex=True,
+            gridspec_kw={'height_ratios': [2, 1]}
+        )
 
-    # رنگ‌های چارت (تم تاریک)
-    for ax in [ax_price, ax_rsi]:
-        ax.set_facecolor('#1e1e1e')
-        ax.tick_params(colors='white')
-        ax.xaxis.label.set_color('white')
-        ax.yaxis.label.set_color('white')
-        ax.grid(True, color='#333333', linestyle='--', alpha=0.5)
+        bg_color = '#1e1e1e'
+        fig.set_facecolor(bg_color)
 
-    x_axis = range(len(df_plot))
+        for ax in (ax_price, ax_rsi):
+            ax.set_facecolor(bg_color)
+            ax.tick_params(colors='#ffffff', labelsize=9)
+            ax.grid(True, color='#333333', linestyle='--', alpha=0.5)
+            for spine in ax.spines.values():
+                spine.set_color('#444444')
 
-    # ۱. رسم قیمت (Line / Close)
-    ax_price.plot(x_axis, df_plot['close'], color='#00bcff', linewidth=1.5, label='Price (Close)')
-    ax_price.set_title(f"{symbol} - {timeframe} | Divergence Analysis", color='white', fontsize=12, pad=10)
-    ax_price.set_ylabel("Price", color='white')
+        x_axis = range(len(df_plot))
 
-    # ۲. رسم RSI
-    ax_rsi.plot(x_axis, df_plot['rsi'], color='#ff9900', linewidth=1.5, label='RSI (14)')
-    ax_rsi.axhline(70, color='#ff4d4d', linestyle='--', alpha=0.7)
-    ax_rsi.axhline(30, color='#2ecc71', linestyle='--', alpha=0.7)
-    ax_rsi.fill_between(x_axis, 70, 30, color='#ffffff', alpha=0.03)
-    ax_rsi.set_ylabel("RSI", color='white')
-    ax_rsi.set_ylim(0, 100)
+        # ۳. رسم قیمت (خط اصلی)
+        ax_price.plot(x_axis, df_plot['close'], color='#00bcff', linewidth=1.8, label='Price')
+        ax_price.set_title(f"{symbol} - {timeframe} | Divergence Analysis", color='#ffffff', fontsize=12, pad=10)
+        ax_price.set_ylabel("Price", color='#ffffff')
 
-    # ۳. رسم خطوط واگرایی روی چارت و RSI
-    line_color = '#2ecc71' if div_type == "BULLISH" else '#ff4d4d'
+        # ۴. رسم RSI
+        ax_rsi.plot(x_axis, df_plot['rsi'], color='#ff9900', linewidth=1.8, label='RSI')
+        ax_rsi.axhline(70, color='#ff4d4d', linestyle='--', alpha=0.7)
+        ax_rsi.axhline(30, color='#2ecc71', linestyle='--', alpha=0.7)
+        ax_rsi.fill_between(x_axis, 70, 30, color='#ffffff', alpha=0.04)
+        ax_rsi.set_ylabel("RSI", color='#ffffff')
+        ax_rsi.set_ylim(0, 100)
 
-    # اندیس‌های متناظر در دیتافریم برش‌خورده
-    idx1 = df_plot.index[df_plot['index_orig'] == p1_idx][0]
-    idx2 = df_plot.index[df_plot['index_orig'] == p2_idx][0]
+        # ۵. رسم خطوط واگرایی با محاسبه ایمن اندیس‌ها
+        line_color = '#2ecc71' if div_type == "BULLISH" else '#ff4d4d'
 
-    # خط واگرایی روی قیمت
-    ax_price.plot([idx1, idx2], [df_plot.loc[idx1, 'close'], df_plot.loc[idx2, 'close']],
-                  color=line_color, linewidth=2.5, marker='o', linestyle='-')
+        # یافتن اندیس‌ها در ۳۵ کندل اخیر
+        if 'index_orig' in df_plot.columns:
+            idx1_matches = df_plot.index[df_plot['index_orig'] == p1_idx].tolist()
+            idx2_matches = df_plot.index[df_plot['index_orig'] == p2_idx].tolist()
 
-    # خط واگرایی روی RSI
-    ax_rsi.plot([idx1, idx2], [df_plot.loc[idx1, 'rsi'], df_plot.loc[idx2, 'rsi']],
-                color=line_color, linewidth=2.5, marker='o', linestyle='-')
+            if idx1_matches and idx2_matches:
+                i1, i2 = idx1_matches[0], idx2_matches[0]
 
-    plt.tight_layout()
+                # رسم خط قیمت
+                ax_price.plot([i1, i2], [df_plot.loc[i1, 'close'], df_plot.loc[i2, 'close']],
+                              color=line_color, linewidth=2.5, marker='o', markersize=5)
 
-    # ذخیره فایل تصویر
-    chart_dir = "charts"
-    os.makedirs(chart_dir, exist_ok=True)
-    file_path = os.path.join(chart_dir, f"div_{symbol}_{timeframe}.png")
-    plt.savefig(file_path, facecolor=fig.get_facecolor(), edgecolor='none', dpi=150)
-    plt.close(fig)
+                # رسم خط RSI
+                ax_rsi.plot([i1, i2], [df_plot.loc[i1, 'rsi'], df_plot.loc[i2, 'rsi']],
+                            color=line_color, linewidth=2.5, marker='o', markersize=5)
 
-    return file_path
+        plt.tight_layout()
 
+        # ۶. ذخیره‌سازی مطمئن
+        chart_dir = "charts"
+        os.makedirs(chart_dir, exist_ok=True)
+        file_path = os.path.join(chart_dir, f"div_{symbol}_{timeframe}.png")
+
+        fig.savefig(
+            file_path,
+            facecolor=bg_color,
+            edgecolor='none',
+            dpi=120,
+            bbox_inches='tight'
+        )
+        return file_path
+
+    except Exception as err:
+        logger.error("Error in generate_divergence_chart: %s", err)
+        return None
+    finally:
+        if fig is not None:
+            plt.close(fig)
+        plt.close('all')
 
 def get_lower_tf_candles(symbol: str, lower_timeframe: str = "1m", count: int = 8, market_type: str = "FOREX") -> str:
     """دریافت کندل‌های تایم‌فریم پایین‌تر جهت بررسی الگوها"""
