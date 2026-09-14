@@ -536,17 +536,49 @@ async def get_ai_market_view(symbol, rsi_val, rsi_status, divergence, market_typ
 - فقط متن فارسی بدون هیچ عنوان یا مقدمه‌چینی بنویس.
 - جملات را کاملاً مرتب و روان بگو تا در فرمت راست‌چین تلگرام به شکل کاملاً تمیز دیده شوند.
 """
+        models_to_try = ['gemini-3.6-flash','gemini-2.5-flash']
+        max_retries_per_model = 2
 
-        response = client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-            )
-        )
-        raw_text = response.text.strip()
-        formatted_text = "\u200f" + raw_text.replace("\n", "\n\u200f")
-        return formatted_text
+        for model_name in models_to_try:
+            for attempt in range(max_retries_per_model):
+                try:
+                    def call_api(m_name=model_name):
+                        return client.models.generate_content(
+                            model=m_name,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                temperature=0.2,
+                            )
+                        )
+
+                    response = await loop.run_in_executor(None, call_api)
+
+                    if response and response.text:
+                        raw_text = response.text.strip()
+                        formatted_text = "\u200f" + raw_text.replace("\n", "\n\u200f")
+                        return formatted_text
+
+                except Exception as api_err:
+                    err_str = str(api_err)
+
+                    # اگر مدل پیدا نشد (404)، بلافاصله به مدل بعدی سوئیچ کن
+                    if "404" in err_str or "NOT_FOUND" in err_str:
+                        logger.warning("مدل %s یافت نشد (404). سوئیچ به مدل بعدی...", model_name)
+                        break
+
+                    is_unavailable = any(
+                        err in err_str for err in ["503", "UNAVAILABLE", "Overloaded", "ResourceExhausted"])
+                    if is_unavailable:
+                        logger.warning(
+                            "Gemini %s 503/Overload (تلاش %d از %d روی این مدل). وقفه...",
+                            model_name, attempt + 1, max_retries_per_model
+                        )
+                        await asyncio.sleep(1.5 * (attempt + 1))
+                    else:
+                        logger.error("خطای غیرمنتظره API: %s", api_err)
+                        break
+
+        return "\u200f⚠️ سرویس هوش مصنوعی به دلیل ترافیک بالای سرورها موقتاً در دسترس نیست."
     except Exception as e:
         logger.error("AI Analysis generation error: %s", e)
         return "\u200f⚠️ تحلیل هوش مصنوعی در دسترس نیست."
@@ -572,7 +604,7 @@ TP: <حد سود یا 0>
 """
 
     # لیست مدل‌ها جهت Fallback در صورت ترافیک بالا
-    models_to_try = ['gemini-2.5-flash', 'gemini-1.5-flash']
+    models_to_try = ['gemini-3.6-flash','gemini-2.5-flash']
 
     for model_name in models_to_try:
         try:
@@ -639,7 +671,7 @@ def analyze_trades_with_gemini(trades: list, period_name: str) -> str:
         # 📌 اصلاح اصلی: ساخت کلاینت بر اساس نسخه جدید SDK
         client = genai.Client(api_key=API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model='gemini-3.6-flash',
             contents=prompt,
         )
         return response.text.strip()
