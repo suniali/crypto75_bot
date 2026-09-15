@@ -87,7 +87,7 @@ from bot_app.mt5_service import (
     check_recent_closed_positions,
 )
 from bot_app.report_service import generate_pdf_report
-from bot_app.checker import fetch_active_alerts,process_alert
+from bot_app.checker import fetch_active_alerts,deactivate_alert_by_id,process_alert
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
@@ -107,7 +107,7 @@ ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌ه�
 MAIN_MENU_TEXT = "\u200f🏠 **به منوی اصلی بازگشتید.**\n\n💡 _از دکمه‌های زیر جهت دسترسی سریع استفاده کنید:_"
 MAIN_KEYBOARD = ReplyKeyboardMarkup(
         [
-            ["ثبت هشدار قیمت 🔔"],
+            ["🔔 هشدارهای فعال","ثبت هشدار قیمت 🔔"],
             ["📋 واچ‌لیست", "✨ افزودن به واچ‌لیست"],
             ["📊 پوزیشن‌های باز","📈 معامله جدید"],
             ["✍️ ثبت دستی معامله", "📸 استخراج معامله از عکس"],
@@ -220,7 +220,109 @@ async def on_shutdown(app):
     logger.info("✅ All background workers stopped cleanly.")
 
 # ------------------------------------------------------------------
-# 5.َAlert Handlers
+# #. Show And Manage Alerts
+# ------------------------------------------------------------------
+# تابع اصلی برای نمایش لیست هشدارهای فعال کاربر
+async def show_active_alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    chat_id = str(update.effective_chat.id)
+
+    if query:
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning("Error answering callback query: %s", e)
+
+    try:
+        # ۱. دریافت هشدارها از دیتابیس (غیربلاک‌کننده)
+        loop = asyncio.get_running_loop()
+        if inspect.iscoroutinefunction(fetch_active_alerts):
+            alerts = await fetch_active_alerts()
+        else:
+            alerts = await loop.run_in_executor(None, fetch_active_alerts)
+
+        # ۲. اگر حسابی هشداری نداشت
+        if not alerts:
+            text = "🔕 **شما هیچ هشدار فعال قیمت ندارید!**"
+            if query:
+                await query.edit_message_text(text, parse_mode="Markdown")
+            else:
+                await update.message.reply_text(text, parse_mode="Markdown")
+            return
+
+        # ۳. ساخت متن و دکمه‌های حذف
+        msg = "🔔 **لیست هشدارهای قیمت فعال شما:**\n\n"
+        buttons = []
+
+        for idx, alert in enumerate(alerts, 1):
+            market_label = "فارکس" if alert.is_forex else "کریپتو"
+            # تمیزسازی نماد جهت جلوگیری از خطای مارک‌داون
+            sym = str(alert.symbol).replace("_", "\\_")
+
+            msg += f"{idx}. `{sym}` ({market_label}) 🎯 قیمت: `{alert.target_price}`\n"
+
+            # دکمه اختصاصی حذف بر اساس ID هشدار در دیتابیس
+            buttons.append([
+                InlineKeyboardButton(
+                    f"🗑 حذف: {alert.symbol} روی {alert.target_price}",
+                    callback_data=f"confirm_del_alert_{alert.id}"
+                )
+            ])
+
+        msg += "\n*جهت لغو هر هشدار، روی دکمه مربوط به آن کلیک کنید:*"
+        reply_markup = InlineKeyboardMarkup(buttons)
+
+        if query:
+            try:
+                await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+            except BadRequest as e:
+                if "Message is not modified" not in str(e):
+                    await query.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+
+    except Exception as e:
+        logger.exception("Error in show_active_alerts_command: %s", e)
+        error_msg = "🚨 **خطا در دریافت لیست هشدارها!**"
+        if query:
+            await query.edit_message_text(error_msg, parse_mode="Markdown")
+        elif update.message:
+            await update.message.reply_text(error_msg, parse_mode="Markdown")
+
+async def confirm_delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۱: درخواست تأیید از کاربر قبل از غیرفعالسازی"""
+    query = update.callback_query
+    await query.answer()
+
+    alert_id = query.data.replace("confirm_del_alert_", "")
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ بله، غیرفعال شود", callback_data=f"do_del_alert_{alert_id}"),
+            InlineKeyboardButton("❌ انصراف", callback_data="back_to_alerts_list"),
+        ]
+    ])
+
+    await query.edit_message_text(
+        "⚠️ **آیا از غیرفعال‌سازی این هشدار اطمینان دارید؟**",
+        reply_markup=keyboard,
+        parse_mode="Markdown"
+    )
+
+async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۲: اجرای نهایی غیرفعالسازی پس از تأیید"""
+    query = update.callback_query
+    await query.answer()
+
+    alert_id = query.data.replace("do_del_alert_", "")
+
+    # اجرای امن عملیات دیتابیس
+    await deactivate_alert_by_id(alert_id)
+
+    # بازگشت و نمایش مجدد لیست به روز شده
+    await show_active_alerts_command(update, context)
+# ------------------------------------------------------------------
+# #.Create New Alert
 # ------------------------------------------------------------------
 ADD_ALERT_MARKET, ADD_ALERT_SYMBOL, ADD_ALERT_PRICE = (
     "ADD_ALERT_MARKET",
@@ -2439,8 +2541,17 @@ if __name__ == "__main__":
     # ------------------ 4️⃣ کلیدهای میانبر کیبورد (Keyboard Handlers) ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
     app.add_handler(MessageHandler(filters.Regex("^📊 پوزیشن‌های باز$"), show_positions_handler))
+    app.add_handler(MessageHandler(filters.Text(["🔔 هشدارهای فعال"]), show_active_alerts_command))
 
     # ------------------ 5️⃣ دکمه‌های شیشه‌ای (Callback Query Handlers) ------------------
+    # حذف آلرت
+    # ۱. درخواست تأیید قبل از حذف
+    app.add_handler(CallbackQueryHandler(confirm_delete_alert_callback, pattern="^confirm_del_alert_"))
+    # ۲. انجام نهایی حذف پس از کلیک روی "بله"
+    app.add_handler(CallbackQueryHandler(delete_alert_callback, pattern="^do_del_alert_"))
+    # ۳. دکمه بازگشت به لیست هشدارها در صورت انصراف
+    app.add_handler(CallbackQueryHandler(show_active_alerts_command, pattern="^back_to_alerts_list$"))
+
     # حذف از واچ لیست
     app.add_handler(CallbackQueryHandler(show_watchlist_command, pattern="^showWatchlist$"))
     app.add_handler(CallbackQueryHandler(delete_watchlist_handler, pattern="^del_watchlist_"))
