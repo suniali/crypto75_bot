@@ -1399,49 +1399,79 @@ async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAUL
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
-    # ۱. پاسخ سریع به تلگرام برای برداشتن لودینگ دکمه
+    # ۱. پاسخ سریع جهت رفع لودینگ دکمه شیشه‌ای
     if query:
-        await query.answer()
+        try:
+            await query.answer()
+        except Exception as e:
+            logger.warning("Could not answer callback query: %s", e)
 
-    loop = asyncio.get_running_loop()
-    # ۲. اجرای غیربلاک‌کننده فراخوانی دیتابیس
-    watchlist = await loop.run_in_executor(None, get_all_watchlist) if not inspect.iscoroutinefunction(
-        get_all_watchlist) else await get_all_watchlist()
-
-    if not watchlist:
-        text = "📭 واچ‌لیست شما خالی است!"
-        if query:
-            await query.edit_message_text(text)
+    try:
+        # ۲. فراخوانی ایمن دیتابیس (غیربلاک‌کننده)
+        loop = asyncio.get_running_loop()
+        if inspect.iscoroutinefunction(get_all_watchlist):
+            watchlist = await get_all_watchlist()
         else:
-            await update.message.reply_text(text)
-        return
+            watchlist = await loop.run_in_executor(None, get_all_watchlist)
 
-    msg = "📊 **لیست نمادهای تحت نظر:**\n\n"
-    buttons = []
-    row = []
+        # ۳. بررسی خالی بودن واچ‌لیست
+        if not watchlist:
+            text = "📭 **واچ‌لیست شما خالی است!**"
+            if query:
+                await query.edit_message_text(text, parse_mode="Markdown")
+            else:
+                await update.message.reply_text(text, parse_mode="Markdown")
+            return
 
-    for watch in watchlist:
-        msg += f"• `{watch.symbol}` ({watch.time_frame}) - {watch.market_type}\n"
-        row.append(
-            InlineKeyboardButton(
-                f"❌ {watch.symbol}({watch.time_frame})",
-                callback_data=f"del_watchlist_{watch.symbol}_{watch.time_frame}_{watch.market_type}"
+        # ۴. ساخت متن و دکمه‌ها
+        msg = "📊 **لیست نمادهای تحت نظر:**\n\n"
+        buttons = []
+        row = []
+
+        for watch in watchlist:
+            # Escape یا تمیزسازی نماد برای جلوگیری از خطای Markdown
+            sym = str(watch.symbol).replace("_", "\\_")
+            tf = str(watch.time_frame)
+            m_type = str(watch.market_type)
+
+            msg += f"• `{sym}` ({tf}) - {m_type}\n"
+
+            row.append(
+                InlineKeyboardButton(
+                    f"❌ {watch.symbol} ({tf})",
+                    callback_data=f"del_watchlist_{watch.symbol}_{tf}_{m_type}"
+                )
             )
-        )
-        if len(row) == 2:
+            if len(row) == 2:
+                buttons.append(row)
+                row = []
+        if row:
             buttons.append(row)
-            row = []
-    if row:
-        buttons.append(row)
 
-    msg += "\n*جهت حذف هر نماد روی دکمه مربوط به آن کلیک کنید:*"
-    reply_markup = InlineKeyboardMarkup(buttons)
+        msg += "\n*جهت حذف هر نماد، روی دکمه مربوط به آن کلیک کنید:*"
+        reply_markup = InlineKeyboardMarkup(buttons)
 
-    # ۳. مدیریت یکپارچه پاسخ جهت جلوگیری از خطای update.message
-    if query:
-        await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+        # ۵. ارسال یا ویرایش پیام با مدیریت خطای تلگرام
+        if query:
+            try:
+                await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+            except BadRequest as e:
+                # اگر پیام تغییری نکرده باشد، خطای تلگرام را نادیده می‌گیریم
+                if "Message is not modified" in str(e):
+                    pass
+                else:
+                    # اگر پیام قابل ادیت نبود، یک پیام جدید ارسال می‌کنیم
+                    await query.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
+
+    except Exception as e:
+        logger.exception("Error in show_watchlist_command: %s", e)
+        error_msg = "🚨 **خطا در دریافت اطلاعات واچ‌لیست!**"
+        if query:
+            await query.edit_message_text(error_msg, parse_mode="Markdown")
+        elif update.message:
+            await update.message.reply_text(error_msg, parse_mode="Markdown")
 
 async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
