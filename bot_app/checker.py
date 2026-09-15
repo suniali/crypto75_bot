@@ -56,6 +56,17 @@ def deactivate_alert(alert: UserAlert):
     alert.save(update_fields=["is_active"])
     logger.info("Alert ID #%s for symbol %s set to inactive.", alert.id, alert.symbol)
 
+@sync_to_async
+def deactivate_alert_by_id(alert_id: int):
+    try:
+        alert = UserAlert.objects.get(id=alert_id)
+        alert.is_active = False
+        alert.save(update_fields=["is_active"])
+        logger.info("Alert ID #%s for symbol %s set to inactive.", alert.id, alert.symbol)
+        return True
+    except UserAlert.DoesNotExist:
+        logger.warning("Alert ID #%s not found for deactivation.", alert_id)
+        return False
 
 def check_target_reached(current_price: float, target_price: float, alert_type: str) -> bool:
     if alert_type == "ABOVE":
