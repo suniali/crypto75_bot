@@ -102,11 +102,6 @@ TIMEFRAME_TO_SECONDS = {
     "1d": 86400,
 }
 
-ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME, ADD_WATCHLIST_MARKET = (
-    "ADD_WATCHLIST_SYMBOL",
-    "ADD_WATCHLIST_TIMEFRAME",
-    "ADD_WATCHLIST_MARKET"
-)
 ACTIVE_WORKERS = {}  # برای مدیریت و متوقف کردن تسک‌های پس‌زمینه هنگام حذف
 
 MAIN_MENU_TEXT = "\u200f🏠 **به منوی اصلی بازگشتید.**\n\n💡 _از دکمه‌های زیر جهت دسترسی سریع استفاده کنید:_"
@@ -1510,22 +1505,95 @@ async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes
         )
 
 
-# Conversation steps
+# ------------------------------------------------------------------
+# #. Watchlist Conversation steps
+# ------------------------------------------------------------------
+ADD_WATCHLIST_MARKET, ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME = (
+    "ADD_WATCHLIST_MARKET",
+    "ADD_WATCHLIST_SYMBOL",
+    "ADD_WATCHLIST_TIMEFRAME"
+)
+
+
+# مرحله ۱: شروع و درخواست انتخاب مارکت
 async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Starting addWatchlist conversation for chat_id %s", update.effective_chat.id)
-    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")]])
-    await update.message.reply_text(
-        "📝 لطفاً نام نماد را وارد کنید (مثلاً `BTCUSDT`):",
-        parse_mode="Markdown",
-        reply_markup=cancel_keyboard,
-    )
+    context.user_data.clear()
+
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 کریپتو", callback_data="CRYPTO"),
+         InlineKeyboardButton("📈 فارکس", callback_data="FOREX")],
+        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
+    ])
+
+    msg_text = "🏷 **مرحله ۱ از ۳:** لطفاً نوع بازار را انتخاب کنید:"
+
+    if update.message:
+        await update.message.reply_text(msg_text, parse_mode="Markdown", reply_markup=keyboard)
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(msg_text, parse_mode="Markdown", reply_markup=keyboard)
+
+    return ADD_WATCHLIST_MARKET
+
+
+# مرحله ۲: ذخیره مارکت و درخواست نماد (با پشتیبانی از واچ‌لیست MT5)
+async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    market_type = query.data
+    context.user_data['market_type'] = market_type
+    logger.info("AddWatchlist step 1 - Market selected: %s", market_type)
+
+    keyboard_buttons = []
+    msg_text = f"🏷 **بازار:** `{market_type}`\n\n"
+
+    # اگر فارکس بود، نمادها را از متاتریدر می‌گیریم
+    if market_type == "FOREX":
+        msg_text += "📝 **مرحله ۲ از ۳:** نماد مورد نظر را از لیست زیر انتخاب کرده یا نام آن را دقیق تایپ کنید:"
+        try:
+            # فراخوانی تابع دریافت واچ‌لیست متاتریدر (با فرض اینکه این تابع را از قبل دارید)
+            loop = asyncio.get_running_loop()
+            symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+
+            # چیدمان ۲ تایی دکمه‌ها
+            row = []
+            for sym in symbols:
+                row.append(InlineKeyboardButton(sym, callback_data=f"sym_{sym}"))
+                if len(row) == 2:
+                    keyboard_buttons.append(row)
+                    row = []
+            if row:
+                keyboard_buttons.append(row)
+        except Exception as e:
+            logger.error("Failed to load MT5 symbols: %s", e)
+            msg_text += "\n*(خطا در دریافت لیست متاتریدر. لطفاً نام نماد را تایپ کنید)*"
+    else:
+        # برای کریپتو فقط پیام تایپ دستی می‌دهیم
+        msg_text += "📝 **مرحله ۲ از ۳:** لطفاً نام نماد را وارد کنید (مثلاً `BTCUSDT`):"
+
+    keyboard_buttons.append([InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")])
+    keyboard = InlineKeyboardMarkup(keyboard_buttons)
+
+    await query.edit_message_text(msg_text, parse_mode="Markdown", reply_markup=keyboard)
     return ADD_WATCHLIST_SYMBOL
 
 
+# مرحله ۳: ذخیره نماد و درخواست تایم‌فریم
 async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    symbol = update.message.text.upper()
+    # بررسی اینکه ورودی از کلیک دکمه بوده یا تایپ دستی
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        symbol = query.data.replace("sym_", "").upper()
+        message_func = query.edit_message_text
+    else:
+        symbol = update.message.text.strip().upper()
+        message_func = update.message.reply_text
+
     context.user_data['symbol'] = symbol
-    logger.info("AddWatchlist step 1 - Symbol entered: %s", symbol)
+    market_type = context.user_data.get('market_type', 'UNKNOWN')
+    logger.info("AddWatchlist step 2 - Symbol entered: %s", symbol)
 
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("5m", callback_data="5m"), InlineKeyboardButton("15m", callback_data="15m")],
@@ -1533,37 +1601,29 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
         [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")],
         [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
     ])
-    await update.message.reply_text(f"📌 نماد: `{symbol}`\n⏱ تایم‌فریم را انتخاب کنید:",
-                                    parse_mode="Markdown", reply_markup=keyboard)
+
+    msg_text = (
+        f"🏷 **بازار:** `{market_type}`\n"
+        f"📌 **نماد:** `{symbol}`\n\n"
+        "⏱ **مرحله ۳ از ۳:** تایم‌فریم را انتخاب کنید:"
+    )
+
+    await message_func(msg_text, parse_mode="Markdown", reply_markup=keyboard)
     return ADD_WATCHLIST_TIMEFRAME
 
 
+# مرحله ۴: ذخیره تایم‌فریم و ثبت نهایی در واچ‌لیست
 async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    timeframe = query.data
-    context.user_data['timeframe'] = timeframe
-    logger.info("AddWatchlist step 2 - Timeframe selected: %s", timeframe)
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 کریپتو", callback_data="CRYPTO"),
-         InlineKeyboardButton("📈 فارکس", callback_data="FOREX")],
-        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
-    ])
-    await query.edit_message_text("🏷 بازار را انتخاب کنید:", reply_markup=keyboard)
-    return ADD_WATCHLIST_MARKET
-
-
-async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     await query.edit_message_text("⏳ **در حال ثبت در واچ لیست...**", parse_mode="Markdown")
 
+    timeframe = query.data
     symbol = context.user_data['symbol']
-    timeframe = context.user_data['timeframe']
-    market_type = query.data
-    logger.info("AddWatchlist step 3 - Market selected: %s for symbol %s", market_type, symbol)
+    market_type = context.user_data['market_type']
+
+    logger.info("AddWatchlist step 3 - Finished. %s %s %s", market_type, symbol, timeframe)
 
     await save_watchlist_item(symbol, timeframe, market_type)
 
@@ -1573,31 +1633,32 @@ async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DE
     ACTIVE_WORKERS[worker_key] = task
     logger.info("Created new worker task for key: %s", worker_key)
 
-    await query.edit_message_text(f"✨ ` {timeframe} | {symbol}` به واچ‌لیست اضافه شد و پایش RSI فعال گردید. ", parse_mode="Markdown")
+    await query.edit_message_text(
+        f"✨ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` به واچ‌لیست اضافه و پایش آن فعال گردید.",
+        parse_mode="Markdown"
+    )
+
+    context.user_data.clear()
     return ConversationHandler.END
 
 
+# هندلر لغو عملیات
 async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
-
     context.user_data.clear()
 
     query = update.callback_query
     if query:
         await query.answer()
-        # ۱. ویرایش پیام شیشه‌ای (حذف دکمه‌های شیشه‌ای قبلی)
         await query.edit_message_text("❌ **عملیات افزودن به واچ‌لیست لغو شد.**", parse_mode="Markdown")
-
-        # ۲. ارسال پیام جدید برای بازگرداندن کیبورد اصلی
         await update.effective_chat.send_message(
             MAIN_MENU_TEXT,
             parse_mode="Markdown",
             reply_markup=MAIN_KEYBOARD
         )
     else:
-        # پشتیبانی از حالتی که لغو از طریق دستور متنی انجام شود
         await update.message.reply_text(
-          MAIN_MENU_TEXT,
+            MAIN_MENU_TEXT,
             parse_mode="Markdown",
             reply_markup=MAIN_KEYBOARD
         )
@@ -2166,25 +2227,26 @@ if __name__ == "__main__":
             MessageHandler(filters.Text(["✨ افزودن به واچ‌لیست"]), start_add_watchlist),
         ],
         states={
+            ADD_WATCHLIST_MARKET: [
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
+                CallbackQueryHandler(add_watchlist_get_market_step, pattern="^(CRYPTO|FOREX)$"),
+            ],
             ADD_WATCHLIST_SYMBOL: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),
-                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
+                CallbackQueryHandler(add_watchlist_get_symbol_step, pattern="^sym_"),  # برای کلیک روی دکمه‌های متاتریدر
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),  # برای تایپ دستی
             ],
             ADD_WATCHLIST_TIMEFRAME: [
-                CallbackQueryHandler(add_watchlist_get_timeframe_step,pattern="^(5m|15m|30m|1h|4h|1d)$"),
-                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
-            ],
-            ADD_WATCHLIST_MARKET: [
-                CallbackQueryHandler(add_watchlist_get_market_step),
-                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$")
+                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
+                CallbackQueryHandler(add_watchlist_get_timeframe_step, pattern="^(5m|15m|30m|1h|4h|1d)$"),
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(cancel_watch_list_callback,pattern="^cancel_watchlist$"),
+            CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
         ],
-        per_message=False,  # اضافه شد جهت حذف هشدار
-        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
-        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
+        per_message=False,
+        per_chat=True,
+        per_user=True,
     )
     app.add_handler(add_watchlist_handler)
 
