@@ -2007,9 +2007,20 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
                         # ارسال به تلگرام
                         if chart_path and os.path.exists(chart_path):
                             with open(chart_path, "rb") as photo:
-                                await bot.send_photo(chat_id=chat_id, photo=photo, caption=msg, parse_mode="HTML")
+                                await bot.send_photo(
+                                    chat_id=chat_id,
+                                    photo=photo,
+                                    caption=msg,
+                                    reply_markup=MAIN_KEYBOARD,
+                                    parse_mode="HTML"
+                                )
                         else:
-                            await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+                            await bot.send_message(
+                                chat_id=chat_id,
+                                text=msg,
+                                reply_markup=MAIN_KEYBOARD,
+                                parse_mode="HTML"
+                            )
 
                         last_signal_state = current_state
                 else:
