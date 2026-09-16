@@ -68,13 +68,23 @@ def deactivate_alert_by_id(alert_id: int):
         logger.warning("Alert ID #%s not found for deactivation.", alert_id)
         return False
 
-def check_target_reached(current_price: float, target_price: float, alert_type: str) -> bool:
+def check_target_reached(current_price: float, target_price: float, alert_type: str, is_forex: bool = False) -> bool:
     if alert_type == "ABOVE":
         return current_price >= target_price
     elif alert_type == "BELOW":
         return current_price <= target_price
 
-    return abs(current_price - target_price) <= (target_price * 0.0001)
+    # اگر alert_type مشخص نشده یا BOTH است:
+    if is_forex:
+        # برای فارکس: تلرانس بسیار دقیق‌تر (مثلاً 0.1 پیپ یا 0.00001)
+        # برای جفت‌ارزهای JPY (قیمت حول و حوش 100-150) مقدار 0.01 محاسبه می‌شود
+        pip_unit = 0.01 if target_price > 50 else 0.0001
+        tolerance = pip_unit * 0.1  # یعنی حداکثر 0.1 پیپ فاصله
+    else:
+        # برای کریپتو: 0.001 درصد (10 برابر دقیق‌تر از کد قبلی)
+        tolerance = target_price * 0.00001
+
+    return abs(current_price - target_price) <= tolerance
 
 
 async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | None:
@@ -89,7 +99,12 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | No
         # ۱. دریافت قیمت فعلی (فارکس یا کریپتو)
         if alert.is_forex:
             loop = asyncio.get_running_loop()
-            current_price = await loop.run_in_executor(None, get_forex_price, alert.symbol)
+            current_price = None
+            for attempt in range(2):
+                current_price = await loop.run_in_executor(None, get_forex_price, alert.symbol)
+                if current_price is not None:
+                    break
+                await asyncio.sleep(0.5)
         else:
             current_price = await get_crypto_price(client, alert.symbol)
 
@@ -101,7 +116,7 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | No
         alert_type = getattr(alert, "alert_type", "BOTH")
 
         # ۲. بررسی شرایط رسیدن به تارگت
-        if check_target_reached(current_price, target_price, alert_type):
+        if check_target_reached(current_price, target_price, alert_type,alert.is_forex):
             logger.info("Target price reached for %s! Current: %s | Target: %s", alert.symbol, current_price, target_price)
 
             # ۳. غیرفعال‌سازی آلرت در دیتابیس
@@ -112,7 +127,7 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | No
                 f"🚨 **هشدار قیمت رسید!** 🚨\n\n"
                 f"📌 نماد: `{alert.symbol}`\n"
                 f"🎯 قیمت هدف: `{target_price}`\n"
-                f"📈 قیمت فعلی: `{current_price}`"
+                f"📈 قیمت فعلی: `{current_price:.5f}`"
             )
             return msg
 

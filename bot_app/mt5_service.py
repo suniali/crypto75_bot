@@ -55,17 +55,35 @@ def init_mt5() -> bool:
     return True
 
 
-def get_forex_price(symbol: str):
-    if not init_mt5():
+def get_forex_price(symbol: str) -> float | None:
+    """
+    دریافت قیمت لحظه‌ای (Bid/Ask/Last) از متاتریدر ۵ با اطمینان از فعال بودن نماد در Market Watch
+    """
+    # ۱. اطمینان از مقداردهی اولیه متاتریدر
+    if not mt5.initialize():
+        logger.error("MT5 initialize failed: %s", mt5.last_error())
         return None
-    try:
-        tick = mt5.symbol_info_tick(symbol)
-        if not tick:
-            logger.warning("Tick info returned None for symbol: %s", symbol)
+
+    # ۲. بررسی وجود نماد در متاتریدر
+    symbol_info = mt5.symbol_info(symbol)
+    if symbol_info is None:
+        logger.warning("Symbol %s not found in MetaTrader 5", symbol)
+        return None
+
+    # ۳. اگر نماد در Market Watch فعال نیست، آن را فعال می‌کنیم
+    if not symbol_info.select:
+        if not mt5.symbol_select(symbol, True):
+            logger.error("Failed to select symbol %s in Market Watch", symbol)
             return None
-        return tick.bid
-    finally:
-        mt5.shutdown()
+
+    # ۴. دریافت تیک قیمت (Tick)
+    tick = mt5.symbol_info_tick(symbol)
+    if tick is None or tick.bid == 0:
+        logger.warning("Failed to get tick for %s, error code: %s", symbol, mt5.last_error())
+        return None
+
+    # برگرداندن قیمت Bid (یا میانگین Bid و Ask)
+    return float(tick.bid)
 
 
 # ------------------------------------------------------------------
