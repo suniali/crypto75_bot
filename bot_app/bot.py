@@ -87,7 +87,13 @@ from bot_app.mt5_service import (
     check_recent_closed_positions,
 )
 from bot_app.report_service import generate_pdf_report
-from bot_app.checker import fetch_active_alerts,deactivate_alert_by_id,process_alert
+from bot_app.checker import (
+    fetch_active_alerts,
+    deactivate_alert_by_id,
+    process_alert
+)
+from bot_app.generate_hiken_chart import create_pending_alert_chart
+from bot_app.api_service import fetch_recent_klines
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
@@ -465,7 +471,7 @@ async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAUL
 
 
 async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """دریافت قیمت هدف و ذخیره نهایی هشدار"""
+    """دریافت قیمت هدف و ذخیره نهایی هشدار به همراه ارسال چارت"""
     chat_id = update.effective_chat.id
     symbol = context.user_data.get("symbol")
     is_forex = context.user_data.get("is_forex", False)
@@ -481,17 +487,59 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
         )
         return ADD_ALERT_PRICE
 
-    # ذخیره در دیتابیس
-    await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
-
-    logger.info("Alert created successfully: %s at %s for chat_id %s", symbol, target_price, chat_id)
-    await update.message.reply_text(
-        f"🔔 **هشدار قیمت با موفقیت ثبت شد!**\n\n"
-        f"📌 **نماد:** `{symbol}`\n"
-        f"🎯 **قیمت هدف:** `{target_price}`\n"
-        f"🌐 **بازار:** {'فارکس' if is_forex else 'ارز دیجیتال'}",
+    # ۱. ارسال یک پیام موقت برای اعلام شروع پردازش به کاربر
+    status_msg = await update.message.reply_text(
+        "⏳ **در حال ثبت هشدار و تولید چارت...**\nلطفاً چند لحظه شکیبا باشید.",
         parse_mode="Markdown"
     )
+
+    # ۲. ذخیره در دیتابیس
+    await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
+    logger.info("Alert created successfully: %s at %s for chat_id %s", symbol, target_price, chat_id)
+
+    # ۳. ساخت متن کپشن پیام نهایی
+    msg_text = (
+        f"⏳ **هشدار جدید ثبت شد (در انتظار فعال‌سازی)**\n\n"
+        f"📌 **نماد:** `{symbol}`\n"
+        f"🎯 **قیمت هدف:** `{target_price}`\n"
+        f"🌐 **بازار:** {'فارکس' if is_forex else 'ارز دیجیتال'}\n\n"
+        f"🔹 *خط نقطه‌چین فیروزه‌ای روی چارت نشان‌دهنده تارگت جدید شماست.*"
+    )
+
+    # ۴. دریافت داده‌های کندل و تولید چارت
+    chart_buf = None
+    try:
+        async with httpx.AsyncClient() as client:
+            df_klines = await fetch_recent_klines(
+                client=client,
+                symbol=symbol,
+                interval="30m", # تایم فریم استاندارد بایننس به صورت حروف کوچک است
+                limit=50,
+                is_forex=is_forex
+            )
+            if df_klines is not None and not df_klines.empty:
+                chart_buf = create_pending_alert_chart(df_klines, target_price, symbol)
+    except Exception as e:
+        logger.exception("Failed to generate chart for new alert %s: %s", symbol, e)
+
+    # ۵. پاک کردن پیام موقت «در حال پردازش»
+    try:
+        await status_msg.delete()
+    except Exception:
+        pass  # اگر به هر دلیلی پاک نشد، برنامه کرش نکند
+
+    # ۶. ارسال پاسخ نهایی
+    if chart_buf:
+        await update.message.reply_photo(
+            photo=chart_buf,
+            caption=msg_text,
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            msg_text,
+            parse_mode="Markdown"
+        )
 
     # پاکسازی داده‌های موقت کاربر
     context.user_data.clear()
