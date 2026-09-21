@@ -1,5 +1,4 @@
 import io
-import matplotlib.pyplot as plt
 import mplfinance as mpf
 import pandas as pd
 
@@ -108,7 +107,7 @@ def create_pending_alert_chart(df_ohlc: pd.DataFrame, target_price: float, symbo
     )
 
     buf = io.BytesIO()
-    title_text = f"⏳ NEW ALERT CREATED: {symbol} @ {target_price}"
+    title_text = f"NEW ALERT CREATED: {symbol} @ {target_price}"
 
     mpf.plot(
         ha_df,
