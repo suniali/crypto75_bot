@@ -463,9 +463,11 @@ async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAUL
     next_msg = f"✅ نماد انتخاب‌شده: `{symbol}`\n\n🎯 حالا **قیمت هدف** مد نظر خود را به عدد وارد کنید:"
 
     if update.callback_query:
-        await update.callback_query.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
+        last_msg_id=await update.callback_query.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
     else:
-        await update.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
+        last_msg_id=await update.message.reply_text(next_msg, reply_markup=cancel_keyboard, parse_mode="Markdown")
+
+    context.user_data["last_message_id"] = last_msg_id.message_id
 
     return ADD_ALERT_PRICE
 
@@ -475,6 +477,7 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
     chat_id = update.effective_chat.id
     symbol = context.user_data.get("symbol")
     is_forex = context.user_data.get("is_forex", False)
+    last_msg_id = context.user_data.get("last_message_id")
 
     try:
         target_price = float(update.message.text.strip())
@@ -488,10 +491,17 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
         return ADD_ALERT_PRICE
 
     # ۱. ارسال یک پیام موقت برای اعلام شروع پردازش به کاربر
-    status_msg = await update.message.reply_text(
-        "⏳ **در حال ثبت هشدار و تولید چارت...**\nلطفاً چند لحظه شکیبا باشید.",
-        parse_mode="Markdown"
-    )
+    if last_msg_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=last_msg_id,
+                text="⏳ **در حال ثبت هشدار و دریافت چارت...**\nلطفاً چند لحظه شکیبا باشید.",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.warning("Could not edit last message: %s", e)
+
 
     # ۲. ذخیره در دیتابیس
     await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
