@@ -1,10 +1,13 @@
+import io
 import asyncio
 import logging
 import httpx
+import pandas as pd
 from asgiref.sync import sync_to_async
 
 from bot_app.models import UserAlert
-from bot_app.mt5_service import get_forex_price
+from bot_app.mt5_service import get_forex_price,get_rates_data
+from bot_app.generate_hiken_chart import create_heikin_ashi_chart
 
 # ------------------------------------------------------------------
 # Logging Configuration
@@ -45,6 +48,80 @@ async def get_crypto_price(client: httpx.AsyncClient, symbol: str):
     return None
 
 
+async def fetch_recent_klines(
+        client: httpx.AsyncClient,
+        symbol: str,
+        interval: str = "1h",
+        limit: int = 50,
+        is_forex: bool = False
+) -> pd.DataFrame | None:
+    """
+    دریافت کندل‌های اخیر برای فارکس (MetaTrader5) یا کریپتو (Binance)
+    و خروجی به صورت pandas.DataFrame آماده برای mplfinance
+    """
+    try:
+        # -------------------------------------------------------------
+        # ۱. بخش فارکس (با استفاده از تابع get_rates_data و MetaTrader5)
+        # -------------------------------------------------------------
+        if is_forex:
+            loop = asyncio.get_running_loop()
+
+            # اجرا در ترد جداگانه چون متاتریدر به صورت sync کار می‌کند
+            rates, msg = await loop.run_in_executor(None, get_rates_data, symbol, interval)
+
+            if rates is False or rates is None or len(rates) == 0:
+                logger.warning("Failed to fetch MT5 rates for %s: %s", symbol, msg)
+                return None
+
+            # تبدیل خروجی copy_rates_from_pos به دیتافریم
+            df = pd.DataFrame(rates)
+
+            # تبدیل زمان (unix timestamp به datetime)
+            df['timestamp'] = pd.to_datetime(df['time'], unit='s')
+
+            # تغییر نام ستون‌ها به ساختار مورد نیاز mplfinance
+            df.rename(columns={
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'tick_volume': 'Volume'
+            }, inplace=True)
+
+            df.set_index('timestamp', inplace=True)
+
+            # محدود کردن تعداد کندل‌ها به limit درخواست‌شده
+            return df[['Open', 'High', 'Low', 'Close']].tail(limit)
+
+        # -------------------------------------------------------------
+        # ۲. بخش کریپتو (با استفاده از Binance API)
+        # -------------------------------------------------------------
+        else:
+            url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
+            res = await client.get(url, timeout=5.0)
+
+            if res.status_code == 200:
+                raw_data = res.json()
+                data = []
+                for item in raw_data:
+                    data.append({
+                        'timestamp': pd.to_datetime(item[0], unit='ms'),
+                        'Open': float(item[1]),
+                        'High': float(item[2]),
+                        'Low': float(item[3]),
+                        'Close': float(item[4]),
+                    })
+                df = pd.DataFrame(data)
+                df.set_index('timestamp', inplace=True)
+                return df
+            else:
+                logger.warning("Binance Klines API returned status %s for %s", res.status_code, symbol)
+
+    except Exception as e:
+        logger.exception("Error in fetch_recent_klines for %s (is_forex=%s): %s", symbol, is_forex, e)
+
+    return None
+
 @sync_to_async
 def fetch_active_alerts():
     return list(UserAlert.objects.filter(is_active=True))
@@ -69,29 +146,27 @@ def deactivate_alert_by_id(alert_id: int):
         return False
 
 def check_target_reached(current_price: float, target_price: float, alert_type: str, is_forex: bool = False) -> bool:
+    """
+    بررسی رسیدن قیمت به تارگت:
+    - اگر ABOVE باشد: قیمت فعلی باید بزرگتر یا مساوی تارگت باشد.
+    - اگر BELOW باشد: قیمت فعلی باید کوچکتر یا مساوی تارگت باشد.
+    - اگر BOTH یا مشخص‌نشده باشد: فقط بر اساس برخورد یا رد شدن از مرز قیمت برخورد می‌شود.
+    """
     if alert_type == "ABOVE":
         return current_price >= target_price
     elif alert_type == "BELOW":
         return current_price <= target_price
 
-    # اگر alert_type مشخص نشده یا BOTH است:
-    if is_forex:
-        # برای فارکس: تلرانس بسیار دقیق‌تر (مثلاً 0.1 پیپ یا 0.00001)
-        # برای جفت‌ارزهای JPY (قیمت حول و حوش 100-150) مقدار 0.01 محاسبه می‌شود
-        pip_unit = 0.01 if target_price > 50 else 0.0001
-        tolerance = pip_unit * 0.1  # یعنی حداکثر 0.1 پیپ فاصله
-    else:
-        # برای کریپتو: 0.001 درصد (10 برابر دقیق‌تر از کد قبلی)
-        tolerance = target_price * 0.00001
-
-    return abs(current_price - target_price) <= tolerance
+    # اگر alert_type روی BOTH یا خالی بود:
+    # تلرانس کاملاً حذف شده تا از فعال شدن اشتباهی در فواصل دور جلوگیری شود.
+    # فقط زمانی True می‌دهد که قیمت دقیقاً برابر با قیمت هدف شود.
+    return current_price == target_price
 
 
-async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | None:
+async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> tuple[str, io.BytesIO | None] | None:
     """
     بررسی یک آلرت:
-    - در صورت رسیدن قیمت به تارگت، آلرت را غیرفعال کرده و متن پیام را برمی‌گرداند.
-    - در غیر این صورت یا هنگام بروز خطا، None برمی‌گرداند.
+    در صورت رسیدن قیمت به تارگت، آلرت را غیرفعال کرده و (متن پیام, تصویر چارت) را برمی‌گرداند.
     """
     logger.debug("Processing alert ID #%s (%s)", alert.id, alert.symbol)
 
@@ -116,20 +191,34 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> str | No
         alert_type = getattr(alert, "alert_type", "BOTH")
 
         # ۲. بررسی شرایط رسیدن به تارگت
-        if check_target_reached(current_price, target_price, alert_type,alert.is_forex):
+        if check_target_reached(current_price, target_price, alert_type, alert.is_forex):
             logger.info("Target price reached for %s! Current: %s | Target: %s", alert.symbol, current_price, target_price)
 
             # ۳. غیرفعال‌سازی آلرت در دیتابیس
             await deactivate_alert(alert)
 
-            # ۴. ساخت و بازگرداندن متن پیام
+            # ۴. دریافت داده کندل‌ها و تولید چارت هیکن آشی
+            df_klines = await fetch_recent_klines(
+                client=client,
+                symbol=alert.symbol,
+                interval="30M",
+                limit=50,
+                is_forex=alert.is_forex
+            )
+
+            chart_buf = None
+            if df_klines is not None and not df_klines.empty:
+                chart_buf = create_heikin_ashi_chart(df_klines, target_price, alert.symbol)
+
+            # ۵. ساخت متن پیام
             msg = (
-                f"🚨 **هشدار قیمت رسید!** 🚨\n\n"
+                f"🚨 **هشدار قیمت فعال شد!** 🚨\n\n"
                 f"📌 نماد: `{alert.symbol}`\n"
                 f"🎯 قیمت هدف: `{target_price}`\n"
-                f"📈 قیمت فعلی: `{current_price:.5f}`"
+                f"📈 قیمت فعلی: `{current_price:.5f}`\n\n"
+                f"📊 *چارت هیکن آشی با خط قرمز نشان‌دهنده تارگت فعال‌شده است.*"
             )
-            return msg
+            return msg, chart_buf
 
     except Exception as e:
         logger.exception("Error processing alert ID #%s (%s): %s", alert.id, alert.symbol, e)

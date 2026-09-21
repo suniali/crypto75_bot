@@ -2145,18 +2145,35 @@ async def check_alerts_loop(bot) -> None:
                     tasks = [process_alert(client, alert) for alert in alerts]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                    # پیمایش روی نتایج و ارسال پیام در صورت وجود خروجی
+                    # پیمایش روی نتایج و ارسال پیام/چارت در صورت وجود خروجی
                     for alert, result in zip(alerts, results):
-                        if isinstance(result, str):  # یعنی متن پیام برگشته است
-                            try:
-                                await bot.send_message(
-                                    chat_id=alert.chat_id,
-                                    text=result,
-                                    parse_mode="Markdown"
-                                )
-                                logger.info("Telegram notification sent to %s", alert.chat_id)
-                            except Exception as e:
-                                logger.exception("Failed to send msg to %s: %s", alert.chat_id, e)
+                        # بررسی اینکه خطا رخ نداده و خروجی یک تاپل یا لیست است
+                        if isinstance(result, tuple) and len(result) == 2:
+                            msg, chart_buf = result
+
+                            if msg:  # اگر متن پیام وجود داشته باشد
+                                try:
+                                    if chart_buf:  # اگر چارت هیکن آشی آماده شده بود
+                                        await bot.send_photo(
+                                            chat_id=alert.chat_id,
+                                            photo=chart_buf,
+                                            caption=msg,
+                                            parse_mode="Markdown"
+                                        )
+                                        logger.info("Photo notification sent to %s for symbol %s", alert.chat_id, alert.symbol)
+                                    else:  # اگر فقط متن بود (مثلاً در صورت عدم دریافت کندل‌ها یا فارکس)
+                                        await bot.send_message(
+                                            chat_id=alert.chat_id,
+                                            text=msg,
+                                            parse_mode="Markdown"
+                                        )
+                                        logger.info("Text notification sent to %s for symbol %s", alert.chat_id, alert.symbol)
+
+                                except Exception as e:
+                                    logger.exception("Failed to send notification to %s: %s", alert.chat_id, e)
+
+                        elif isinstance(result, Exception):
+                            logger.error("Error processing alert ID #%s: %s", alert.id, result)
 
             except Exception as e:
                 logger.exception("Unexpected error in main alert loop: %s", e)
