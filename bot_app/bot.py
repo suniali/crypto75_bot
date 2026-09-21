@@ -533,10 +533,11 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
         logger.exception("Failed to generate chart for new alert %s: %s", symbol, e)
 
     # ۵. پاک کردن پیام موقت «در حال پردازش»
-    try:
-        await status_msg.delete()
-    except Exception:
-        pass  # اگر به هر دلیلی پاک نشد، برنامه کرش نکند
+    if last_msg_id:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=last_msg_id)
+        except Exception:
+            pass
 
     # ۶. ارسال پاسخ نهایی
     if chart_buf:
