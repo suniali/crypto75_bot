@@ -4,6 +4,7 @@ import os
 import sys
 import httpx
 from pathlib import Path
+from datetime import datetime
 
 from PIL import Image
 import django
@@ -97,7 +98,7 @@ from bot_app.services.watchlist_service import (
     delete_from_watchlist
 )
 from bot_app.price_checker import process_alert
-from bot_app.services.chart_service import create_pending_alert_chart
+from bot_app.services.chart_service import create_pending_alert_chart,generate_pro_daily_dashboard,calculate_today_stats
 from bot_app.services.api_service import fetch_recent_klines
 
 from bot_app.models import MarketType
@@ -2426,44 +2427,82 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
 async def sl_tp_monitor_loop(chat_id: int, bot):
     logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
 
-    # ۱. در لحظه روشن شدن ربات، معاملات ۱۲ ساعت گذشته را می خوانیم
-    # و به عنوان قدیمی علامت می‌زنیم تا فقط معاملات "جدید" اطلاع‌رسانی شوند.
-    initial_deals = await asyncio.to_thread(check_recent_closed_positions, 12)
+    initial_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
     notified_deals = {deal["deal_id"] for deal in initial_deals}
     logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals.")
 
     try:
         while True:
             try:
-                # چک کردن معاملات با بازه مطمئن
-                closed_deals = await asyncio.to_thread(check_recent_closed_positions, 12)
+                # ۱. دریافت معاملات ۲۴ ساعت گذشته
+                closed_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
 
+                new_deals_notified_count = 0
+
+                # ۲. حلقه اول: ارسال پیام هشدار مجزا برای تک‌تک معاملات جدید
                 for deal in closed_deals:
                     deal_id = deal["deal_id"]
 
-                    # اگر معامله جدیدی رخ داده باشد که در notified_deals نیست:
                     if deal_id not in notified_deals:
-                        profit = deal["profit"]
+                        profit = deal.get("profit", 0.0) or 0.0
                         profit_icon = "🟢" if profit >= 0 else "🔴"
 
-                        msg = (
+                        # ساخت پیام اختصاصی معامله
+                        alert_msg = (
                             f"🔔 <b>هشدار بسته‌شدن پوزیشن!</b>\n\n"
-                            f"🎫 <b>تیکت پوزیشن:</b> <code>{deal['position_id']}</code>\n"
+                            f"🎫 <b>تیکت:</b> <code>{deal['position_id']}</code>\n"
                             f"📌 <b>نماد:</b> <b>{deal['symbol']}</b>\n"
                             f"📌 <b>علت خروج:</b> {deal['exit_type']}\n"
                             f"📊 <b>حجم:</b> <code>{deal['volume']}</code> لات\n"
                             f"🏁 <b>قیمت خروج:</b> <code>{deal['exit_price']}</code>\n"
-                            f"{profit_icon} <b>سود/زیان نهایی:</b> <code>${profit:,.2f}</code>"
+                            f"{profit_icon} <b>سود/زیان معامله:</b> <code>${profit:,.2f}</code>"
                         )
 
-                        await bot.send_message(chat_id=chat_id, text=msg, parse_mode="HTML")
+                        # ارسال پیام هشدار خروج معامله
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=alert_msg,
+                            parse_mode="HTML"
+                        )
                         logger.info(f"✅ Alert sent for NEW Deal {deal_id}")
 
-                        # ثبت آی‌دی جدید
+                        # علامت‌گذاری معامله
                         notified_deals.add(deal_id)
+                        new_deals_notified_count += 1
+
+                # ۳. اگر حداقل یک معامله جدید در این پارت فرستاده شد، حالا پیام جداگانه داشبورد روزانه ارسال می‌شود
+                if new_deals_notified_count > 0:
+                    # محاسبه آمار معاملات امروز
+                    total_trades, wins, losses, win_rate, net_profit, avg_win, avg_loss, profits_history = calculate_today_stats(closed_deals)
+                    net_icon = "🚀" if net_profit >= 0 else "🔻"
+
+                    # متن پیام گزارش روزانه
+                    summary_msg = (
+                        f"📊 <b>گزارش عملکرد کل امروز ({datetime.now().strftime('%Y-%m-%d')})</b>\n\n"
+                        f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
+                        f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
+                        f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
+                        f"📈 <b>میانگین سود:</b> <code>${avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>${avg_loss:,.2f}</code>\n"
+                        f"───────────────────\n"
+                        f"{net_icon} <b>سود/زیان کل امروز:</b> <b><code>${net_profit:,.2f}</code></b>"
+                    )
+
+                    # تولید داشبورد گرافیکی
+                    chart_buf = await asyncio.to_thread(
+                        generate_pro_daily_dashboard, wins, losses, net_profit, win_rate, avg_win, avg_loss, profits_history
+                    )
+
+                    # ارسال داشبورد در یک پیام جداگانه (تصویر + کاپشن)
+                    await bot.send_photo(
+                        chat_id=chat_id,
+                        photo=chart_buf,
+                        caption=summary_msg,
+                        parse_mode="HTML"
+                    )
+                    logger.info("📊 Daily Dashboard sent as a separate message.")
 
             except Exception as e:
-                logger.error("Error in SL/TP monitor loop: %s", e)
+                logger.error("Error in SL/TP monitor loop: %s", e, exc_info=True)
 
             # چک کردن هر ۵ ثانیه
             await asyncio.sleep(5)
