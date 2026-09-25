@@ -933,17 +933,44 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
             name=f"live_single_pos_{chat_id}",
         )
 
+async def cancel_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer("عملیات لغو شد.")
+
+    # پاکسازی داده‌های موقت اکشن از context
+    context.user_data.pop("action_ticket", None)
+    context.user_data.pop("action_type", None)
+
+    data_parts = query.data.split("_")
+    ticket = int(data_parts[2]) if len(data_parts) == 3 else None
+
+    # ویرایش پیام و بازگشت به جزئیات پوزیشن یا لیست اصلی
+    if ticket:
+        # فراخوانی مجدد نمایش جزئیات پوزیشن (یا هدایت کاربر به تابع position_detail_callback)
+        await position_detail_callback(update, context)
+    else:
+        await query.edit_message_text(
+            "❌ **عملیات لغو شد.**",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]
+            ]),
+            parse_mode="Markdown"
+        )
+
+    # ⚠️ بسیار مهم: پایان دادن به وضعیت ConversationHandler
+    return ConversationHandler.END
 
 async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     data_parts = query.data.split("_")
-    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
     chat_id = update.effective_chat.id
+
+    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
     await stop_all_live_jobs(chat_id, context)
 
-    # پشتیبانی از فرمت‌های مختلف: action_close_123 یا close_pos_123 یا action_confirmclose_123
+    # پشتیبانی از فرمت‌های مختلف callback_data
     if len(data_parts) == 3 and data_parts[0] == "action":
         action = data_parts[1]
         ticket = int(data_parts[2])
@@ -954,8 +981,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         action = data_parts[1]
         ticket = int(data_parts[2])
 
-
-    # ------------------ ۱-الف. درخواست بستن (نمایش پیام تأییدیه) ------------------
+    # ------------------ ۱. بستن کامل پوزیشن ------------------
     if action in ["close", "closepos"]:
         confirm_keyboard = InlineKeyboardMarkup([
             [
@@ -970,42 +996,43 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             parse_mode="Markdown"
         )
 
-    # ------------------ ۱-ب. اجرای واقعی بستن پس از تأیید ------------------
     elif action == "confirmclose":
-        await query.edit_message_text(
-            f"⏳ در حال بستن کامل پوزیشن `{ticket}`...",
-            parse_mode="Markdown"
-        )
-
-        # فراخوانی تابع بستن کامل پوزیشن در MT5 (به صورت Async/Executor)
-        success, msg = await asyncio.to_thread( close_position, ticket)
-
-        back_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]
-        ])
-
-        await query.edit_message_text(
-            f"{msg}",
-            reply_markup=back_keyboard,
-            parse_mode="Markdown"
-        )
+        await query.edit_message_text(f"⏳ در حال بستن کامل پوزیشن `{ticket}`...", parse_mode="Markdown")
+        success, msg = await asyncio.to_thread(close_position, ticket)
+        back_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]])
+        await query.edit_message_text(f"{msg}", reply_markup=back_keyboard, parse_mode="Markdown")
 
     # ------------------ ۲. فری‌ریسک (Break-Even) ------------------
+    # ۲-الف: درخواست تأیید فری‌ریسک
     elif action == "be":
+        confirm_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ بله، فری‌ریسک شود", callback_data=f"action_confirmbe_{ticket}"),
+                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
+            ]
+        ])
         await query.edit_message_text(
-            f"⏳ در حال انتقال حد ضرر پوزیشن `{ticket}` به نقطه ورود...",
+            f"🛡 **تأییدیه فری‌ریسک (Break-Even) پوزیشن `{ticket}`**\n\n"
+            f"آیا مطمئن هستید که می‌خواهید حد ضرر به نقطه ورود منتقل شود؟",
+            reply_markup=confirm_keyboard,
             parse_mode="Markdown"
         )
+
+    # ۲-ب: اجرای واقعی فری‌ریسک پس از تأیید
+    elif action == "confirmbe":
+        await query.edit_message_text(f"⏳ در حال انتقال حد ضرر پوزیشن `{ticket}` به نقطه ورود...",
+                                      parse_mode="Markdown")
         _, msg = await asyncio.to_thread(set_break_even, ticket)
         await query.edit_message_text(
             f"{msg}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]
-            ]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
 
-    # ------------------ ۳. خروج 25% حجم ------------------
+    # ------------------ ۳. خروج ۲۵٪ حجم ------------------
+    # ۳-الف: درخواست تأیید خروج ۲۵٪
     elif action == "close25":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
@@ -1016,22 +1043,46 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
         sm_vol = round(pos['volume'] / 3, 2)
         if sm_vol < 0.01:
-            await query.edit_message_text(
-                "⚠️ **حجم پوزیشن برای خروج 25٪ بسیار کوچک است (کمتر از 0.01).**",
-                parse_mode="Markdown"
-            )
+            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج 25٪ بسیار کوچک است (کمتر از 0.01).**",
+                                          parse_mode="Markdown")
             return
 
+        confirm_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ بله، خروج ۲۵٪", callback_data=f"action_confirmclose25_{ticket}"),
+                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
+            ]
+        ])
+        await query.edit_message_text(
+            f"✂️ **تأییدیه خروج ۲۵٪ از پوزیشن `{ticket}`**\n\n"
+            f"حجم کل: `{pos['volume']}` لات\n"
+            f"حجم خروج: `{sm_vol}` لات\n\n"
+            f"آیا از بستن این میزان حجم اطمینان دارید؟",
+            reply_markup=confirm_keyboard,
+            parse_mode="Markdown"
+        )
+
+    # ۳-ب: اجرای واقعی خروج ۲۵٪ پس از تأیید
+    elif action == "confirmclose25":
+        success, positions = await asyncio.to_thread(get_open_positions)
+        pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
+
+        if not pos:
+            await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
+            return
+
+        sm_vol = round(pos['volume'] / 3, 2)
         await query.edit_message_text(f"⏳ در حال بستن `{sm_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
         _, msg = await asyncio.to_thread(close_position, ticket, sm_vol)
         await query.edit_message_text(
             f"{msg}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]
-            ]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
-        # ------------------ ۳. خروج ۵۰٪ حجم ------------------
+
+    # ------------------ ۴. خروج ۵۰٪ حجم ------------------
+    # ۴-الف: درخواست تأیید خروج ۵۰٪
     elif action == "close50":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
@@ -1046,21 +1097,48 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
                                           parse_mode="Markdown")
             return
 
+        confirm_keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ بله، خروج ۵۰٪", callback_data=f"action_confirmclose50_{ticket}"),
+                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
+            ]
+        ])
+        await query.edit_message_text(
+            f"✂️ **تأییدیه خروج ۵۰٪ از پوزیشن `{ticket}`**\n\n"
+            f"حجم کل: `{pos['volume']}` لات\n"
+            f"حجم خروج: `{half_vol}` لات\n\n"
+            f"آیا از بستن این میزان حجم اطمینان دارید؟",
+            reply_markup=confirm_keyboard,
+            parse_mode="Markdown"
+        )
+
+    # ۴-ب: اجرای واقعی خروج ۵۰٪ پس از تأیید
+    elif action == "confirmclose50":
+        success, positions = await asyncio.to_thread(get_open_positions)
+        pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
+
+        if not pos:
+            await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
+            return
+
+        half_vol = round(pos['volume'] / 2, 2)
         await query.edit_message_text(f"⏳ در حال بستن `{half_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
         _, msg = await asyncio.to_thread(close_position, ticket, half_vol)
         await query.edit_message_text(
             f"{msg}",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]
-            ]),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
 
-    # ------------------ ۴. ورود به مرحله دریافت SL و TP جدید ------------------
+    # ------------------ ۵. ورود به مرحله دریافت SL و TP جدید ------------------
     elif action == "editsltp":
         context.user_data["action_ticket"] = ticket
         context.user_data["action_type"] = "sltp"
-        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")]])
+
+        # 💡 تغییر callback_data به cancel_action_ticket
+        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
+
         await query.edit_message_text(
             f"✏️ **ویرایش حد ضرر و حد سود پوزیشن `{ticket}`**\n\n"
             f"لطفاً **حد ضرر (SL)** و **حد سود (TP)** جدید را با یک فاصله وارد کنید:\n"
@@ -1071,10 +1149,13 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
         return INPUT_NEW_SL_TP
 
-    # ------------------ ۵. ورود به مرحله خروج جزئی دلخواه ------------------
+    # ------------------ ۶. ورود به مرحله خروج جزئی دلخواه ------------------
     elif action == "partial":
         context.user_data["action_ticket"] = ticket
-        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")]])
+
+        # 💡 تغییر callback_data به cancel_action_ticket
+        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
+
         await query.edit_message_text(
             f"✂️ **خروج جزئی از پوزیشن `{ticket}`**\n\n"
             f"لطفاً **حجم مورد نظر جهت خروج** را به لات وارد کنید (مثال: `0.05`):",
@@ -2546,10 +2627,18 @@ if __name__ == "__main__":
             CallbackQueryHandler(handle_position_actions, pattern="^action_(editsltp|partial)_")
         ],
         states={
-            INPUT_NEW_SL_TP: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_new_sltp_input)],
-            INPUT_PARTIAL_LOT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_partial_close_input)],
+            INPUT_NEW_SL_TP: [
+                CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_new_sltp_input)
+            ],
+            INPUT_PARTIAL_LOT: [
+                CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_partial_close_input)
+            ],
         },
         fallbacks=[
+            CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
+            CommandHandler("cancel", cancel_action),
             CallbackQueryHandler(show_positions_handler, pattern="^refresh_positions_list$"),
             CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_")
         ],
