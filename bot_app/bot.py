@@ -2,13 +2,11 @@ import asyncio
 import logging
 import os
 import sys
-import inspect
 import httpx
 from pathlib import Path
 
 from PIL import Image
 import django
-from asgiref.sync import sync_to_async
 from decouple import config
 
 # ------------------------------------------------------------------
@@ -66,14 +64,14 @@ from telegram.request import HTTPXRequest
 from telegram.warnings import PTBUserWarning
 warnings.filterwarnings("ignore", category=PTBUserWarning)
 
-from bot_app.analysis_service import (
-    calculate_rsi,
-    get_ai_market_view,
-    extract_trade_from_image,
-    analyze_trades_with_gemini,
+from bot_app.services.analysis_service import (
+    calculate_rsi,get_ai_market_view,
+    extract_trade_from_image,analyze_trades_with_gemini
 )
-from bot_app.models import UserAlert, Watchlist
-from bot_app.mt5_service import (
+
+from bot_app.services.mt5_service import (
+    start_mt5_connection,
+    stop_mt5_connection,
     check_symbol_info,
     close_all_positions,
     close_position_by_ticket,
@@ -86,14 +84,22 @@ from bot_app.mt5_service import (
     get_trades_history,
     check_recent_closed_positions,
 )
-from bot_app.report_service import generate_pdf_report
-from bot_app.checker import (
+from bot_app.services.report_service import generate_pdf_report
+from bot_app.services.alert_service import (
     fetch_active_alerts,
     deactivate_alert_by_id,
-    process_alert
+    get_or_create_user,
+    create_user_alert
 )
-from bot_app.generate_hiken_chart import create_pending_alert_chart
-from bot_app.api_service import fetch_recent_klines
+from bot_app.services.watchlist_service import (
+    get_all_watchlist,
+    save_watchlist_item,
+    delete_from_watchlist
+)
+from bot_app.price_checker import process_alert
+from bot_app.services.chart_service import create_pending_alert_chart
+from bot_app.services.api_service import fetch_recent_klines
+from bot_app.choices import MarketType
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
@@ -121,54 +127,6 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup(
         ],
         resize_keyboard=True
     )
-
-
-# ------------------------------------------------------------------
-# 4. Database Async Helpers
-# ------------------------------------------------------------------
-@sync_to_async
-def save_alert_to_db(chat_id: str, symbol: str, target_price: float, is_forex: bool):
-    market_type = "FOREX" if is_forex else "CRYPTO"
-    exists = UserAlert.objects.filter(
-        symbol=symbol, target_price=target_price, is_active=True
-    ).exists()
-    if exists:
-        logger.warning("Alert already exists for chat_id %s, symbol %s at target %s", chat_id, symbol, target_price)
-        return None
-    alert = UserAlert.objects.create(
-        chat_id=chat_id, symbol=symbol, target_price=target_price, market_type=market_type
-    )
-    logger.info("Alert created successfully: ID #%s for %s at %s", alert.id, symbol, target_price)
-    return alert
-
-
-@sync_to_async
-def get_all_watchlist():
-    return list(Watchlist.objects.all())
-
-
-@sync_to_async
-def save_watchlist_item(symbol: str, timeframe: str, market_type: str):
-    obj, created = Watchlist.objects.get_or_create(
-        symbol=symbol, time_frame=timeframe, market_type=market_type
-    )
-    if created:
-        logger.info("New watchlist item added: %s | %s | %s", symbol, timeframe, market_type)
-    else:
-        logger.info("Watchlist item already existed: %s | %s | %s", symbol, timeframe, market_type)
-    return created
-
-
-@sync_to_async
-def delete_from_watchlist(symbol: str, timeframe: str, market_type: str):
-    deleted_count, _ = Watchlist.objects.filter(
-        symbol=symbol, time_frame=timeframe, market_type=market_type
-    ).delete()
-    if deleted_count > 0:
-        logger.info("Deleted %s from watchlist (%s, %s)", symbol, timeframe, market_type)
-    else:
-        logger.warning("Failed to delete %s from watchlist or item not found", symbol)
-    return deleted_count > 0
 
 
 # ------------------------------------------------------------------
@@ -209,22 +167,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=MAIN_KEYBOARD
     )
 
-
-async def on_shutdown(app):
-    logger.info("🛑 Stopping background workers...")
-
-    # لغو تمامی تسک‌های فعال
-    for worker_key, task in ACTIVE_WORKERS.items():
-        if not task.done():
-            task.cancel()
-            logger.info("Cancelling worker: %s", worker_key)
-
-    # منتظر ماندن برای بسته شدن کامل تسک‌ها
-    await asyncio.gather(*ACTIVE_WORKERS.values(), return_exceptions=True)
-    ACTIVE_WORKERS.clear()
-
-    logger.info("✅ All background workers stopped cleanly.")
-
 # ------------------------------------------------------------------
 # #. Show And Manage Alerts
 # ------------------------------------------------------------------
@@ -240,12 +182,8 @@ async def show_active_alerts_command(update: Update, context: ContextTypes.DEFAU
             logger.warning("Error answering callback query: %s", e)
 
     try:
-        # ۱. دریافت هشدارها از دیتابیس (غیربلاک‌کننده)
-        loop = asyncio.get_running_loop()
-        if inspect.iscoroutinefunction(fetch_active_alerts):
-            alerts = await fetch_active_alerts()
-        else:
-            alerts = await loop.run_in_executor(None, fetch_active_alerts)
+
+        alerts = await fetch_active_alerts()
 
         # ۲. اگر حسابی هشداری نداشت
         if not alerts:
@@ -265,12 +203,12 @@ async def show_active_alerts_command(update: Update, context: ContextTypes.DEFAU
             # تمیزسازی نماد جهت جلوگیری از خطای مارک‌داون
             sym = str(alert.symbol).replace("_", "\\_")
 
-            msg += f"{idx}. `{sym}` ({market_label}) 🎯 قیمت: `{alert.target_price}`\n"
+            msg += f"{idx}. `{sym}` ({market_label}) 🎯 قیمت: `{alert.target_price:.5f}`\n"
 
             # دکمه اختصاصی حذف بر اساس ID هشدار در دیتابیس
             buttons.append([
                 InlineKeyboardButton(
-                    f"🗑 حذف: {alert.symbol} روی {alert.target_price}",
+                    f"🗑 حذف: {alert.symbol} روی {alert.target_price:.5f}",
                     callback_data=f"confirm_del_alert_{alert.id}"
                 )
             ])
@@ -373,8 +311,7 @@ async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAUL
 
     # اگر فارکس باشد، نمادهای مارکت‌واچ متاتریدر را می‌گیریم
     if is_forex:
-        loop = asyncio.get_running_loop()
-        symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+        symbols = await asyncio.to_thread(get_market_watch_symbols)
 
         # ساخت دکمه‌های ۲ ستونه برای واچ‌لیست
         row = []
@@ -430,8 +367,8 @@ async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAUL
         else:
             status_msg = await update.message.reply_text("⏳ **در حال بررسی نماد در متاتریدر...**", parse_mode="Markdown")
 
-        loop = asyncio.get_running_loop()
-        res = await loop.run_in_executor(None, check_symbol_info, symbol)
+
+        res = await asyncio.to_thread(check_symbol_info, symbol)
 
         if res is not True:
             if isinstance(res, list):
@@ -472,21 +409,30 @@ async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAUL
     return ADD_ALERT_PRICE
 
 
-async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_alert_price_received(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
     """دریافت قیمت هدف و ذخیره نهایی هشدار به همراه ارسال چارت"""
     chat_id = update.effective_chat.id
-    symbol = context.user_data.get("symbol")
+    symbol = str(context.user_data.get("symbol"))
     is_forex = context.user_data.get("is_forex", False)
     last_msg_id = context.user_data.get("last_message_id")
+
+    # اطلاعات کاربر از آپدیت تلگرام
+    user_info = update.effective_user
+    username = user_info.username
+    first_name = user_info.first_name
 
     try:
         target_price = float(update.message.text.strip())
     except ValueError:
-        cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
+        cancel_keyboard = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]]
+        )
         await update.message.reply_text(
             "❌ **قیمت هدف باید یک عدد معتبر باشد.**\nلطفاً قیمت را دوباره وارد کنید:",
             reply_markup=cancel_keyboard,
-            parse_mode="Markdown"
+            parse_mode="Markdown",
         )
         return ADD_ALERT_PRICE
 
@@ -497,15 +443,47 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
                 chat_id=chat_id,
                 message_id=last_msg_id,
                 text="⏳ **در حال ثبت هشدار و دریافت چارت...**\nلطفاً چند لحظه شکیبا باشید.",
-                parse_mode="Markdown"
+                parse_mode="Markdown",
             )
         except Exception as e:
             logger.warning("Could not edit last message: %s", e)
 
+    # ۲. ثبت/بروزرسانی کاربر و ذخیره آلرت در دیتابیس
+    user_obj = await get_or_create_user(
+        chat_id=chat_id, username=username, first_name=first_name
+    )
+    market_type = MarketType.FOREX if is_forex else MarketType.CRYPTO
 
-    # ۲. ذخیره در دیتابیس
-    await save_alert_to_db(str(chat_id), symbol, target_price, is_forex)
-    logger.info("Alert created successfully: %s at %s for chat_id %s", symbol, target_price, chat_id)
+    alert, created = await create_user_alert(
+        user=user_obj,
+        symbol=symbol,
+        target_price=target_price,
+        market_type=market_type,
+    )
+
+    # اگر آلرت تکراری بود و ثبت نشد
+    if not created:
+        if last_msg_id:
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id, message_id=last_msg_id
+                )
+            except Exception:
+                pass
+
+        await update.message.reply_text(
+            f"⚠️ **شما قبلاً یک هشدار فعال با همین قیمت (`{target_price}`) برای نماد `{symbol}` ثبت کرده‌اید.**",
+            parse_mode="Markdown",
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    logger.info(
+        "Alert created successfully: %s at %s for chat_id %s",
+        symbol,
+        target_price,
+        chat_id,
+    )
 
     # ۳. ساخت متن کپشن پیام نهایی
     msg_text = (
@@ -523,19 +501,25 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
             df_klines = await fetch_recent_klines(
                 client=client,
                 symbol=symbol,
-                interval="30m", # تایم فریم استاندارد بایننس به صورت حروف کوچک است
+                interval="30m",
                 limit=50,
-                is_forex=is_forex
+                is_forex=is_forex,
             )
             if df_klines is not None and not df_klines.empty:
-                chart_buf = create_pending_alert_chart(df_klines, target_price, symbol)
+                chart_buf = create_pending_alert_chart(
+                    df_klines, target_price, symbol
+                )
     except Exception as e:
-        logger.exception("Failed to generate chart for new alert %s: %s", symbol, e)
+        logger.exception(
+            "Failed to generate chart for new alert %s: %s", symbol, e
+        )
 
     # ۵. پاک کردن پیام موقت «در حال پردازش»
     if last_msg_id:
         try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=last_msg_id)
+            await context.bot.delete_message(
+                chat_id=chat_id, message_id=last_msg_id
+            )
         except Exception:
             pass
 
@@ -544,11 +528,13 @@ async def add_alert_price_received(update: Update, context: ContextTypes.DEFAULT
         await update.message.reply_photo(
             photo=chart_buf,
             caption=msg_text,
+            reply_markup=MAIN_KEYBOARD,
             parse_mode="Markdown"
         )
     else:
         await update.message.reply_text(
             msg_text,
+            reply_markup=MAIN_KEYBOARD,
             parse_mode="Markdown"
         )
 
@@ -579,94 +565,100 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
     message_id = job_data.get("message_id")
 
     if not message_id:
+        logger.warning("auto_refresh_positions_job: No message_id provided for chat_id %s. Removing job.", chat_id)
         job.schedule_removal()
         return
 
-    # دریافت جدیدترین لیست پوزیشن‌ها از متاتریدر در Executor
-    loop = asyncio.get_running_loop()
     try:
-        success, positions = await loop.run_in_executor(None, get_open_positions)
-    except Exception as e:
-        logger.error(f"Error fetching positions in background job: {e}")
-        return
+        try:
+            # ۱. دریافت جدیدترین لیست پوزیشن‌ها از متاتریدر در Executor
+            success, positions = await asyncio.to_thread(get_open_positions)
+        except Exception as e:
+            logger.error(f"Error fetching positions in background job: {e}")
+            return
 
-    # اگر پوزیشنی وجود نداشت یا خطا رخ داد
-    if not success or not positions:
+        # اگر پوزیشنی وجود نداشت یا خطا رخ داد
+        if not success or not positions:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text="📭 <b>در حال حاضر هیچ پوزیشن بازی وجود ندارد.</b>",
+                    parse_mode="HTML",
+                )
+            except BadRequest as e:
+                if "message is not modified" not in str(e).lower():
+                    logger.warning(f"Failed to edit empty message: {e}")
+                    job.schedule_removal()
+            except Exception as e:
+                logger.error(f"Unexpected error when clearing message: {e}")
+                job.schedule_removal()
+
+            job.schedule_removal()  # توقف تایمر
+            return
+
+        # ساخت متن جدید با فرمت HTML
+        text = "🔄 <b>لیست پوزیشن‌های فعال (بروزرسانی زنده):</b>\n\n"
+        total_profit = 0.0
+        keyboard = []
+
+        for pos in positions:
+            profit = pos.get("profit", 0.0)
+            total_profit += profit
+            profit_icon = "🟢" if profit >= 0 else "🔴"
+
+            symbol = pos.get('symbol', 'N/A')
+            pos_type = pos.get('type', 'N/A')
+            ticket = pos.get('ticket', '')
+            volume = pos.get('volume', 0)
+            price_open = pos.get('price_open', 0)
+            price_current = pos.get('price_current', 0)
+
+            text += (
+                f"🔹 <b>تیکت:</b> <code>{ticket}</code> | <b>{symbol}</b> ({pos_type})\n"
+                f"📊 <b>حجم:</b> <code>{volume}</code> | <b>ورود:</b> <code>{price_open}</code>\n"
+                f"📈 <b>قیمت فعلی:</b> <code>{price_current:.5f}</code>\n"
+                f"{profit_icon} <b>سود/ضرر:</b> <code>{profit:.2f}$</code>\n"
+                f"➖➖➖➖➖➖➖➖➖➖\n"
+            )
+
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"⚙️ مدیریت پوزیشن {ticket}",
+                    callback_data=f"pos_detail_{ticket}"
+                )
+            ])
+
+        text += f"\n💰 <b>مجموع سود/ضرر کل:</b> <code>{total_profit:.2f}$</code>"
+
+        # دکمه‌های کنترلی
+        keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
+
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text="📭 <b>در حال حاضر هیچ پوزیشن بازی وجود ندارد.</b>",
+                text=text,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML",
             )
+            logger.debug("Successfully updated positions message for chat_id %s", chat_id)
         except BadRequest as e:
-            if "message is not modified" not in str(e).lower():
-                logger.warning(f"Failed to edit empty message: {e}")
+            err_msg = str(e).lower()
+            if "message is not modified" in err_msg:
+                logger.debug("Message not modified for chat_id %s (prices unchanged).", chat_id)
+            else:
+                logger.warning("Stopping live_pos_job for chat_id %s due to BadRequest: %s", chat_id, e)
                 job.schedule_removal()
         except Exception as e:
-            logger.error(f"Unexpected error when clearing message: {e}")
-            job.schedule_removal()
-
-        job.schedule_removal()  # توقف تایمر
-        return
-
-    # ساخت متن جدید با فرمت HTML
-    text = "🔄 <b>لیست پوزیشن‌های فعال (بروزرسانی زنده):</b>\n\n"
-    total_profit = 0.0
-    keyboard = []
-
-    for pos in positions:
-        profit = pos.get("profit", 0.0)
-        total_profit += profit
-        profit_icon = "🟢" if profit >= 0 else "🔴"
-
-        symbol = pos.get('symbol', 'N/A')
-        pos_type = pos.get('type', 'N/A')
-        ticket = pos.get('ticket', '')
-        volume = pos.get('volume', 0)
-        price_open = pos.get('price_open', 0)
-        price_current = pos.get('price_current', 0)
-
-        text += (
-            f"🔹 <b>تیکت:</b> <code>{ticket}</code> | <b>{symbol}</b> ({pos_type})\n"
-            f"📊 <b>حجم:</b> <code>{volume}</code> | <b>ورود:</b> <code>{price_open}</code>\n"
-            f"📈 <b>قیمت فعلی:</b> <code>{price_current:.5f}</code>\n"
-            f"{profit_icon} <b>سود/ضرر:</b> <code>{profit:.2f}$</code>\n"
-            f"➖➖➖➖➖➖➖➖➖➖\n"
-        )
-
-        keyboard.append([
-            InlineKeyboardButton(
-                f"⚙️ مدیریت پوزیشن {ticket}",
-                callback_data=f"pos_detail_{ticket}"
-            )
-        ])
-
-    text += f"\n💰 <b>مجموع سود/ضرر کل:</b> <code>{total_profit:.2f}$</code>"
-
-    # دکمه‌های کنترلی
-    keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
-
-    try:
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=message_id,
-            text=text,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML",
-        )
-    except BadRequest as e:
-        err_msg = str(e).lower()
-        if "message is not modified" in err_msg:
-            pass
-        else:
-            # اگر پیام ویرایش نمی‌شود (تغییر ماهیت داده، پاک شده یا کاربر منو را عوض کرده)، تایمر متوقف شود
-            logger.warning(f"Stopping live_pos_job for chat {chat_id} due to BadRequest: {e}")
+            logger.error("Error editing positions message for chat_id %s: %s", chat_id, e, exc_info=True)
             job.schedule_removal()
     except Exception as e:
-        logger.error(f"Error updating positions job: {e}")
-        job.schedule_removal()
-
+        logger.critical(
+            "Unhandled fatal exception in auto_refresh_positions_job for chat_id %s: %s",
+            chat_id, e,
+            exc_info=True
+        )
 
 async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار جزییات یک پوزیشن خاص هر چند ثانیه یک‌بار"""
@@ -677,82 +669,94 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     ticket = job_data.get("ticket")
 
     if not message_id or not ticket:
+        logger.warning("auto_refresh_single_position_job: Missing message_id or ticket for chat_id %s. Removing job.",
+                       chat_id)
         job.schedule_removal()
         return
 
-    loop = asyncio.get_running_loop()
     try:
-        success, positions = await loop.run_in_executor(None, get_open_positions)
-    except Exception as e:
-        logger.error(f"Error fetching single position in background job: {e}")
-        return
+        try:
+            success, positions = await asyncio.to_thread(get_open_positions)
+        except Exception as e:
+            logger.error("Error executing get_open_positions in executor for ticket %s: %s", ticket, e, exc_info=True)
+            return
 
-    pos = next((p for p in positions if p["ticket"] == ticket), None) if success and positions else None
+        pos = next((p for p in positions if p["ticket"] == ticket), None) if success and positions else None
 
-    # اگر پوزیشن بسته شده باشد، اطلاع بده و تایمر را متوقف کن
-    if not pos:
+        # اگر پوزیشن بسته شده باشد، اطلاع بده و تایمر را متوقف کن
+        if not pos:
+            logger.info("Position ticket %s closed or not found for chat_id %s. Removing job.", ticket, chat_id)
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=f"❌ <b>پوزیشن <code>{ticket}</code> بسته شده است یا یافت نشد.</b>",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
+                    parse_mode="HTML",
+                )
+            except Exception as e:
+                logger.warning("Failed to notify user about closed position ticket %s: %s", ticket, e)
+
+            job.schedule_removal()
+            return
+
+        trade_type = "🟢 BUY" if pos["type"] == "BUY" else "🔴 SELL"
+        profit_emoji = "🟢" if pos["profit"] >= 0 else "🔴"
+
+        caption = (
+            f"⚙️ <b>مدیریت پوزیشن <code>{pos['symbol']}</code></b> (🎫 <code>{pos['ticket']}</code>)\n\n"
+            f"🔹 <b>نوع:</b> {trade_type} | 📦 <b>حجم:</b> <code>{pos['volume']}</code> لات\n"
+            f"💵 <b>قیمت ورود:</b> <code>{pos['price_open']}</code>\n"
+            f"📈 <b>قیمت لحظه‌ای:</b> <code>{pos['price_current']:.5f}</code>\n"
+            f"🛑 <b>SL:</b> <code>{pos['sl']}</code> | 🎯 <b>TP:</b> <code>{pos['tp']}</code>\n"
+            f"───────────────────\n"
+            f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>${pos['profit']:,.2f}</code></b>"
+        )
+
+        keyboard = [
+            [
+                InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
+                InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
+                InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
+            ],
+            [
+                InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
+                InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
+            ],
+            [
+                InlineKeyboardButton("❌ بستن کامل پوزیشن", callback_data=f"close_pos_{ticket}"),
+            ],
+            [
+                InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list"),
+            ],
+        ]
+
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=f"❌ <b>پوزیشن <code>{ticket}</code> بسته شده است یا یافت نشد.</b>",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
+                text=caption,
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML",
             )
-        except Exception:
-            pass
-        job.schedule_removal()
-        return
-
-    trade_type = "🟢 BUY" if pos["type"] == "BUY" else "🔴 SELL"
-    profit_emoji = "🟢" if pos["profit"] >= 0 else "🔴"
-
-    caption = (
-        f"⚙️ <b>مدیریت پوزیشن <code>{pos['symbol']}</code></b> (🎫 <code>{pos['ticket']}</code>)\n\n"
-        f"🔹 <b>نوع:</b> {trade_type} | 📦 <b>حجم:</b> <code>{pos['volume']}</code> لات\n"
-        f"💵 <b>قیمت ورود:</b> <code>{pos['price_open']}</code>\n"
-        f"📈 <b>قیمت لحظه‌ای:</b> <code>{pos['price_current']:.5f}</code>\n"
-        f"🛑 <b>SL:</b> <code>{pos['sl']}</code> | 🎯 <b>TP:</b> <code>{pos['tp']}</code>\n"
-        f"───────────────────\n"
-        f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>${pos['profit']:,.2f}</code></b>"
-    )
-
-    keyboard = [
-        [
-            InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
-            InlineKeyboardButton("✂️ خروج ۵۰٪", callback_data=f"action_close50_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
-            InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("❌ بستن کامل پوزیشن", callback_data=f"close_pos_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list"),
-        ],
-    ]
-
-    try:
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=message_id,
-            text=caption,
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML",
-        )
-    except BadRequest as e:
-        err_msg = str(e).lower()
-        if "message is not modified" in err_msg:
-            pass
-        else:
-            # اگر کاربر دکمه اکشنی زده (مثلا ویرایش SL/TP) و متن تغییر کرده، لایو تک‌پوزیشن فوراً کشته شود
-            logger.info(f"Stopping live_single_pos job for ticket {ticket} due to UI transition.")
+            logger.debug("Successfully updated single position message for ticket %s", ticket)
+        except BadRequest as e:
+            err_msg = str(e).lower()
+            if "message is not modified" in err_msg:
+                logger.debug("Single position message not modified for ticket %s.", ticket)
+            else:
+                logger.info("Stopping live_single_pos job for ticket %s due to UI transition or BadRequest: %s", ticket, e)
+                job.schedule_removal()
+        except Exception as e:
+            logger.error("Error updating single position message for ticket %s: %s", ticket, e, exc_info=True)
             job.schedule_removal()
+
     except Exception as e:
-        logger.error(f"Error in auto_refresh_single_position_job: {e}")
-        job.schedule_removal()
+        logger.critical(
+            "Unhandled fatal exception in auto_refresh_single_position_job for ticket %s: %s",
+            ticket, e,
+            exc_info=True
+        )
 
 
 async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -764,16 +768,11 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer()
 
     # ۱. متوقف کردن تمامی تایمرهای قبلی (لیست کلی و تک پوزیشن)
-    if context.job_queue:
-        for job_name in [f"live_pos_{chat_id}", f"live_single_pos_{chat_id}"]:
-            for job in context.job_queue.get_jobs_by_name(job_name):
-                job.schedule_removal()
-                logger.info("Stopped job %s for chat %s", job_name, chat_id)
+    await stop_all_live_jobs(chat_id,context)
 
 
     # ۲. دریافت پوزیشن‌ها از متاتریدر
-    loop = asyncio.get_running_loop()
-    success, positions = await loop.run_in_executor(None, get_open_positions)
+    success, positions = await asyncio.to_thread(get_open_positions)
 
     if not success:
         error_msg = positions if isinstance(positions, str) else "❌ **خطا در دریافت پوزیشن‌ها**"
@@ -833,14 +832,15 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
         message_id = msg.message_id
 
     # ۶. تنظیم و شروع تایمر آپدیت زنده (هر ۳ ثانیه یک‌بار)
-    context.job_queue.run_repeating(
-        auto_refresh_positions_job,
-        interval=3,  # بازه زمانی بروزرسانی (برحسب ثانیه)
-        first=3,
-        chat_id=chat_id,
-        data={"message_id": message_id},
-        name=f"live_pos_{chat_id}",
-    )
+    if context.job_queue:
+        context.job_queue.run_repeating(
+            auto_refresh_positions_job,
+            interval=3,  # بازه زمانی بروزرسانی (برحسب ثانیه)
+            first=3,
+            chat_id=chat_id,
+            data={"message_id": message_id},
+            name=f"live_pos_{chat_id}",
+        )
 
 
 async def stop_all_live_jobs(chat_id: int, context: ContextTypes.DEFAULT_TYPE):
@@ -875,8 +875,7 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
     await stop_all_live_jobs(chat_id, context)
 
     # ۲. دریافت پوزیشن از متاتریدر به صورت Non-blocking
-    loop = asyncio.get_running_loop()
-    success, positions = await loop.run_in_executor(None, get_open_positions)
+    success, positions = await asyncio.to_thread( get_open_positions)
 
     pos = next((p for p in positions if p["ticket"] == ticket), None) if success and positions else None
 
@@ -939,6 +938,9 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     data_parts = query.data.split("_")
+    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
+    chat_id = update.effective_chat.id
+    await stop_all_live_jobs(chat_id, context)
 
     # پشتیبانی از فرمت‌های مختلف: action_close_123 یا close_pos_123 یا action_confirmclose_123
     if len(data_parts) == 3 and data_parts[0] == "action":
@@ -951,12 +953,6 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         action = data_parts[1]
         ticket = int(data_parts[2])
 
-    chat_id = update.effective_chat.id
-
-    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
-    await stop_all_live_jobs(chat_id, context)
-
-    loop = asyncio.get_running_loop()
 
     # ------------------ ۱-الف. درخواست بستن (نمایش پیام تأییدیه) ------------------
     if action in ["close", "closepos"]:
@@ -981,7 +977,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
 
         # فراخوانی تابع بستن کامل پوزیشن در MT5 (به صورت Async/Executor)
-        success, msg = await loop.run_in_executor(None, close_position, ticket)
+        success, msg = await asyncio.to_thread( close_position, ticket)
 
         back_keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]
@@ -999,7 +995,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             f"⏳ در حال انتقال حد ضرر پوزیشن `{ticket}` به نقطه ورود...",
             parse_mode="Markdown"
         )
-        _, msg = await loop.run_in_executor(None, set_break_even, ticket)
+        _, msg = await asyncio.to_thread(set_break_even, ticket)
         await query.edit_message_text(
             f"{msg}",
             reply_markup=InlineKeyboardMarkup([
@@ -1010,7 +1006,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
     # ------------------ ۳. خروج 25% حجم ------------------
     elif action == "close25":
-        success, positions = await loop.run_in_executor(None, get_open_positions)
+        success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
@@ -1026,7 +1022,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             return
 
         await query.edit_message_text(f"⏳ در حال بستن `{sm_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
-        _, msg = await loop.run_in_executor(None, close_position, ticket, sm_vol)
+        _, msg = await asyncio.to_thread(close_position, ticket, sm_vol)
         await query.edit_message_text(
             f"{msg}",
             reply_markup=InlineKeyboardMarkup([
@@ -1036,7 +1032,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
         # ------------------ ۳. خروج ۵۰٪ حجم ------------------
     elif action == "close50":
-        success, positions = await loop.run_in_executor(None, get_open_positions)
+        success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
@@ -1050,7 +1046,7 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             return
 
         await query.edit_message_text(f"⏳ در حال بستن `{half_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
-        _, msg = await loop.run_in_executor(None, close_position, ticket, half_vol)
+        _, msg = await asyncio.to_thread(close_position, ticket, half_vol)
         await query.edit_message_text(
             f"{msg}",
             reply_markup=InlineKeyboardMarkup([
@@ -1104,11 +1100,11 @@ async def process_new_sltp_input(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("❌ **مقادیر وارد شده باید عدد باشند.** مجدداً وارد کنید:")
         return INPUT_NEW_SL_TP
 
-    loop = asyncio.get_running_loop()
+
     msg = await update.message.reply_text("⏳ در حال بروزرسانی حد ضرر و حد سود...", parse_mode="Markdown")
 
     # اعتمادسازی و فراخوانی متاتریدر برای آپدیت SL/TP
-    _, res_msg = await loop.run_in_executor(None, update_position_sltp, ticket, new_sl, new_tp)
+    _, res_msg = await asyncio.to_thread(update_position_sltp, ticket, new_sl, new_tp)
 
     await msg.edit_text(
         res_msg,
@@ -1130,10 +1126,9 @@ async def process_partial_close_input(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text("❌ **حجم وارد شده باید یک عدد معتبر باشد.** (مثال: `0.02`):")
         return INPUT_PARTIAL_LOT
 
-    loop = asyncio.get_running_loop()
     msg = await update.message.reply_text(f"⏳ در حال بستن `{vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
 
-    _, res_msg = await loop.run_in_executor(None, close_position, ticket, vol)
+    _, res_msg = await asyncio.to_thread(close_position, ticket, vol)
 
     await msg.edit_text(
         res_msg,
@@ -1163,8 +1158,7 @@ async def start_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.callback_query.answer()
 
     # دریافت نمادهای واچ‌لیست از متاتریدر در Executor (غیربلاک‌کننده)
-    loop = asyncio.get_running_loop()
-    symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+    symbols = await asyncio.to_thread(get_market_watch_symbols)
 
     # چیدمان پویا: ایجاد دکمه‌های ۲ تایی در هر سطر
     keyboard = []
@@ -1401,6 +1395,11 @@ async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """مرحله نهایی: جمع‌آوری تمامی اطلاعات و اجرای معامله"""
+    # ۱. دریافت اطلاعات کاربر تلگرام
+    user = update.effective_user
+    telegram_id = user.id
+    username = user.username or user.first_name
+
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -1430,9 +1429,11 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         msg = await update.message.reply_text("⏳ <b>در حال ارسال سفارش به متاتریدر...</b>", parse_mode="HTML")
 
-    loop = asyncio.get_running_loop()
-    success, result_msg, rr_ratio = await loop.run_in_executor(
-        None, execute_trade, symbol, action, lot, entry_price, sl, tp
+
+
+    success, result_msg, rr_ratio = await asyncio.to_thread(
+        execute_trade, symbol, action, lot,
+        entry_price, sl, tp, telegram_id,username
     )
 
     if success:
@@ -1450,6 +1451,7 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     summary_text = (
         f"{title}\n"
         f"───────────────────\n"
+        f"👤 <b>کاربر:</b> <code>{username}</code> (<code>{telegram_id}</code>)\n"
         f"📌 <b>نماد:</b> <code>{symbol}</code>\n"
         f"📊 <b>جهت:</b> <code>{action}</code> | 📦 <b>حجم:</b> <code>{lot}</code>\n"
         f"💵 <b>ورود:</b> <code>{price_disp}</code>\n"
@@ -1462,7 +1464,6 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await msg.edit_text(summary_text, parse_mode="HTML")
     context.user_data.clear()
     return ConversationHandler.END
-
 
 async def cancel_trade_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """انصراف از ساخت معامله و بازگشت به منوی اصلی"""
@@ -1497,8 +1498,7 @@ async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_
     logger.info("Request to close position ticket #%s from chat_id %s", ticket, update.effective_chat.id)
     await query.edit_message_text(f"⏳ در حال بستن پوزیشن `{ticket}`...", parse_mode="Markdown")
 
-    loop = asyncio.get_running_loop()
-    _, message = await loop.run_in_executor(None, close_position_by_ticket, ticket)
+    _, message = await asyncio.to_thread(close_position_by_ticket, ticket)
     logger.info("Close position #%s result: %s", ticket, message)
     await query.edit_message_text(message,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
 
@@ -1543,9 +1543,8 @@ async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAUL
     logger.info("Confirmed close ALL positions triggered by chat_id %s", chat_id)
     await query.edit_message_text("⏳ <b>در حال بستن تمامی پوزیشن‌ها...</b>", parse_mode="HTML")
 
-    loop = asyncio.get_running_loop()
     # ۲. اجرای غیربلاک‌کننده بستن همه پوزیشن‌ها
-    res_msg = await loop.run_in_executor(None, close_all_positions)
+    res_msg = await asyncio.to_thread(close_all_positions)
     logger.info("Close ALL positions result: %s", res_msg)
 
     # نمایش نتیجه و دکمه بازگشت به لیست
@@ -1568,20 +1567,16 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
             logger.warning("Could not answer callback query: %s", e)
 
     try:
-        # ۲. فراخوانی ایمن دیتابیس (غیربلاک‌کننده)
-        loop = asyncio.get_running_loop()
-        if inspect.iscoroutinefunction(get_all_watchlist):
-            watchlist = await get_all_watchlist()
-        else:
-            watchlist = await loop.run_in_executor(None, get_all_watchlist)
+
+        watchlist = await get_all_watchlist()
 
         # ۳. بررسی خالی بودن واچ‌لیست
         if not watchlist:
             text = "📭 **واچ‌لیست شما خالی است!**"
             if query:
-                await query.edit_message_text(text, parse_mode="Markdown")
+                await query.edit_message_text(text,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
             else:
-                await update.message.reply_text(text, parse_mode="Markdown")
+                await update.message.reply_text(text,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
             return
 
         # ۴. ساخت متن و دکمه‌ها
@@ -1630,9 +1625,9 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
         logger.exception("Error in show_watchlist_command: %s", e)
         error_msg = "🚨 **خطا در دریافت اطلاعات واچ‌لیست!**"
         if query:
-            await query.edit_message_text(error_msg, parse_mode="Markdown")
+            await query.edit_message_text(error_msg,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
         elif update.message:
-            await update.message.reply_text(error_msg, parse_mode="Markdown")
+            await update.message.reply_text(error_msg,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
 
 async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1673,11 +1668,8 @@ async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes
         logger.info("Cancelled background worker task for key: %s", worker_key)
 
     # اجرای غیربلاک‌کننده حذف از دیتابیس
-    loop = asyncio.get_running_loop()
-    if inspect.iscoroutinefunction(delete_from_watchlist):
-        res_msg = await delete_from_watchlist(symbol, timeframe, market_type)
-    else:
-        res_msg = await loop.run_in_executor(None, delete_from_watchlist, symbol, timeframe, market_type)
+
+    res_msg = await delete_from_watchlist(symbol,timeframe, market_type)
 
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="showWatchlist")]])
 
@@ -1744,8 +1736,7 @@ async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DE
         msg_text += "📝 **مرحله ۲ از ۳:** نماد مورد نظر را از لیست زیر انتخاب کرده یا نام آن را دقیق تایپ کنید:"
         try:
             # فراخوانی تابع دریافت واچ‌لیست متاتریدر (با فرض اینکه این تابع را از قبل دارید)
-            loop = asyncio.get_running_loop()
-            symbols = await loop.run_in_executor(None, get_market_watch_symbols)
+            symbols = await asyncio.to_thread(get_market_watch_symbols)
 
             # چیدمان ۲ تایی دکمه‌ها
             row = []
@@ -1814,18 +1805,43 @@ async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes
     symbol = context.user_data['symbol']
     market_type = context.user_data['market_type']
 
-    logger.info("AddWatchlist step 3 - Finished. %s %s %s", market_type, symbol, timeframe)
+    # دریافت اطلاعات کاربر تلگرام
+    chat_id = update.effective_chat.id
+    user_info = update.effective_user
 
-    await save_watchlist_item(symbol, timeframe, market_type)
+    # ۱. دریافت یا ثبت کاربر در دیتابیس
+    user_obj = await get_or_create_user(
+        chat_id=chat_id,
+        username=user_info.username,
+        first_name=user_info.first_name
+    )
 
-    # شروع تسک جدید
-    worker_key = f"{symbol}_{timeframe}_{market_type}"
-    task = asyncio.create_task(worker_loop(symbol, timeframe, market_type, update.effective_chat.id, context.bot))
+    logger.info("AddWatchlist step 3 - Finished. User: %s %s %s %s", chat_id, market_type, symbol, timeframe)
+
+    # ۲. ذخیره در دیتابیس
+    created = await save_watchlist_item(
+        user=user_obj,
+        symbol=symbol,
+        timeframe=timeframe,
+        market_type=market_type
+    )
+
+    if not created:
+        await query.edit_message_text(
+            f"⚠️ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` قبلاً در واچ‌لیست شما ثبت شده است.",
+            parse_mode="Markdown"
+        )
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    # ۳. شروع تسک جدید (در صورت ثبت موفق)
+    worker_key = f"{chat_id}_{symbol}_{timeframe}_{market_type}"  # بهتره chat_id هم کلید ورکر اضافه بشه تا مجزا باشه
+    task = asyncio.create_task(worker_loop(symbol, timeframe, market_type, chat_id, context.bot))
     ACTIVE_WORKERS[worker_key] = task
     logger.info("Created new worker task for key: %s", worker_key)
 
     await query.edit_message_text(
-        f"✨ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` به واچ‌لیست اضافه و پایش آن فعال گردید.",
+        f"✨ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` به واچ‌لیست شما اضافه و پایش آن فعال گردید.",
         parse_mode="Markdown"
     )
 
@@ -1903,8 +1919,8 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
         await status_msg.edit_text("🤖 هوش مصنوعی در حال خواندن قیمت‌ها و نماد است...")
 
         # ۳. فراخوانی هوش مصنوعی
-        loop = asyncio.get_running_loop()
-        extracted_text = await loop.run_in_executor(None, extract_trade_from_image, temp_image_path)
+
+        extracted_text = await  extract_trade_from_image(temp_image_path)
 
         # ۴. بررسی پیام‌های خطای خروجی از تابع استخراج
         if not extracted_text or extracted_text.startswith("⚠️") or "خطا" in extracted_text:
@@ -2134,10 +2150,9 @@ async def process_report_generation(update: Update, context: ContextTypes.DEFAUL
     await query.edit_message_text(
         f"⏳ **در حال استخراج معاملات و تحلیل هوش مصنوعی برای بازه {period_name}...**\nلطفاً چند لحظه شکیبا باشید.")
 
-    loop = asyncio.get_running_loop()
 
     # ۱. استخراج دیتای MT5
-    trades, error = await loop.run_in_executor(None, get_trades_history, days)
+    trades, error = await asyncio.to_thread(get_trades_history, days)
 
     if error or not trades:
         await query.edit_message_text(f"⚠️ {error or 'هیچ معامله‌ای یافت نشد.'}")
@@ -2146,11 +2161,11 @@ async def process_report_generation(update: Update, context: ContextTypes.DEFAUL
         return ConversationHandler.END
 
     # ۲. تحلیل Gemini
-    ai_analysis = await loop.run_in_executor(None, analyze_trades_with_gemini, trades, period_name)
+    ai_analysis = await analyze_trades_with_gemini(trades, period_name)
 
     # ۳. تولید فایل PDF
     pdf_filename = f"Trade_Report_{update.effective_user.id}_{days}d.pdf"
-    await loop.run_in_executor(None, generate_pdf_report, pdf_filename, period_name, trades, ai_analysis)
+    await asyncio.to_thread(generate_pdf_report, pdf_filename, period_name, trades, ai_analysis)
 
     # ۴. ارسال فایل برای کاربر
     await query.edit_message_text("✅ **گزارش با موفقیت آماده شد. در حال ارسال فایل...**")
@@ -2198,7 +2213,9 @@ async def check_alerts_loop(bot) -> None:
     async with httpx.AsyncClient() as client:
         while True:
             try:
+                # ۱. دریافت تمام آلرت‌های فعال (حتماً باید user رو select_related کنه)
                 alerts = await fetch_active_alerts()
+
                 if alerts:
                     # اجرا و دریافت خروجی تمام تسک‌ها هم‌زمان
                     tasks = [process_alert(client, alert) for alert in alerts]
@@ -2206,33 +2223,44 @@ async def check_alerts_loop(bot) -> None:
 
                     # پیمایش روی نتایج و ارسال پیام/چارت در صورت وجود خروجی
                     for alert, result in zip(alerts, results):
-                        # بررسی اینکه خطا رخ نداده و خروجی یک تاپل یا لیست است
+
+                        # اگر در اجرای process_alert خطایی رخ داده بود
+                        if isinstance(result, Exception):
+                            logger.error("Error processing alert ID #%s: %s", alert.id, result)
+                            continue
+
+                        # اگر آلرت تاچ نشده و نتیجه None است
+                        if not result:
+                            continue
+
+                        # اگر خروجی به صورت (msg, chart_buf) برگشته بود
                         if isinstance(result, tuple) and len(result) == 2:
                             msg, chart_buf = result
 
-                            if msg:  # اگر متن پیام وجود داشته باشد
+                            # دریافت chat_id از طریق رابطه کاربر
+                            chat_id = alert.user.chat_id
+
+                            if msg:
                                 try:
-                                    if chart_buf:  # اگر چارت هیکن آشی آماده شده بود
+                                    if chart_buf:
                                         await bot.send_photo(
-                                            chat_id=alert.chat_id,
+                                            chat_id=chat_id,
                                             photo=chart_buf,
                                             caption=msg,
                                             parse_mode="Markdown"
                                         )
-                                        logger.info("Photo notification sent to %s for symbol %s", alert.chat_id, alert.symbol)
-                                    else:  # اگر فقط متن بود (مثلاً در صورت عدم دریافت کندل‌ها یا فارکس)
+                                        logger.info("Photo notification sent to %s for symbol %s", chat_id,
+                                                    alert.symbol)
+                                    else:
                                         await bot.send_message(
-                                            chat_id=alert.chat_id,
+                                            chat_id=chat_id,
                                             text=msg,
                                             parse_mode="Markdown"
                                         )
-                                        logger.info("Text notification sent to %s for symbol %s", alert.chat_id, alert.symbol)
+                                        logger.info("Text notification sent to %s for symbol %s", chat_id, alert.symbol)
 
                                 except Exception as e:
-                                    logger.exception("Failed to send notification to %s: %s", alert.chat_id, e)
-
-                        elif isinstance(result, Exception):
-                            logger.error("Error processing alert ID #%s: %s", alert.id, result)
+                                    logger.exception("Failed to send notification to %s: %s", chat_id, e)
 
             except Exception as e:
                 logger.exception("Unexpected error in main alert loop: %s", e)
@@ -2315,11 +2343,10 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
 
 async def sl_tp_monitor_loop(chat_id: int, bot):
     logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
-    loop = asyncio.get_running_loop()
 
     # ۱. در لحظه روشن شدن ربات، معاملات ۱۲ ساعت گذشته را می خوانیم
     # و به عنوان قدیمی علامت می‌زنیم تا فقط معاملات "جدید" اطلاع‌رسانی شوند.
-    initial_deals = await loop.run_in_executor(None, check_recent_closed_positions, 12)
+    initial_deals = await asyncio.to_thread(check_recent_closed_positions, 12)
     notified_deals = {deal["deal_id"] for deal in initial_deals}
     logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals.")
 
@@ -2327,7 +2354,7 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
         while True:
             try:
                 # چک کردن معاملات با بازه مطمئن
-                closed_deals = await loop.run_in_executor(None, check_recent_closed_positions, 12)
+                closed_deals = await asyncio.to_thread(check_recent_closed_positions, 12)
 
                 for deal in closed_deals:
                     deal_id = deal["deal_id"]
@@ -2366,32 +2393,58 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
 # 14. Application Startup & Main Execution
 # ------------------------------------------------------------------
 async def on_startup(app):
-    logger.info("Starting bot initialization and background workers...")
+    logger.info("⚡ Initializing MetaTrader 5 Connection...")
+    # متصل کردن متاتریدر ۵ ابتدای اجرای برنامه
+    mt5_initialized = await asyncio.to_thread(start_mt5_connection)
+    if not mt5_initialized:
+        logger.error("❌ Failed to initialize MetaTrader 5")
+        return
 
-    # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت
-    sl_tp_task = asyncio.create_task(
-        sl_tp_monitor_loop(ADMIN_CHAT_ID, app.bot)
-    )
-    ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
-
-    # ۲. استارت ورکر آلرت قیمت (Price Alerts)
-    price_alert_task = asyncio.create_task(
-        check_alerts_loop(app.bot)
-    )
-    ACTIVE_WORKERS["price_alert_monitor"] = price_alert_task
-
-    # ۳. استارت ورکرهای RSI برای نمادهای واچ‌لیست
-    watchlist = await get_all_watchlist()
-
-    for item in watchlist:
-        worker_key = f"{item.symbol}_{item.time_frame}_{item.market_type}"
-        task = asyncio.create_task(
-            worker_loop(item.symbol, item.time_frame, item.market_type, ADMIN_CHAT_ID, app.bot)
+    logger.info("✅ MetaTrader 5 initialized successfully.")
+    try:
+        logger.info("Starting bot background workers...")
+        # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت
+        sl_tp_task = asyncio.create_task(
+            sl_tp_monitor_loop(ADMIN_CHAT_ID, app.bot)
         )
-        ACTIVE_WORKERS[worker_key] = task
+        ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
 
-    logger.info("Successfully started SL/TP monitor and %d RSI worker tasks.", len(watchlist))
+        # ۲. استارت ورکر آلرت قیمت (Price Alerts)
+        price_alert_task = asyncio.create_task(
+            check_alerts_loop(app.bot)
+        )
+        ACTIVE_WORKERS["price_alert_monitor"] = price_alert_task
 
+        # ۳. استارت ورکرهای RSI برای نمادهای واچ‌لیست
+        watchlist = await get_all_watchlist()
+
+        for item in watchlist:
+            worker_key = f"{item.symbol}_{item.time_frame}_{item.market_type}"
+            task = asyncio.create_task(
+                worker_loop(item.symbol, item.time_frame, item.market_type, ADMIN_CHAT_ID, app.bot)
+            )
+            ACTIVE_WORKERS[worker_key] = task
+
+        logger.info("Successfully started SL/TP monitor and %d RSI worker tasks.", len(watchlist))
+    except KeyboardInterrupt:
+        logger.info("درخواست توقف ربات از طرف کاربر دریافت شد.")
+
+async def on_shutdown(app):
+    logger.info("🛑 Stopping background workers...")
+
+    # لغو تمامی تسک‌های فعال
+    for worker_key, task in ACTIVE_WORKERS.items():
+        if not task.done():
+            task.cancel()
+            logger.info("Cancelling worker: %s", worker_key)
+
+    await asyncio.gather(*ACTIVE_WORKERS.values(), return_exceptions=True)
+    ACTIVE_WORKERS.clear()
+    logger.info("✅ All background workers stopped cleanly.")
+
+    # قطع اتصال متاتریدر ۵ هنگام خاتمه ربات
+    await asyncio.to_thread(stop_mt5_connection)
+    logger.info("🛑 MetaTrader 5 connection closed cleanly.")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     # اگر خطای شبکه بود، فقط لاگ هشدار بده و ربات را زنده نگه دار
