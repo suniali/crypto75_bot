@@ -99,7 +99,8 @@ from bot_app.services.watchlist_service import (
 from bot_app.price_checker import process_alert
 from bot_app.services.chart_service import create_pending_alert_chart
 from bot_app.services.api_service import fetch_recent_klines
-from bot_app.choices import MarketType
+
+from bot_app.models import MarketType
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")

@@ -1,8 +1,7 @@
 import logging
 from asgiref.sync import sync_to_async
 from django.db import IntegrityError
-from bot_app.models import TelegramUser, UserAlert
-from bot_app.choices import MarketType
+from bot_app.models import TelegramUser, UserAlert,MarketType
 
 logger = logging.getLogger("price_checker")
 

@@ -1,6 +1,8 @@
 from django.db import models
 
-from bot_app.choices import MarketType
+class MarketType(models.TextChoices):
+    CRYPTO = 'CRYPTO', 'Crypto'
+    FOREX = 'FOREX', 'Forex'
 
 class TelegramUser(models.Model):
     chat_id = models.BigIntegerField(db_index=True, verbose_name="آیدی چت")
