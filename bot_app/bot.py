@@ -1638,7 +1638,7 @@ async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAUL
 
 # ------------------------------------------------------------------
 # 7. Watchlist & Conversation Handlers
-# ------------------------------------------------------------------
+# -----------------------------------------------------------------
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
 
@@ -1650,25 +1650,35 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
             logger.warning("Could not answer callback query: %s", e)
 
     try:
-
         watchlist = await get_all_watchlist()
 
-        # ۳. بررسی خالی بودن واچ‌لیست
+        # ۲. بررسی خالی بودن واچ‌لیست (اصلاح‌شده)
         if not watchlist:
             text = "📭 **واچ‌لیست شما خالی است!**"
+
+            # دکمه شیشه‌ای بازگشت/افزودن برای حالت Callback
+            empty_inline_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("➕ افزودن نماد جدید", callback_data="addWatchlist")],
+                # یا Callback مربوط به منوی اصلی شما
+            ])
+
             if query:
-                await query.edit_message_text(text,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
+                try:
+                    # ویرایش پیام با کیبورد Inline (جلوگیری از ارسال ReplyKeyboardMarkup به edit_message_text)
+                    await query.edit_message_text(text, reply_markup=empty_inline_keyboard, parse_mode="Markdown")
+                except BadRequest as e:
+                    if "Message is not modified" not in str(e):
+                        await query.message.reply_text(text, reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
             else:
-                await update.message.reply_text(text,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
+                await update.message.reply_text(text, reply_markup=empty_inline_keyboard, parse_mode="Markdown")
             return
 
-        # ۴. ساخت متن و دکمه‌ها
+        # ۳. ساخت متن و دکمه‌ها
         msg = "📊 **لیست نمادهای تحت نظر:**\n\n"
         buttons = []
         row = []
 
         for watch in watchlist:
-            # Escape یا تمیزسازی نماد برای جلوگیری از خطای Markdown
             sym = str(watch.symbol).replace("_", "\\_")
             tf = str(watch.time_frame)
             m_type = str(watch.market_type)
@@ -1687,19 +1697,18 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
         if row:
             buttons.append(row)
 
+
         msg += "\n*جهت حذف هر نماد، روی دکمه مربوط به آن کلیک کنید:*"
         reply_markup = InlineKeyboardMarkup(buttons)
 
-        # ۵. ارسال یا ویرایش پیام با مدیریت خطای تلگرام
+        # ۴. ارسال یا ویرایش پیام
         if query:
             try:
                 await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
             except BadRequest as e:
-                # اگر پیام تغییری نکرده باشد، خطای تلگرام را نادیده می‌گیریم
                 if "Message is not modified" in str(e):
                     pass
                 else:
-                    # اگر پیام قابل ادیت نبود، یک پیام جدید ارسال می‌کنیم
                     await query.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
         else:
             await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=reply_markup)
@@ -1707,10 +1716,15 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
     except Exception as e:
         logger.exception("Error in show_watchlist_command: %s", e)
         error_msg = "🚨 **خطا در دریافت اطلاعات واچ‌لیست!**"
+
+
         if query:
-            await query.edit_message_text(error_msg,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
+            try:
+                await query.edit_message_text(error_msg, reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
+            except Exception:
+                await query.message.reply_text(error_msg, reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
         elif update.message:
-            await update.message.reply_text(error_msg,reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
+            await update.message.reply_text(error_msg, reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
 
 async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -2607,6 +2621,7 @@ if __name__ == "__main__":
         entry_points=[
             CommandHandler("addWatchlist", start_add_watchlist),
             MessageHandler(filters.Text(["✨ افزودن به واچ‌لیست"]), start_add_watchlist),
+            CallbackQueryHandler(start_add_watchlist, pattern="^addWatchlist$"),
         ],
         states={
             ADD_WATCHLIST_MARKET: [
