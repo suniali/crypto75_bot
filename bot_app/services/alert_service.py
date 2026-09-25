@@ -1,31 +1,9 @@
 import logging
 from asgiref.sync import sync_to_async
 from django.db import IntegrityError
-from bot_app.models import TelegramUser, UserAlert,MarketType
+from bot_app.models import TelegramUser,UserAlert,MarketType
 
-logger = logging.getLogger("price_checker")
-
-
-# ------------------------------------------------------------------
-# TelegramUser Services
-# ------------------------------------------------------------------
-
-@sync_to_async
-def get_or_create_user(chat_id: int, username: str = None, first_name: str = None) -> TelegramUser:
-    """دریافت یا ثبت کاربر جدید در ربات تلگرام"""
-    user, created = TelegramUser.objects.get_or_create(
-        chat_id=chat_id,
-        defaults={
-            'username': username,
-            'first_name': first_name
-        }
-    )
-    if not created and (user.username != username or user.first_name != first_name):
-        user.username = username
-        user.first_name = first_name
-        user.save(update_fields=['username', 'first_name'])
-    return user
-
+logger = logging.getLogger("alert_service")
 
 # ------------------------------------------------------------------
 # UserAlert Services (استفاده‌شده در price_checker.py و Handlers)

@@ -59,6 +59,8 @@ from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     filters,
+    ChatMemberHandler,
+    CommandHandler
 )
 from telegram.error import NetworkError,TimedOut,BadRequest
 from telegram.request import HTTPXRequest
@@ -89,9 +91,9 @@ from bot_app.services.report_service import generate_pdf_report
 from bot_app.services.alert_service import (
     fetch_active_alerts,
     deactivate_alert_by_id,
-    get_or_create_user,
     create_user_alert
 )
+from bot_app.services.user_service import get_or_create_user,set_users_blocked_status
 from bot_app.services.watchlist_service import (
     get_all_watchlist,
     save_watchlist_item,
@@ -139,6 +141,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     logger.info("User %s (chat_id: %s) started the bot.", user_name, chat_id)
 
+    try:
+        await set_users_blocked_status(chat_id,False)
+        logger.info("✅ User %s marked as is_blocked=False in Database.", chat_id)
+    except Exception as e:
+        logger.error("Failed to update is_blocked in DB for user %s: %s", chat_id, e)
+
     # کاراکتر \u200f جهت مرتب‌سازی درست متون فارسی و انگلیسی در تلگرام
     welcome_text = (
         f"\u200fسلام **{user_name}** عزیز! 👋✨\n"
@@ -167,6 +175,68 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         welcome_text,
         parse_mode="Markdown",
         reply_markup=MAIN_KEYBOARD
+    )
+
+
+async def handle_user_stop_or_block(user_id: int, context: ContextTypes.DEFAULT_TYPE = None):
+    """
+    تابع اصلی پاک‌سازی تسک‌ها، رم و بلاک کردن کاربر در دیتابیس
+    """
+    logger.info("🛑 User %s stopped/blocked the bot. Starting cleanup...", user_id)
+
+    # ------------ ۱. متوقف کردن و حذف تسک‌های پس‌زمینه کاربر از حافظه ------------
+    user_id_str = str(user_id)
+    keys_to_remove = [key for key in ACTIVE_WORKERS.keys() if
+                      key.startswith(f"{user_id_str}_") or key.endswith(f"_{user_id_str}")]
+
+    for key in keys_to_remove:
+        task = ACTIVE_WORKERS.pop(key, None)
+        if task and not task.done():
+            task.cancel()
+            logger.info("Cancelled active background worker: %s", key)
+
+    # ------------ ۲. پاک‌سازی حافظه Context و داده‌های موقت کاربر ------------
+    if context:
+        # پاک‌سازی user_data
+        if hasattr(context, "user_data") and context.user_data:
+            context.user_data.clear()
+
+        # اگر اطلاعات مکالمه یا واچ‌لیستی در حافظه موقت رم دارید
+        if hasattr(context, "chat_data") and context.chat_data:
+            context.chat_data.clear()
+
+    # ------------ ۳. به روزرسانی وضعیت کاربر در دیتابیس ------------
+    try:
+        await set_users_blocked_status(user_id,True)
+        logger.info("✅ User %s marked as is_blocked=True in Database.", user_id)
+    except Exception as e:
+        logger.error("Failed to update is_blocked in DB for user %s: %s", user_id, e)
+
+async def block_detection_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """شناسایی لحظه‌ای بلاک شدن ربات توسط کاربر"""
+    chat_member = update.my_chat_member
+    if not chat_member:
+        return
+
+    new_status = chat_member.new_chat_member.status
+
+    # اگر وضعیت کاربر به kicked (بلاک کرده) تغییر کرد
+    if new_status == "kicked":
+        user_id = chat_member.from_user.id
+        await handle_user_stop_or_block(user_id, context)
+
+
+async def stop_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """پاسخ به دستور /stop کاربر"""
+    user_id = update.effective_user.id
+
+    # اجرا فرایند استاپ و پاکسازی
+    await handle_user_stop_or_block(user_id, context)
+
+    await update.message.reply_text(
+        "🛑 **ربات برای شما متوقف شد و تمامی پایش‌های فعال شما لغو گردیدند.**\n\n"
+        "هر زمان مایل بودید می‌توانید با فرستادن دستور /start مجدداً ربات را فعال کنید.",
+        parse_mode="Markdown"
     )
 
 # ------------------------------------------------------------------
@@ -2567,7 +2637,7 @@ async def on_startup(app):
 async def on_shutdown(app):
     logger.info("🛑 Stopping background workers...")
 
-    # لغو تمامی تسک‌های فعال
+    # ۱. لغو تمامی تسک‌های فعال
     for worker_key, task in ACTIVE_WORKERS.items():
         if not task.done():
             task.cancel()
@@ -2577,7 +2647,8 @@ async def on_shutdown(app):
     ACTIVE_WORKERS.clear()
     logger.info("✅ All background workers stopped cleanly.")
 
-    # قطع اتصال متاتریدر ۵ هنگام خاتمه ربات
+
+    # ۳. قطع اتصال متاتریدر ۵ هنگام خاتمه ربات
     await asyncio.to_thread(stop_mt5_connection)
     logger.info("🛑 MetaTrader 5 connection closed cleanly.")
 
@@ -2611,9 +2682,11 @@ if __name__ == "__main__":
 
     # ------------------ 2️⃣ ثبت دستورات اولیه (Commands) ------------------
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
-
+    # ۱. ثبت هاندلر تشخیص بلاک شدن ربات
+    app.add_handler(ChatMemberHandler(block_detection_handler, ChatMemberHandler.MY_CHAT_MEMBER))
+    # ۲. ثبت دستور /stop
+    app.add_handler(CommandHandler("stop", stop_command_handler))
     # ------------------ 3️⃣ گفتگوها (Conversation Handlers) ------------------
 
     # واچ‌لیست
