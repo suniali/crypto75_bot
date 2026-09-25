@@ -1,78 +1,52 @@
 import io
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 import httpx
-from asgiref.sync import sync_to_async
 
 from bot_app.models import UserAlert
-from bot_app.mt5_service import get_forex_price
-from bot_app.generate_hiken_chart import create_heikin_ashi_chart
-from bot_app.api_service import get_crypto_price,fetch_recent_klines
+from bot_app.services.alert_service import deactivate_alert
+from bot_app.services.mt5_service import get_forex_price
+from bot_app.services.chart_service import create_heikin_ashi_chart
+from bot_app.services.api_service import get_crypto_price, fetch_recent_klines
 
 # ------------------------------------------------------------------
 # Logging Configuration
 # ------------------------------------------------------------------
 logger = logging.getLogger("price_checker")
-logger.setLevel(logging.INFO)
 
-formatter = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-# Console Handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
-# File Handler
-file_handler = logging.FileHandler("price_alerts.log", encoding="utf-8")
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+    # استفاده از RotatingFileHandler برای جلوگیری از حجیم شدن فایل Log
+    file_handler = RotatingFileHandler(
+        "price_alerts.log",
+        maxBytes=5 * 1024 * 1024,  # ۵ مگابایت
+        backupCount=3,
+        encoding="utf-8"
+    )
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 
 # ------------------------------------------------------------------
-# Helper & Service Functions
+# Logic & Processing Worker
 # ------------------------------------------------------------------
-
-@sync_to_async
-def fetch_active_alerts():
-    return list(UserAlert.objects.filter(is_active=True))
-
-
-@sync_to_async
-def deactivate_alert(alert: UserAlert):
-    alert.is_active = False
-    alert.save(update_fields=["is_active"])
-    logger.info("Alert ID #%s for symbol %s set to inactive.", alert.id, alert.symbol)
-
-@sync_to_async
-def deactivate_alert_by_id(alert_id: int):
-    try:
-        alert = UserAlert.objects.get(id=alert_id)
-        alert.is_active = False
-        alert.save(update_fields=["is_active"])
-        logger.info("Alert ID #%s for symbol %s set to inactive.", alert.id, alert.symbol)
-        return True
-    except UserAlert.DoesNotExist:
-        logger.warning("Alert ID #%s not found for deactivation.", alert_id)
-        return False
 
 def check_target_reached(current_price: float, target_price: float, alert_type: str, is_forex: bool = False) -> bool:
-    """
-    بررسی رسیدن قیمت به تارگت:
-    - اگر ABOVE باشد: قیمت فعلی باید بزرگتر یا مساوی تارگت باشد.
-    - اگر BELOW باشد: قیمت فعلی باید کوچکتر یا مساوی تارگت باشد.
-    - اگر BOTH یا مشخص‌نشده باشد: فقط بر اساس برخورد یا رد شدن از مرز قیمت برخورد می‌شود.
-    """
     if alert_type == "ABOVE":
         return current_price >= target_price
     elif alert_type == "BELOW":
         return current_price <= target_price
 
-    # اگر alert_type روی BOTH یا خالی بود:
-    # تلرانس کاملاً حذف شده تا از فعال شدن اشتباهی در فواصل دور جلوگیری شود.
-    # فقط زمانی True می‌دهد که قیمت دقیقاً برابر با قیمت هدف شود.
     return current_price == target_price
 
 
@@ -86,10 +60,10 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> tuple[st
     try:
         # ۱. دریافت قیمت فعلی (فارکس یا کریپتو)
         if alert.is_forex:
-            loop = asyncio.get_running_loop()
+
             current_price = None
             for attempt in range(2):
-                current_price = await loop.run_in_executor(None, get_forex_price, alert.symbol)
+                current_price = await asyncio.to_thread(get_forex_price, alert.symbol)
                 if current_price is not None:
                     break
                 await asyncio.sleep(0.5)
@@ -114,7 +88,7 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> tuple[st
             df_klines = await fetch_recent_klines(
                 client=client,
                 symbol=alert.symbol,
-                interval="30M",
+                interval="30m",
                 limit=50,
                 is_forex=alert.is_forex
             )
