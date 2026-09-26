@@ -19,7 +19,7 @@ if GEMINI_API_KEY:
 # TradeJournal Database Services
 # ------------------------------------------------------------------
 
-@sync_to_async
+@sync_to_async(thread_sensitive=True)
 def create_journal_entry(
         user: TelegramUser,
         symbol: str,
@@ -44,7 +44,7 @@ def create_journal_entry(
     return journal
 
 
-@sync_to_async
+@sync_to_async(thread_sensitive=True)
 def close_journal_entry(
         journal_id: int,
         exit_price: float,
@@ -63,13 +63,13 @@ def close_journal_entry(
         return None
 
 
-@sync_to_async
+@sync_to_async(thread_sensitive=True)
 def get_user_pending_trades(user: TelegramUser) -> list[TradeJournal]:
     """دریافت لیست معاملات باز (PENDING) کاربر"""
     return list(TradeJournal.objects.filter(user=user, result='PENDING').order_by('-created_at'))
 
 
-@sync_to_async
+@sync_to_async(thread_sensitive=True)
 def get_user_trade_history(user: TelegramUser, limit: int = 20) -> list[TradeJournal]:
     """دریافت هیستوری معاملات ثبت‌شده کاربر"""
     return list(TradeJournal.objects.filter(user=user).order_by('-created_at')[:limit])
