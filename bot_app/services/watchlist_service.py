@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 @sync_to_async
 def get_all_watchlist() -> list[Watchlist]:
     """دریافت تمام آیتم‌های لیست زیرنظر"""
-    return list(Watchlist.objects.all())
+    return list(Watchlist.objects.all().select_related('user'))
 
 @sync_to_async
 def save_watchlist_item(user: TelegramUser, symbol: str, timeframe: str, market_type: str) -> bool:

@@ -17,12 +17,12 @@ from decouple import config
 from PIL import Image
 
 from bot_app.services.mt5_service import get_rates_data
-from bot_app.utils.math_helpers import calculate_symbol_breakdown,calculate_trading_metrics
+from bot_app.utils.math_helpers import calculate_symbol_breakdown, calculate_trading_metrics
 
 API_KEY = config('GEMINI_API_KEY', default='')
 
 # ------------------------------------------------------------------
-# Logging Configuration (جلوگیری از تکثیر Handlerها)
+# Logging Configuration
 # ------------------------------------------------------------------
 logger = logging.getLogger("analysis_service")
 
@@ -310,6 +310,9 @@ def generate_equity_chart(trades: list) -> io.BytesIO | None:
         plt.savefig(img_buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor())
         img_buf.seek(0)
         return img_buf
+    except Exception as e:
+        logger.error("Error generating equity chart: %s", e)
+        return None
     finally:
         if fig is not None:
             plt.close(fig)
@@ -344,6 +347,8 @@ def generate_report_charts(trades: list) -> dict:
         plt.savefig(buf1, format='png', dpi=150, bbox_inches='tight')
         buf1.seek(0)
         charts['equity'] = buf1
+    except Exception as e:
+        logger.error("Error generating chart 1: %s", e)
     finally:
         if fig1 is not None:
             plt.close(fig1)
@@ -372,6 +377,8 @@ def generate_report_charts(trades: list) -> dict:
             plt.savefig(buf2, format='png', dpi=150, bbox_inches='tight')
             buf2.seek(0)
             charts['win_rate_symbol'] = buf2
+        except Exception as e:
+            logger.error("Error generating chart 2: %s", e)
         finally:
             if fig2 is not None:
                 plt.close(fig2)
@@ -393,6 +400,8 @@ def generate_report_charts(trades: list) -> dict:
         plt.savefig(buf3, format='png', dpi=150, bbox_inches='tight')
         buf3.seek(0)
         charts['pnl_dist'] = buf3
+    except Exception as e:
+        logger.error("Error generating chart 3: %s", e)
     finally:
         if fig3 is not None:
             plt.close(fig3)
@@ -434,14 +443,12 @@ async def get_ai_market_view(symbol: str, rsi_val: float, rsi_status: str, diver
 - فقط متن فارسی بدون هیچ عنوان یا مقدمه‌چینی بنویس.
 - جملات را کاملاً مرتب و روان بگو تا در فرمت راست‌چین تلگرام به شکل کاملاً تمیز دیده شوند.
 """
-        # استفاده از کلاینت جدید و مدل‌های استاندارد
         client = genai.Client(api_key=API_KEY)
-        models_to_try = ['gemini-3.6-flash','gemini-2.5-flash']
+        models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
         for model_name in models_to_try:
             for attempt in range(2):
                 try:
-                    # فراخوانی غیرهمزمان API
                     response = await client.aio.models.generate_content(
                         model=model_name,
                         contents=prompt,
@@ -488,7 +495,7 @@ TP: <حد سود یا 0>
 """
 
         client = genai.Client(api_key=API_KEY)
-        models_to_try = ['gemini-3.6-flash','gemini-2.5-flash']
+        models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro']
 
         for model_name in models_to_try:
             try:
@@ -529,28 +536,28 @@ async def analyze_trades_with_gemini(trades: list, period_name: str) -> str:
     worst_sym = symbols_summary[-1]['symbol'] if symbols_summary else "N/A"
 
     prompt = f"""
-    تو یک تحلیل‌گر و مربی ارشد ترید هستی. گزارش عملکرد معامله‌گر را در بازه ({period_name}) بررسی کن.
+        تو یک تحلیل‌گر و مربی ارشد ترید هستی. گزارش عملکرد معامله‌گر را در بازه ({period_name}) بررسی کن.
 
-    📊 **آمارهای کلیدی:**
-    - تعداد کل معاملات: {total_trades}
-    - وین‌ریت: {win_rate:.1f}%
-    - سود/زیان خالص: ${total_profit:.2f}
-    - ضریب سودآوری (Profit Factor): {metrics.get('profit_factor', 0.0):.2f}
-    - بیشترین افت حساب (Max Drawdown): ${metrics.get('max_drawdown', 0.0):.2f}
-    - نسبت میانگین سود به زیان (Payoff Ratio): {metrics.get('payoff_ratio', 0.0):.2f}
-    - میانگین سود: ${metrics.get('avg_win', 0.0):.2f} | میانگین زیان: ${metrics.get('avg_loss', 0.0):.2f}
+        📊 **آمارهای کلیدی:**
+        - تعداد کل معاملات: {total_trades}
+        - وین‌ریت: {win_rate:.1f}%
+        - سود/زیان خالص: ${total_profit:.2f}
+        - ضریب سودآوری (Profit Factor): {metrics.get('profit_factor', 0.0):.2f}
+        - بیشترین افت حساب (Max Drawdown): ${metrics.get('max_drawdown', 0.0):.2f}
+        - نسبت میانگین سود به زیان (Payoff Ratio): {metrics.get('payoff_ratio', 0.0):.2f}
+        - میانگین سود: ${metrics.get('avg_win', 0.0):.2f} | میانگین زیان: ${metrics.get('avg_loss', 0.0):.2f}
 
-    📌 **آمار نمادها:**
-    - سودده‌ترین نماد: {best_sym}
-    - پرریسک‌ترین/زیان‌ده‌ترین نماد: {worst_sym}
+        📌 **آمار نمادها:**
+        - سودده‌ترین نماد: {best_sym}
+        - پرریسک‌ترین/زیان‌ده‌ترین نماد: {worst_sym}
 
-    لطفاً تحلیل روان‌شناختی و فنی خود را در ۳ بخش زیر ارائه بده:
-    ۱. **ارزیابی پایداری استراتژی** (با توجه به Profit Factor و Max Drawdown)
-    ۲. **مدیریت ریسک و R:R** (با توجه به Payoff Ratio، وین‌ریت و میانگین سود/زیان)
-    ۳. **تحلیل نمادها و توصیه کلیدی برای بازه بعدی** (تمرکز روی {best_sym} و کنترل زیان در {worst_sym})
+        لطفاً تحلیل روان‌شناختی و فنی خود را در ۳ بخش زیر ارائه بده:
+        ۱. **ارزیابی پایداری استراتژی** (با توجه به Profit Factor و Max Drawdown)
+        ۲. **مدیریت ریسک و R:R** (با توجه به Payoff Ratio، وین‌ریت و میانگین سود/زیان)
+        ۳. **تحلیل نمادها و توصیه کلیدی برای بازه بعدی** (تمرکز روی {best_sym} و کنترل زیان در {worst_sym})
 
-    پاسخ را فشرده، کاربردی، بدون مقدمه‌چینی اضافی و کاملاً به زبان فارسی بنویس.
-    """
+        پاسخ را فشرده، کاربردی، بدون مقدمه‌چینی اضافی و کاملاً به زبان فارسی بنویس.
+        """
 
     try:
         client = genai.Client(api_key=API_KEY)

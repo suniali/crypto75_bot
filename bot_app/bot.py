@@ -1038,11 +1038,11 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
     data_parts = query.data.split("_")
     chat_id = update.effective_chat.id
 
-    # ۱. توقف حتمی و آنی تمام تایمرهای آپدیت زنده
+    # ۱. توقف تایمرها
     await stop_all_live_jobs(chat_id, context)
 
-    # پشتیبانی از فرمت‌های مختلف callback_data
-    if len(data_parts) == 3 and data_parts[0] == "action":
+    # ۲. استخراج اکشن و تیکت
+    if len(data_parts) >= 3 and data_parts[0] == "action":
         action = data_parts[1]
         ticket = int(data_parts[2])
     elif len(data_parts) == 3 and data_parts[0] == "close" and data_parts[1] == "pos":
@@ -1061,11 +1061,11 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             ]
         ])
         await query.edit_message_text(
-            f"⚠️ **هشدار بستن پوزیشن `{ticket}`**\n\n"
-            f"آیا از بستن کامل این پوزیشن اطمینان دارید؟",
+            f"⚠️ **هشدار بستن پوزیشن `{ticket}`**\n\nآیا از بستن کامل این پوزیشن اطمینان دارید؟",
             reply_markup=confirm_keyboard,
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
     elif action == "confirmclose":
         await query.edit_message_text(f"⏳ در حال بستن کامل پوزیشن `{ticket}`...", parse_mode="Markdown")
@@ -1073,9 +1073,9 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         back_keyboard = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]])
         await query.edit_message_text(f"{msg}", reply_markup=back_keyboard, parse_mode="Markdown")
+        return ConversationHandler.END
 
     # ------------------ ۲. فری‌ریسک (Break-Even) ------------------
-    # ۲-الف: درخواست تأیید فری‌ریسک
     elif action == "be":
         confirm_keyboard = InlineKeyboardMarkup([
             [
@@ -1084,16 +1084,14 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             ]
         ])
         await query.edit_message_text(
-            f"🛡 **تأییدیه فری‌ریسک (Break-Even) پوزیشن `{ticket}`**\n\n"
-            f"آیا مطمئن هستید که می‌خواهید حد ضرر به نقطه ورود منتقل شود؟",
+            f"🛡 **تأییدیه فری‌ریسک (Break-Even) پوزیشن `{ticket}`**\n\nآیا مطمئن هستید که می‌خواهید حد ضرر به نقطه ورود منتقل شود؟",
             reply_markup=confirm_keyboard,
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
-    # ۲-ب: اجرای واقعی فری‌ریسک پس از تأیید
     elif action == "confirmbe":
-        await query.edit_message_text(f"⏳ در حال انتقال حد ضرر پوزیشن `{ticket}` به نقطه ورود...",
-                                      parse_mode="Markdown")
+        await query.edit_message_text(f"⏳ در حال انتقال حد ضرر پوزیشن `{ticket}` به نقطه ورود...", parse_mode="Markdown")
         _, msg = await asyncio.to_thread(set_break_even, ticket)
         await query.edit_message_text(
             f"{msg}",
@@ -1101,22 +1099,21 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
                 [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
     # ------------------ ۳. خروج ۲۵٪ حجم ------------------
-    # ۳-الف: درخواست تأیید خروج ۲۵٪
     elif action == "close25":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return
+            return ConversationHandler.END
 
-        sm_vol = round(pos['volume'] / 3, 2)
+        sm_vol = round(pos['volume'] / 3, 2)  # فرمول اصلی شما برگردانده شد
         if sm_vol < 0.01:
-            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج 25٪ بسیار کوچک است (کمتر از 0.01).**",
-                                          parse_mode="Markdown")
-            return
+            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج ۲۵٪ بسیار کوچک است (کمتر از 0.01).**", parse_mode="Markdown")
+            return ConversationHandler.END
 
         confirm_keyboard = InlineKeyboardMarkup([
             [
@@ -1126,23 +1123,21 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         ])
         await query.edit_message_text(
             f"✂️ **تأییدیه خروج ۲۵٪ از پوزیشن `{ticket}`**\n\n"
-            f"حجم کل: `{pos['volume']}` لات\n"
-            f"حجم خروج: `{sm_vol}` لات\n\n"
-            f"آیا از بستن این میزان حجم اطمینان دارید؟",
+            f"حجم کل: `{pos['volume']}` لات\nحجم خروج: `{sm_vol}` لات\n\nآیا از بستن این میزان حجم اطمینان دارید؟",
             reply_markup=confirm_keyboard,
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
-    # ۳-ب: اجرای واقعی خروج ۲۵٪ پس از تأیید
     elif action == "confirmclose25":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return
+            return ConversationHandler.END
 
-        sm_vol = round(pos['volume'] / 3, 2)
+        sm_vol = round(pos['volume'] / 3, 2)  # فرمول اصلی شما برگردانده شد
         await query.edit_message_text(f"⏳ در حال بستن `{sm_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
         _, msg = await asyncio.to_thread(close_position, ticket, sm_vol)
         await query.edit_message_text(
@@ -1151,22 +1146,21 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
                 [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
     # ------------------ ۴. خروج ۵۰٪ حجم ------------------
-    # ۴-الف: درخواست تأیید خروج ۵۰٪
     elif action == "close50":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return
+            return ConversationHandler.END
 
         half_vol = round(pos['volume'] / 2, 2)
         if half_vol < 0.01:
-            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج ۵۰٪ بسیار کوچک است (کمتر از 0.01).**",
-                                          parse_mode="Markdown")
-            return
+            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج ۵۰٪ بسیار کوچک است.**", parse_mode="Markdown")
+            return ConversationHandler.END
 
         confirm_keyboard = InlineKeyboardMarkup([
             [
@@ -1176,21 +1170,19 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         ])
         await query.edit_message_text(
             f"✂️ **تأییدیه خروج ۵۰٪ از پوزیشن `{ticket}`**\n\n"
-            f"حجم کل: `{pos['volume']}` لات\n"
-            f"حجم خروج: `{half_vol}` لات\n\n"
-            f"آیا از بستن این میزان حجم اطمینان دارید؟",
+            f"حجم کل: `{pos['volume']}` لات\nحجم خروج: `{half_vol}` لات\n\nآیا از بستن این میزان حجم اطمینان دارید؟",
             reply_markup=confirm_keyboard,
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
-    # ۴-ب: اجرای واقعی خروج ۵۰٪ پس از تأیید
     elif action == "confirmclose50":
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
         if not pos:
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return
+            return ConversationHandler.END
 
         half_vol = round(pos['volume'] / 2, 2)
         await query.edit_message_text(f"⏳ در حال بستن `{half_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
@@ -1201,13 +1193,11 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
                 [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
             parse_mode="Markdown"
         )
+        return ConversationHandler.END
 
-    # ------------------ ۵. ورود به مرحله دریافت SL و TP جدید ------------------
+    # ------------------ ۵. تغییر SL / TP ------------------
     elif action == "editsltp":
         context.user_data["action_ticket"] = ticket
-        context.user_data["action_type"] = "sltp"
-
-        # 💡 تغییر callback_data به cancel_action_ticket
         cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
 
         await query.edit_message_text(
@@ -1220,51 +1210,64 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
         return INPUT_NEW_SL_TP
 
-    # ------------------ ۶. ورود به مرحله خروج جزئی دلخواه ------------------
+    # ------------------ ۶. خروج جزئی دلخواه ------------------
     elif action == "partial":
         context.user_data["action_ticket"] = ticket
-
-        # 💡 تغییر callback_data به cancel_action_ticket
         cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
 
         await query.edit_message_text(
-            f"✂️ **خروج جزئی از پوزیشن `{ticket}`**\n\n"
-            f"لطفاً **حجم مورد نظر جهت خروج** را به لات وارد کنید (مثال: `0.05`):",
+            f"✂️ **خروج جزئی از پوزیشن `{ticket}`**\n\nلطفاً **حجم مورد نظر جهت خروج** را به لات وارد کنید (مثال: `0.05`):",
             reply_markup=cancel_btn,
             parse_mode="Markdown"
         )
         return INPUT_PARTIAL_LOT
 
+    return ConversationHandler.END
+
 
 async def process_new_sltp_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت مقادیر جدید SL و TP از کاربر"""
     ticket = context.user_data.get("action_ticket")
-    text = update.message.text.strip().split()
 
-    if len(text) < 2:
+    # ۱. پاکسازی متن و تبدیل کاما به نقطه برای پشتیبانی از اعشار تمام کیبوردها
+    raw_text = update.message.text.strip().replace(",", ".")
+    text = raw_text.split()
+
+    # ۲. بررسی تعداد آرگومان‌های ورودی
+    if len(text) != 2:
         await update.message.reply_text(
-            "❌ **فرمت ورودی نادرست است.** لطفاً دو عدد با فاصله وارد کنید (مثال: `2030 2060`):")
+            "❌ **فرمت ورودی نادرست است.**\n\n"
+            "لطفاً دو عدد با یک فاصله وارد کنید (مثال: `2030.50 2060.00` یا `0 2060.00`):",
+            parse_mode="Markdown"
+        )
         return INPUT_NEW_SL_TP
 
+    # ۳. تبدیل به عدد اعشاری با تبدیل امن
     try:
         new_sl = float(text[0])
         new_tp = float(text[1])
     except ValueError:
-        await update.message.reply_text("❌ **مقادیر وارد شده باید عدد باشند.** مجدداً وارد کنید:")
+        await update.message.reply_text(
+            "❌ **مقادیر وارد شده باید عدد باشند.** مجدداً وارد کنید (مثال: `2030.50 2060.00`):",
+            parse_mode="Markdown"
+        )
         return INPUT_NEW_SL_TP
-
 
     msg = await update.message.reply_text("⏳ در حال بروزرسانی حد ضرر و حد سود...", parse_mode="Markdown")
 
-    # اعتمادسازی و فراخوانی متاتریدر برای آپدیت SL/TP
+    # ۴. فراخوانی متاتریدر برای آپدیت SL/TP
     _, res_msg = await asyncio.to_thread(update_position_sltp, ticket, new_sl, new_tp)
 
     await msg.edit_text(
         res_msg,
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]]),
+            [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]]
+        ),
         parse_mode="Markdown"
     )
+
+    # ۵. پاکسازی داده‌های موقت و اتمام گفتگو
+    context.user_data.pop("action_ticket", None)
     return ConversationHandler.END
 
 # مراحل ConversationHandler برای دریافت عددی SL/TP یا Partial Close
@@ -2511,79 +2514,90 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
 async def sl_tp_monitor_loop(chat_id: int, bot):
     logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
 
+    # ۱. دریافت اولیه برای نادیده گرفتن معاملات گذشته
     initial_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
-    notified_deals = {deal["deal_id"] for deal in initial_deals}
+    notified_deals = {deal["deal_id"] for deal in initial_deals} if initial_deals else set()
     logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals.")
 
     try:
         while True:
             try:
-                # ۱. دریافت معاملات ۲۴ ساعت گذشته
+                # ۲. دریافت معاملات ۲۴ ساعت گذشته از متاتریدر
                 closed_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
 
-                new_deals_notified_count = 0
+                if closed_deals:
+                    new_deals_notified_count = 0
 
-                # ۲. حلقه اول: ارسال پیام هشدار مجزا برای تک‌تک معاملات جدید
-                for deal in closed_deals:
-                    deal_id = deal["deal_id"]
+                    # ۳. حلقه ارسال پیام برای معاملات جدید
+                    for deal in closed_deals:
+                        deal_id = deal["deal_id"]
 
-                    if deal_id not in notified_deals:
-                        profit = deal.get("profit", 0.0) or 0.0
-                        profit_icon = "🟢" if profit >= 0 else "🔴"
+                        if deal_id not in notified_deals:
+                            profit = deal.get("profit", 0.0) or 0.0
+                            profit_icon = "🟢" if profit >= 0 else "🔴"
 
-                        # ساخت پیام اختصاصی معامله
-                        alert_msg = (
-                            f"🔔 <b>هشدار بسته‌شدن پوزیشن!</b>\n\n"
-                            f"🎫 <b>تیکت:</b> <code>{deal['position_id']}</code>\n"
-                            f"📌 <b>نماد:</b> <b>{deal['symbol']}</b>\n"
-                            f"📌 <b>علت خروج:</b> {deal['exit_type']}\n"
-                            f"📊 <b>حجم:</b> <code>{deal['volume']}</code> لات\n"
-                            f"🏁 <b>قیمت خروج:</b> <code>{deal['exit_price']}</code>\n"
-                            f"{profit_icon} <b>سود/زیان معامله:</b> <code>${profit:,.2f}</code>"
-                        )
+                            # ساخت پیام اختصاصی معامله
+                            alert_msg = (
+                                f"🔔 <b>هشدار بسته‌شدن پوزیشن!</b>\n\n"
+                                f"🎫 <b>تیکت:</b> <code>{deal['position_id']}</code>\n"
+                                f"📌 <b>نماد:</b> <b>{deal['symbol']}</b>\n"
+                                f"📌 <b>علت خروج:</b> {deal['exit_type']}\n"
+                                f"📊 <b>حجم:</b> <code>{deal['volume']}</code> لات\n"
+                                f"🏁 <b>قیمت خروج:</b> <code>{deal['exit_price']}</code>\n"
+                                f"{profit_icon} <b>سود/زیان معامله:</b> <code>${profit:,.2f}</code>"
+                            )
 
-                        # ارسال پیام هشدار خروج معامله
-                        await bot.send_message(
-                            chat_id=chat_id,
-                            text=alert_msg,
-                            parse_mode="HTML"
-                        )
-                        logger.info(f"✅ Alert sent for NEW Deal {deal_id}")
+                            # ارسال پیام هشدار خروج معامله
+                            await bot.send_message(
+                                chat_id=chat_id,
+                                text=alert_msg,
+                                parse_mode="HTML"
+                            )
+                            logger.info(f"✅ Alert sent for NEW Deal {deal_id}")
 
-                        # علامت‌گذاری معامله
-                        notified_deals.add(deal_id)
-                        new_deals_notified_count += 1
+                            # علامت‌گذاری معامله
+                            notified_deals.add(deal_id)
+                            new_deals_notified_count += 1
 
-                # ۳. اگر حداقل یک معامله جدید در این پارت فرستاده شد، حالا پیام جداگانه داشبورد روزانه ارسال می‌شود
-                if new_deals_notified_count > 0:
-                    # محاسبه آمار معاملات امروز
-                    total_trades, wins, losses, win_rate, net_profit, avg_win, avg_loss, profits_history = calculate_today_stats(closed_deals)
-                    net_icon = "🚀" if net_profit >= 0 else "🔻"
+                    # ۴. ارسال داشبورد عملکرد روزانه در صورت وجود معامله جدید
+                    if new_deals_notified_count > 0:
+                        # اصلاح مهم: اجرای همگام محاسبه آمار درون thread جداگانه
+                        stats = await asyncio.to_thread(calculate_today_stats,closed_deals)
 
-                    # متن پیام گزارش روزانه
-                    summary_msg = (
-                        f"📊 <b>گزارش عملکرد کل امروز ({datetime.now().strftime('%Y-%m-%d')})</b>\n\n"
-                        f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
-                        f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
-                        f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
-                        f"📈 <b>میانگین سود:</b> <code>${avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>${avg_loss:,.2f}</code>\n"
-                        f"───────────────────\n"
-                        f"{net_icon} <b>سود/زیان کل امروز:</b> <b><code>${net_profit:,.2f}</code></b>"
-                    )
+                        if stats:
+                            total_trades, wins, losses, win_rate, net_profit, avg_win, avg_loss, profits_history = stats
+                            net_icon = "🚀" if net_profit >= 0 else "🔻"
 
-                    # تولید داشبورد گرافیکی
-                    chart_buf = await asyncio.to_thread(
-                        generate_pro_daily_dashboard, wins, losses, net_profit, win_rate, avg_win, avg_loss, profits_history
-                    )
+                            # متن پیام گزارش روزانه
+                            summary_msg = (
+                                f"📊 <b>گزارش عملکرد کل امروز ({datetime.now().strftime('%Y-%m-%d')})</b>\n\n"
+                                f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
+                                f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
+                                f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
+                                f"📈 <b>میانگین سود:</b> <code>${avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>${avg_loss:,.2f}</code>\n"
+                                f"───────────────────\n"
+                                f"{net_icon} <b>سود/زیان کل امروز:</b> <b><code>${net_profit:,.2f}</code></b>"
+                            )
 
-                    # ارسال داشبورد در یک پیام جداگانه (تصویر + کاپشن)
-                    await bot.send_photo(
-                        chat_id=chat_id,
-                        photo=chart_buf,
-                        caption=summary_msg,
-                        parse_mode="HTML"
-                    )
-                    logger.info("📊 Daily Dashboard sent as a separate message.")
+                            # تولید داشبورد گرافیکی
+                            chart_buf = await asyncio.to_thread(
+                                generate_pro_daily_dashboard, wins, losses, net_profit, win_rate, avg_win, avg_loss,
+                                profits_history
+                            )
+
+                            if chart_buf:
+                                # ارسال تصویر داشبورد
+                                await bot.send_photo(
+                                    chat_id=chat_id,
+                                    photo=chart_buf,
+                                    caption=summary_msg,
+                                    parse_mode="HTML"
+                                )
+                                logger.info("📊 Daily Dashboard sent as a separate message.")
+
+                                # بستن بافر جهت آزادسازی رم
+                                if hasattr(chart_buf, 'close'):
+                                    chart_buf.close()
 
             except Exception as e:
                 logger.error("Error in SL/TP monitor loop: %s", e, exc_info=True)
@@ -2599,7 +2613,6 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
 # ------------------------------------------------------------------
 async def on_startup(app):
     logger.info("⚡ Initializing MetaTrader 5 Connection...")
-    # متصل کردن متاتریدر ۵ ابتدای اجرای برنامه
     mt5_initialized = await asyncio.to_thread(start_mt5_connection)
     if not mt5_initialized:
         logger.error("❌ Failed to initialize MetaTrader 5")
@@ -2608,36 +2621,42 @@ async def on_startup(app):
     logger.info("✅ MetaTrader 5 initialized successfully.")
     try:
         logger.info("Starting bot background workers...")
-        # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت
-        sl_tp_task = asyncio.create_task(
-            sl_tp_monitor_loop(ADMIN_CHAT_ID, app.bot)
-        )
-        ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
 
-        # ۲. استارت ورکر آلرت قیمت (Price Alerts)
+        # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت برای ادمین
+        if ADMIN_CHAT_ID:
+            sl_tp_task = asyncio.create_task(
+                sl_tp_monitor_loop(int(ADMIN_CHAT_ID), app.bot)
+            )
+            ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
+
+        # ۲. استارت ورکر آلرت قیمت
         price_alert_task = asyncio.create_task(
             check_alerts_loop(app.bot)
         )
         ACTIVE_WORKERS["price_alert_monitor"] = price_alert_task
 
-        # ۳. استارت ورکرهای RSI برای نمادهای واچ‌لیست
+        # ۳. استارت ورکرهای RSI برای نمادهای واچ‌لیست کاربران
         watchlist = await get_all_watchlist()
 
         for item in watchlist:
-            worker_key = f"{item.symbol}_{item.time_frame}_{item.market_type}"
-            task = asyncio.create_task(
-                worker_loop(item.symbol, item.time_frame, item.market_type, ADMIN_CHAT_ID, app.bot)
-            )
-            ACTIVE_WORKERS[worker_key] = task
+            # استفاده از چت آیدی همان کاربر به جای ادمین
+            chat_id = item.user.chat_id
+            worker_key = f"{chat_id}_{item.symbol}_{item.time_frame}_{item.market_type}"
 
-        logger.info("Successfully started SL/TP monitor and %d RSI worker tasks.", len(watchlist))
-    except KeyboardInterrupt:
-        logger.info("درخواست توقف ربات از طرف کاربر دریافت شد.")
+            if worker_key not in ACTIVE_WORKERS:
+                task = asyncio.create_task(
+                    worker_loop(item.symbol, item.time_frame, item.market_type, chat_id, app.bot)
+                )
+                ACTIVE_WORKERS[worker_key] = task
+
+        logger.info("Successfully started background monitors and %d RSI worker tasks.", len(watchlist))
+    except Exception as e:
+        logger.exception("Error during background tasks startup: %s", e)
+
 
 async def on_shutdown(app):
     logger.info("🛑 Stopping background workers...")
 
-    # ۱. لغو تمامی تسک‌های فعال
     for worker_key, task in ACTIVE_WORKERS.items():
         if not task.done():
             task.cancel()
@@ -2647,13 +2666,12 @@ async def on_shutdown(app):
     ACTIVE_WORKERS.clear()
     logger.info("✅ All background workers stopped cleanly.")
 
-
-    # ۳. قطع اتصال متاتریدر ۵ هنگام خاتمه ربات
+    # قطع اتصال متاتریدر ۵
     await asyncio.to_thread(stop_mt5_connection)
     logger.info("🛑 MetaTrader 5 connection closed cleanly.")
 
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # اگر خطای شبکه بود، فقط لاگ هشدار بده و ربات را زنده نگه دار
     if isinstance(context.error, (NetworkError, TimedOut)):
         logger.warning("Telegram network connection issue: %s", context.error)
     else:
@@ -2680,20 +2698,20 @@ if __name__ == "__main__":
 
     app.add_error_handler(error_handler)
 
-    # ------------------ 2️⃣ ثبت دستورات اولیه (Commands) ------------------
+    # ------------------ 1️⃣ دستورات اولیه و چت ------------------
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
-    # ۱. ثبت هاندلر تشخیص بلاک شدن ربات
-    app.add_handler(ChatMemberHandler(block_detection_handler, ChatMemberHandler.MY_CHAT_MEMBER))
-    # ۲. ثبت دستور /stop
     app.add_handler(CommandHandler("stop", stop_command_handler))
-    # ------------------ 3️⃣ گفتگوها (Conversation Handlers) ------------------
+    app.add_handler(CommandHandler("showWatchlist", show_watchlist_command))
+    app.add_handler(CommandHandler("positions", show_positions_handler))
+    app.add_handler(ChatMemberHandler(block_detection_handler, ChatMemberHandler.MY_CHAT_MEMBER))
+
+    # ------------------ 2️⃣ گفتگوها (Conversation Handlers) ------------------
 
     # واچ‌لیست
     add_watchlist_handler = ConversationHandler(
         entry_points=[
             CommandHandler("addWatchlist", start_add_watchlist),
-            MessageHandler(filters.Text(["✨ افزودن به واچ‌لیست"]), start_add_watchlist),
+            MessageHandler(filters.Regex("^✨ افزودن به واچ‌لیست$"), start_add_watchlist),
             CallbackQueryHandler(start_add_watchlist, pattern="^addWatchlist$"),
         ],
         states={
@@ -2703,8 +2721,8 @@ if __name__ == "__main__":
             ],
             ADD_WATCHLIST_SYMBOL: [
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
-                CallbackQueryHandler(add_watchlist_get_symbol_step, pattern="^sym_"),  # برای کلیک روی دکمه‌های متاتریدر
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),  # برای تایپ دستی
+                CallbackQueryHandler(add_watchlist_get_symbol_step, pattern="^sym_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),
             ],
             ADD_WATCHLIST_TIMEFRAME: [
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
@@ -2713,10 +2731,7 @@ if __name__ == "__main__":
         },
         fallbacks=[
             CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
-        ],
-        per_message=False,
-        per_chat=True,
-        per_user=True,
+        ]
     )
     app.add_handler(add_watchlist_handler)
 
@@ -2725,6 +2740,7 @@ if __name__ == "__main__":
         entry_points=[
             CommandHandler("setalert", start_alert_wizard),
             MessageHandler(filters.Regex("^ثبت هشدار قیمت 🔔$"), start_alert_wizard),
+            CallbackQueryHandler(start_alert_wizard, pattern="^add_alert$")
         ],
         states={
             ADD_ALERT_MARKET: [
@@ -2741,17 +2757,15 @@ if __name__ == "__main__":
         },
         fallbacks=[
             CallbackQueryHandler(cancel_alert_callback, pattern="^cancel_alert$")
-        ],
-        per_message=False,  # اضافه شد جهت حذف هشدار
-        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
-        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
+        ]
     )
     app.add_handler(alert_handler)
 
-    # مدیریت پوزیشن‌ها (تغییر SL/TP و خروج جزئی)
+    # 💡 مدیریت جامع پوزیشن‌ها (تک‌مرحله‌ای + چندمرحله‌ای)
     pos_management_conv = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(handle_position_actions, pattern="^action_(editsltp|partial)_")
+            # پشتیبانی کامل از تمام اکشن‌های اکشن‌دار و ساده
+            CallbackQueryHandler(handle_position_actions, pattern=r"^(action_[a-zA-Z0-9]+_|close_pos_)")
         ],
         states={
             INPUT_NEW_SL_TP: [
@@ -2768,14 +2782,12 @@ if __name__ == "__main__":
             CommandHandler("cancel", cancel_action),
             CallbackQueryHandler(show_positions_handler, pattern="^refresh_positions_list$"),
             CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_")
-        ],
-        per_message=False,  # اضافه شد جهت حذف هشدار
-        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
-        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
+        ]
     )
+
     app.add_handler(pos_management_conv)
 
-    # اضافه کردن ترید جدید
+    # معامله جدید
     trade_wizard_handler = ConversationHandler(
         entry_points=[
             CommandHandler("newtrade", start_trade_wizard),
@@ -2798,8 +2810,9 @@ if __name__ == "__main__":
                 CallbackQueryHandler(new_trade_get_lot_step, pattern="^lot_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_lot_step),
             ],
-            NEW_TRADE_PRICE: [  # 👈 اضافه شدن هندلرهای مرحله قیمت
-                CallbackQueryHandler(new_trade_get_price_step, pattern="^(price_market|cancel_trade)"),
+            NEW_TRADE_PRICE: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
+                CallbackQueryHandler(new_trade_get_price_step, pattern="^price_market$"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_price_step),
             ],
             NEW_TRADE_SL: [
@@ -2816,14 +2829,11 @@ if __name__ == "__main__":
         fallbacks=[
             CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
             MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو)\s*$"), cancel_trade_handler),
-        ],
-        per_message=False,  # اضافه شد جهت حذف هشدار
-        per_chat=True,  # اضافه شد جهت مدیریت بر اساس چت
-        per_user=True,  # اضافه شد جهت مدیریت بر اساس کاربر
+        ]
     )
     app.add_handler(trade_wizard_handler)
 
-    # استخراج اطلاعات ترید از عکس
+    # استخراج عکس / ژورنال
     extract_image_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.Regex(r"^\s*📸 استخراج معامله از عکس$"), start_extract_trade_wizard),
@@ -2832,7 +2842,6 @@ if __name__ == "__main__":
         states={
             WAITING_FOR_TRADE_IMAGE: [
                 MessageHandler(filters.PHOTO, process_trade_image_handler),
-                # پشتیبانی از دکمه شیشه‌ای انصراف در مرحله ارسال عکس
                 CallbackQueryHandler(cancel_extract_image_callback, pattern="^cancel_trade_extraction$")
             ],
             WAITING_FOR_MANUAL_TRADE_INPUT: [
@@ -2852,15 +2861,11 @@ if __name__ == "__main__":
             MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو)\s*$"), cancel_extract_image_callback),
             CallbackQueryHandler(cancel_extract_image_callback,
                                  pattern="^(confirm_journal_no|cancel_trade_extraction)$")
-        ],
-        per_chat=True,
-        per_user=True,
-        per_message=False
+        ]
     )
     app.add_handler(extract_image_handler)
 
-    #
-    # ریپورت گیری
+    # گزارش‌گیری
     report_handler = ConversationHandler(
         entry_points=[
             CommandHandler("report", start_report_wizard),
@@ -2876,46 +2881,34 @@ if __name__ == "__main__":
             CommandHandler("stop", cancel_report_callback),
             CallbackQueryHandler(cancel_report_callback, pattern="^cancel_report$"),
             MessageHandler(filters.Regex(r"^\s*(❌ انصراف|لغو|/stop)\s*$"), cancel_report_callback)
-        ],
-        per_message=False,
-        per_chat=True,
-        per_user=True
+        ]
     )
-
     app.add_handler(report_handler)
 
-    # ------------------ 4️⃣ کلیدهای میانبر کیبورد (Keyboard Handlers) ------------------
+    # ------------------ 3️⃣ کیبورد و دکمه‌های متنی اصلی ------------------
     app.add_handler(MessageHandler(filters.Regex("^📋 واچ‌لیست$"), show_watchlist_command))
     app.add_handler(MessageHandler(filters.Regex("^📊 پوزیشن‌های باز$"), show_positions_handler))
-    app.add_handler(MessageHandler(filters.Text(["🔔 هشدارهای فعال"]), show_active_alerts_command))
+    app.add_handler(MessageHandler(filters.Regex("^🔔 هشدارهای فعال$"), show_active_alerts_command))
 
-    # ------------------ 5️⃣ دکمه‌های شیشه‌ای (Callback Query Handlers) ------------------
-    # حذف آلرت
-    # ۱. درخواست تأیید قبل از حذف
+    # ------------------ 4️⃣ Callback Query Handlers عمومی (بدون تداخل) ------------------
+    # هشدارهای قیمت
     app.add_handler(CallbackQueryHandler(confirm_delete_alert_callback, pattern="^confirm_del_alert_"))
-    # ۲. انجام نهایی حذف پس از کلیک روی "بله"
     app.add_handler(CallbackQueryHandler(delete_alert_callback, pattern="^do_del_alert_"))
-    # ۳. دکمه بازگشت به لیست هشدارها در صورت انصراف
     app.add_handler(CallbackQueryHandler(show_active_alerts_command, pattern="^back_to_alerts_list$"))
 
-    # حذف از واچ لیست
+    # واچ لیست
     app.add_handler(CallbackQueryHandler(show_watchlist_command, pattern="^showWatchlist$"))
     app.add_handler(CallbackQueryHandler(delete_watchlist_handler, pattern="^del_watchlist_"))
     app.add_handler(CallbackQueryHandler(confirm_delete_watchlist_handler, pattern="^confirm_del_watchlist_"))
 
-
-    # مدیریت پوزیشن‌ها و آپدیت لایو
-    app.add_handler(CommandHandler("positions", show_positions_handler))
+    # نمایش لیست و جزئیات پوزیشن‌ها (اکشن‌ها در Conversation Handler بالا قرار گرفتند)
     app.add_handler(CallbackQueryHandler(show_positions_handler, pattern="^refresh_positions_list$"))
     app.add_handler(CallbackQueryHandler(position_detail_callback, pattern="^pos_detail_"))
 
-    # اکشن‌های مستقیم پوزیشن‌ها
-    app.add_handler(CallbackQueryHandler(handle_position_actions, pattern="^action_(be|close25|close50)_"))
-    app.add_handler(CallbackQueryHandler(handle_position_actions, pattern="^(action_|close_pos_)"))
+    # بستن یکباره تمام پوزیشن‌ها
     app.add_handler(CallbackQueryHandler(close_all_positions_handler, pattern="^close_all_positions$"))
     app.add_handler(CallbackQueryHandler(confirm_close_all_handler, pattern="^confirm_close_all$"))
-
-    # ------------------ 6️⃣ اجرا و مانیتورینگ ------------------
+    # ------------------ 5️⃣ اجرا ------------------
     logger.info("🤖 Bot is polling for updates...")
     try:
         app.run_polling(drop_pending_updates=True)
