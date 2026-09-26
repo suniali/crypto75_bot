@@ -2603,16 +2603,25 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
 async def sl_tp_monitor_loop(chat_id: int, bot):
     logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
 
-    # ۱. دریافت اولیه برای نادیده گرفتن معاملات گذشته
-    initial_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
+    # ۱. محاسبه تعداد ساعات سپری‌شده از 00:00 بامداد امروز
+    now = datetime.now()
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    hours_today = max(1, int((now - start_of_today).total_seconds() / 3600) + 1)
+
+    # دریافت اولیه معاملات امروز جهت نادیده گرفتن موارد قبلی (با تابع خودتان)
+    initial_deals = await asyncio.to_thread(check_recent_closed_positions, hours_back=hours_today)
     notified_deals = {deal["deal_id"] for deal in initial_deals} if initial_deals else set()
-    logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals.")
+    logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals from today.")
 
     try:
         while True:
             try:
-                # ۲. دریافت معاملات ۲۴ ساعت گذشته از متاتریدر
-                closed_deals = await asyncio.to_thread(check_recent_closed_positions, 24)
+                # ۲. محاسبه مجدد ساعات امروز در هر اجرا برای پوشش کامل
+                now = datetime.now()
+                start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                hours_today = max(1, int((now - start_of_today).total_seconds() / 3600) + 1)
+
+                closed_deals = await asyncio.to_thread(check_recent_closed_positions, hours_today)
 
                 if closed_deals:
                     new_deals_notified_count = 0
