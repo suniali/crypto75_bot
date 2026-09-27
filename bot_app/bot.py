@@ -57,7 +57,6 @@ from telegram import (
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
-    CommandHandler,
     ContextTypes,
     ConversationHandler,
     MessageHandler,
@@ -89,7 +88,6 @@ from bot_app.services.mt5_service import (
     get_market_watch_symbols,
     get_trades_history,
     check_recent_closed_positions,
-    place_partial_exit_pending_order
 )
 from bot_app.services.report_service import generate_pdf_report
 from bot_app.services.alert_service import (
@@ -789,9 +787,6 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
             ],
             [
-                InlineKeyboardButton("⏰ پندینگ خروج حجمی", callback_data=f"action_pendingexit_{ticket}"),
-            ],
-            [
                 InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
                 InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
             ],
@@ -979,9 +974,6 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
             InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
             InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
 
-        ],
-        [
-            InlineKeyboardButton("⏰ پندینگ خروج حجمی", callback_data=f"action_pendingexit_{ticket}"),
         ],
         [
             InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
@@ -1228,20 +1220,6 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
         return INPUT_PARTIAL_LOT
 
-        # ------------------ ۷. تنظیم پندینگ خروج حجمی ------------------
-    elif action == "pendingexit":
-        context.user_data["action_ticket"] = ticket
-        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
-
-        await query.edit_message_text(
-            f"⏰ **تنظیم پندینگ خروج حجمی برای پوزیشن `{ticket}`**\n\n"
-            f"لطفاً **قیمت مدنظر** جهت خروج را وارد کنید:\n"
-            f"💡 *(مثال: `2050.50`)*",
-            reply_markup=cancel_btn,
-            parse_mode="Markdown"
-        )
-        return INPUT_PENDING_EXIT_PRICE
-
     return ConversationHandler.END
 
 
@@ -1312,72 +1290,6 @@ async def process_partial_close_input(update: Update, context: ContextTypes.DEFA
             [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]]),
         parse_mode="Markdown"
     )
-    return ConversationHandler.END
-
-# Conversation Partial Exit Trigger
-INPUT_PENDING_EXIT_PRICE, INPUT_PENDING_EXIT_RATIO = range(100, 102)
-
-async def receive_pending_exit_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    ticket = context.user_data.get("action_ticket")
-
-    try:
-        price = float(text)
-        if price <= 0:
-            raise ValueError
-    except ValueError:
-        cancel_btn = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")]])
-        await update.message.reply_text("⚠️ لطفاً یک قیمت معتبر و مثبت به عدد وارد کنید.", reply_markup=cancel_btn)
-        return INPUT_PENDING_EXIT_PRICE
-
-    context.user_data["exit_price"] = price
-
-    # دکمه‌های شیشه‌ای انتخاب میزان خروج
-    keyboard = [
-        [
-            InlineKeyboardButton("50٪", callback_data=f"ratio_0.5_{ticket}"),
-            InlineKeyboardButton("33٪", callback_data=f"ratio_0.333_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("25٪", callback_data=f"ratio_0.25_{ticket}"),
-            InlineKeyboardButton("75٪", callback_data=f"ratio_0.75_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("❌ انصراف", callback_data=f"cancel_action_{ticket}")
-        ]
-    ]
-
-    await update.message.reply_text(
-        f"🎯 قیمت خروج: `{price}` ثبت شد.\n\n"
-        f"لطفاً مشخص کنید چه مقداری از حجم پوزیشن خروج داده شود:",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
-    return INPUT_PENDING_EXIT_RATIO
-
-
-async def receive_pending_exit_ratio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    data_parts = query.data.split("_")
-    ratio = float(data_parts[1])
-    ticket = int(data_parts[2])
-    price = context.user_data.get("exit_price")
-
-    await query.edit_message_text(f"⏳ در حال ثبت سفارش پندینگ خروج روی سرور بروکر برای پوزیشن `{ticket}`...")
-
-    # فراخوانی تابع ثبت در MT5 به صورت غیربلاک‌کننده
-    success, message = await asyncio.to_thread(place_partial_exit_pending_order, ticket, price, ratio)
-
-    # پاکسازی داده‌های موقت
-    context.user_data.pop("action_ticket", None)
-    context.user_data.pop("exit_price", None)
-
-    back_keyboard = InlineKeyboardMarkup(
-        [[InlineKeyboardButton("🔙 بازگشت به لیست پوزیشن‌ها", callback_data="refresh_positions_list")]]
-    )
-    await query.edit_message_text(f"{message}", reply_markup=back_keyboard, parse_mode="Markdown")
     return ConversationHandler.END
 
 # تعریف مراحل Conversation New Trade
@@ -2869,14 +2781,6 @@ if __name__ == "__main__":
             INPUT_PARTIAL_LOT: [
                 CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_partial_close_input)
-            ],
-            INPUT_PENDING_EXIT_PRICE: [
-                CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_pending_exit_price),
-            ],
-            INPUT_PENDING_EXIT_RATIO: [
-                CallbackQueryHandler(cancel_action, pattern="^cancel_action_"),
-                CallbackQueryHandler(receive_pending_exit_ratio, pattern=r"^ratio_"),
             ],
         },
         fallbacks=[
