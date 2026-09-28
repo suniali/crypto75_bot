@@ -2916,6 +2916,9 @@ if __name__ == "__main__":
     # ------------------ 5️⃣ اجرا ------------------
     logger.info("🤖 Bot is polling for updates...")
     try:
-        app.run_polling(drop_pending_updates=True)
+        app.run_polling(
+            poll_interval=2.0,
+            timeout=30,
+        )
     except KeyboardInterrupt:
         logger.info("🛑 Telegram bot stopped manually.")
