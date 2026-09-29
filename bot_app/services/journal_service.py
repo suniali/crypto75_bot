@@ -1,4 +1,6 @@
 import re
+import os
+from django.core.files import File
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Tuple
 from asgiref.sync import sync_to_async
@@ -84,7 +86,7 @@ def parse_trade_text(text: str) -> Dict[str, Any]:
 # 2. سرویس ذخیره در دیتابیس (مستقل از تلگرام)
 # ==========================================
 @sync_to_async
-def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any]) -> Tuple[TradeJournal, str]:
+def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: str = None) -> Tuple[TradeJournal, str]:
     """
     اعتبارسنجی کامل داده‌ها و محاسبه سود خالص و ثبت در دیتابیس TradeJournal
     قابل استفاده مشترک در Telegram Bot / Django View / REST API
@@ -157,6 +159,13 @@ def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any]) -> Tuple[Tr
             exit_time=exit_time,
             is_active=True
         )
+        # ۲. اگر تصویر وجود داشت، آن را روی فیلد image ذخیره می‌کنیم
+        if image_path and os.path.exists(image_path):
+            filename = os.path.basename(image_path)
+            with open(image_path, 'rb') as f:
+                trade.image.save(filename, File(f), save=False)
+
+        trade.save()
         return trade, "✅ معامله کامل با موفقیت در ژورنال ثبت شد."
 
     except (InvalidOperation, ValueError):

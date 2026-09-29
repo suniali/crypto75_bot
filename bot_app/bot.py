@@ -2114,6 +2114,7 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
             raise ValueError("⚠️ نماد معاملاتی (SYMBOL) یا قیمت ورود (ENTRY) در تصویر تشخیص داده نشد.")
 
         # ذخیره ساختار پارس‌شده در context جهت استفاده در گام‌های بعدی (ویرایش/ثبت)
+        context.user_data['temp_image_path'] = temp_image_path
         context.user_data['extracted_journal_data'] = parsed_data
 
         # ۶. محاسبه پیش‌نمایش سود/زیان خالص
@@ -2165,14 +2166,6 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
             reply_markup=MAIN_KEYBOARD
         )
         return ConversationHandler.END
-
-    finally:
-        # تضمین پاکسازی فایل موقت تحت هر شرایطی
-        if os.path.exists(temp_image_path):
-            try:
-                os.remove(temp_image_path)
-            except Exception as clean_err:
-                logger.warning("Failed to remove temp image file: %s", clean_err)
 
 
 # ==========================================
@@ -2269,6 +2262,7 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
     await query.answer()
 
     trade_data = context.user_data.get('extracted_journal_data')
+    image_path = context.user_data.get('temp_image_path')
     chat_id = query.message.chat_id
 
     if not trade_data or not isinstance(trade_data, dict):
@@ -2276,9 +2270,16 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
         return ConversationHandler.END
 
     # ۱. فراخوانی تابع سرویس دیتابیس
-    trade_obj, result_msg = await create_trade_from_dict(chat_id, trade_data)
+    trade_obj, result_msg = await create_trade_from_dict(chat_id, trade_data,image_path)
 
     if trade_obj:
+        # تضمین پاکسازی فایل موقت تحت هر شرایطی
+        if os.path.exists(image_path):
+            try:
+                os.remove(image_path)
+            except Exception as clean_err:
+                logger.warning("Failed to remove temp image file: %s", clean_err)
+
         await query.edit_message_text("✅ *داده‌ها با موفقیت در دیتابیس ذخیره شدند.*", parse_mode="Markdown")
 
         final_msg = (
