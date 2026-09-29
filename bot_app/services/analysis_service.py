@@ -444,7 +444,7 @@ async def get_ai_market_view(symbol: str, rsi_val: float, rsi_status: str, diver
 - جملات را کاملاً مرتب و روان بگو تا در فرمت راست‌چین تلگرام به شکل کاملاً تمیز دیده شوند.
 """
         client = genai.Client(api_key=API_KEY)
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro']
+        models_to_try = ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash']
 
         for model_name in models_to_try:
             for attempt in range(2):
@@ -562,7 +562,7 @@ async def analyze_trades_with_gemini(trades: list, period_name: str) -> str:
     try:
         client = genai.Client(api_key=API_KEY)
         response = await client.aio.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.8-flash',
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.3)
         )
