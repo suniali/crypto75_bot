@@ -148,7 +148,7 @@ class TradeJournal(models.Model):
 
     result = models.CharField(max_length=10, choices=RESULT_CHOICES, default='PENDING', verbose_name="نتیجه")
     notes = models.TextField(null=True, blank=True, verbose_name="توضیحات/استراتژی")
-    image_path = models.CharField(max_length=255, null=True, blank=True, verbose_name="مسیر تصویر چارت")
+    image = models.ImageField(upload_to='trade_charts/%Y/%m/', null=True, blank=True, verbose_name="تصویر چارت")
 
     # کنترل ادمین
     is_active = models.BooleanField(default=True, verbose_name="فعال / شامل در محاسبات")
