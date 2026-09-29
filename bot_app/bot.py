@@ -2311,6 +2311,11 @@ async def cancel_extract_image_callback(update: Update, context: ContextTypes.DE
     query = update.callback_query
     await query.answer()
 
+    # پاکسازی فایل موقت تصویر در صورت انصراف
+    image_path = context.user_data.pop('temp_image_path', None)
+    if image_path and os.path.exists(image_path):
+        os.remove(image_path)
+
     await query.edit_message_text("❌ عملیات ثبت معامله لغو شد.")
     await query.message.reply_text(MAIN_MENU_TEXT, reply_markup=MAIN_KEYBOARD)
     context.user_data.pop('extracted_journal_data', None)
