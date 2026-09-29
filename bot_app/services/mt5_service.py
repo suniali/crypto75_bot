@@ -529,7 +529,7 @@ def get_trades_history(days: int):
 
 
 def check_recent_closed_positions(hours_back=12):
-    """دریافت پوزیشن‌های بسته‌شده جهت اطلاع‌رسانی اتوماتیک TP/SL در ربات"""
+    """دریافت پوزیشن‌های بسته‌شده جهت اطلاع‌رسانی اتوماتیک TP/SL به همراه کمیسیون کامل (ورود + خروج) و سوآپ"""
     with mt5_session() as ok:
         if not ok:
             return []
@@ -543,7 +543,9 @@ def check_recent_closed_positions(hours_back=12):
             return []
 
         closed_alerts = []
+
         for deal in deals:
+            # فقط معامله‌های خروج را بررسی می‌کنیم
             if deal.entry in (1, 2, mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT):
                 comment = str(deal.comment).lower()
                 reason = deal.reason
@@ -559,11 +561,37 @@ def check_recent_closed_positions(hours_back=12):
                     exit_type = "✋ بسته‌شدن دستی / کلوز پوزیشن"
 
                 if exit_type:
+                    pos_id = deal.position_id
+
+                    # 🔑 دریافت تمام معاملات مربوط به این پوزیشن برای محاسبه کمیسیون کامل
+                    pos_deals = mt5.history_deals_get(position=pos_id)
+
+                    total_commission = 0.0
+                    total_swap = 0.0
+                    gross_profit = 0.0
+
+                    if pos_deals:
+                        for pd in pos_deals:
+                            total_commission += pd.commission
+                            total_swap += pd.swap
+                            gross_profit += pd.profit
+                    else:
+                        # اگر به هر دلیلی تاریخچه پوزیشن یافت نشد، از داده‌های خود deal استفاده کن
+                        total_commission = deal.commission
+                        total_swap = deal.swap
+                        gross_profit = deal.profit
+
+                    # سود خالص نهایی (Net Profit)
+                    net_profit = gross_profit + total_swap + total_commission
+
                     closed_alerts.append({
                         "deal_id": deal.ticket,
-                        "position_id": deal.position_id,
+                        "position_id": pos_id,
                         "symbol": deal.symbol,
-                        "profit": deal.profit + deal.swap + deal.commission,
+                        "profit": net_profit,  # سود/زیان خالص
+                        "gross_profit": gross_profit,  # سود/زیان ناخالص
+                        "commission": total_commission,  # مجموع کمیسیون ورود و خروج
+                        "swap": total_swap,  # مجموع سوآپ
                         "volume": deal.volume,
                         "exit_price": deal.price,
                         "exit_type": exit_type
