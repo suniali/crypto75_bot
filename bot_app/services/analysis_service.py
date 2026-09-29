@@ -495,7 +495,7 @@ TP: <حد سود یا 0>
 """
 
         client = genai.Client(api_key=API_KEY)
-        models_to_try = ['gemini-2.5-flash', 'gemini-2.5-pro']
+        models_to_try = ['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash']
 
         for model_name in models_to_try:
             try:
