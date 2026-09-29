@@ -2055,24 +2055,29 @@ async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAU
 
 WAITING_FOR_TRADE_IMAGE, CONFIRM_JOURNAL_DATA, EDITING_JOURNAL_DATA = range(100, 103)
 
+# ==========================================
+# ۱. گام اول: درخواست تصویر چارت
+# ==========================================
 async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """گام ۱: درخواست تصویر چارت همراه با دکمه شیشه‌ای انصراف"""
     cancel_inline_keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade_extraction")]
+        [InlineKeyboardButton("❌ انصراف", callback_data="confirm_journal_no")]
     ])
 
     await update.message.reply_text(
         "📸 **لطفاً تصویر چارت یا پوزیشن معاملاتی خود را ارسال کنید:**\n\n"
-        "اطلاعات معامله استخراج شده و پس از تأیید شما جهت ژورنال‌نویسی نمایش داده می‌شود.",
+        "اطلاعات معامله (قیمت‌ها، سواپ، کمیسیون و...) استخراج شده و پس از تأیید شما جهت ژورنال‌نویسی ثبت می‌شود.",
         parse_mode="Markdown",
         reply_markup=cancel_inline_keyboard
     )
     return WAITING_FOR_TRADE_IMAGE
 
 
+# ==========================================
+# ۲. گام دوم: پردازش تصویر و استخراج هوشمند
+# ==========================================
 async def process_trade_image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """گام ۲: دریافت تصویر، استخراج داده‌ها با هندلینگ کامل خطا"""
-
+    """گام ۲: دریافت تصویر، فشرده‌سازی، OCR، پارس کامل و نمایش پیش‌نمایش مالی"""
 
     await update.message.chat.send_action(action="typing")
     status_msg = await update.message.reply_text("⏳ در حال دریافت و پردازش تصویر چارت...")
@@ -2080,12 +2085,12 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
     temp_image_path = f"temp_trade_{update.effective_user.id}.jpg"
 
     try:
-        # ۱. دانلود عکس
+        # ۱. دانلود عکس ارسال‌شده
         photo = update.message.photo[-1]
         file = await photo.get_file()
         await file.download_to_drive(temp_image_path)
 
-        # ۲. فشرده‌سازی تصویر
+        # ۲. فشرده‌سازی و بهینه‌سازی تصویر جهت کاهش حجم ارسال به AI
         try:
             with Image.open(temp_image_path) as img:
                 img.thumbnail((1024, 1024))
@@ -2093,34 +2098,52 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
         except Exception as img_err:
             logger.warning("Image optimization warning: %s", img_err)
 
-        await status_msg.edit_text("🤖 هوش مصنوعی در حال خواندن قیمت‌ها و نماد است...")
+        await status_msg.edit_text("🤖 هوش مصنوعی در حال خواندن قیمت‌ها، سواپ، کمیسیون و نماد است...")
 
-        # ۳. فراخوانی هوش مصنوعی
+        # ۳. فراخوانی تابع استخراج متن از تصویر
+        raw_extracted_text = await extract_trade_from_image(temp_image_path)
 
-        extracted_text = await  extract_trade_from_image(temp_image_path)
+        # ۴. اعتبارسنجی اولیه پاسخ هوش مصنوعی
+        if not raw_extracted_text or raw_extracted_text.startswith("⚠️") or "خطا" in raw_extracted_text:
+            raise ValueError(raw_extracted_text or "پاسخ نامعتبر یا عدم تشخیص اطلاعات از هوش مصنوعی")
 
-        # ۴. بررسی پیام‌های خطای خروجی از تابع استخراج
-        if not extracted_text or extracted_text.startswith("⚠️") or "خطا" in extracted_text:
-            raise ValueError(extracted_text or "پاسخ نامعتبر از هوش مصنوعی")
+        # ۵. پارس هوشمند متن استخراج‌شده به دیکشنری کامل دیتابیس
+        parsed_data = parse_trade_text(raw_extracted_text)
 
-        # اگر تا اینجا خطایی نبود، پاکسازی فایل موقت و ادامه فرآیند
-        if os.path.exists(temp_image_path):
-            os.remove(temp_image_path)
+        if not parsed_data.get('symbol') or not parsed_data.get('entry_price'):
+            raise ValueError("⚠️ نماد معاملاتی (SYMBOL) یا قیمت ورود (ENTRY) در تصویر تشخیص داده نشد.")
 
-        context.user_data['extracted_journal_data'] = extracted_text
+        # ذخیره ساختار پارس‌شده در context جهت استفاده در گام‌های بعدی (ویرایش/ثبت)
+        context.user_data['extracted_journal_data'] = parsed_data
 
-        # ساخت دکمه‌های شیشه‌ای تأیید فقط در صورت موفقیت کامل
+        # ۶. محاسبه پیش‌نمایش سود/زیان خالص
+        p = float(parsed_data.get('profit', 0))
+        c = float(parsed_data.get('commission', 0))
+        s = float(parsed_data.get('swap', 0))
+        net_pnl = p + c + s
+
+        # ساخت پیام پیش‌نمایش مالی جامع
+        msg = (
+            f"🔍 **اطلاعات استخراج‌شده از تصویر:**\n\n"
+            f"📌 **نماد:** `{parsed_data.get('symbol')}` ({parsed_data.get('trade_type', 'BUY')})\n"
+            f"📦 **حجم:** `{parsed_data.get('volume', '0.01')}` لات/واحد\n"
+            f"🏁 **قیمت ورود:** `{parsed_data.get('entry_price')}`\n"
+            f"🏁 **قیمت خروج:** `{parsed_data.get('exit_price', 'هنوز باز/تعیین نشده')}`\n"
+            f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
+            f"💵 **سود خام:** `${p:.2f}`\n"
+            f"💸 **کمیسیون:** `${c:.2f}`\n"
+            f"🔄 **سواپ:** `${s:.2f}`\n"
+            f"📊 **سود خالص (Net PnL):** `${net_pnl:.2f}`\n\n"
+            f"🏷️ **وضعیت:** `{parsed_data.get('result', 'PENDING')}`\n"
+            f"📝 **توضیحات:** `{parsed_data.get('notes', '-')}`\n\n"
+            f"آیا اطلاعات فوق مورد تأیید است؟"
+        )
+
         confirm_keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ تأیید و نمایش نهایی", callback_data="confirm_journal_yes")],
+            [InlineKeyboardButton("✅ تأیید و ثبت نهایی", callback_data="confirm_journal_yes")],
             [InlineKeyboardButton("✏️ ویرایش دستی", callback_data="edit_journal_manual")],
             [InlineKeyboardButton("❌ لغو", callback_data="confirm_journal_no")]
         ])
-
-        msg = (
-            f"🔍 **اطلاعات استخراج‌شده از تصویر:**\n\n"
-            f"```text\n{extracted_text}\n```\n"
-            f"آیا اطلاعات بالا مورد تأیید است؟"
-        )
 
         await status_msg.delete()
         await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=confirm_keyboard)
@@ -2128,25 +2151,28 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
 
     except Exception as e:
         logger.error("Error during trade extraction: %s", e)
-
-        # پاکسازی فایل موقت در صورت وجود
-        if os.path.exists(temp_image_path):
-            os.remove(temp_image_path)
-
         context.user_data.pop('extracted_journal_data', None)
 
-        # اعلام خطا به کاربر و بازگشت مستقیم به منوی اصلی بدون نشان دادن دکمه‌های شیشه‌ای
-        error_text = str(e) if str(e).startswith(
-            "⚠️") else "⚠️ خطا در پردازش و استخراج اطلاعات تصویر. لطفاً مجدداً تلاش کنید."
+        error_text = str(e) if str(e).startswith("⚠️") else "⚠️ خطا در پردازش و استخراج اطلاعات تصویر. لطفاً تصویر واضح‌تری ارسال کنید یا دستی وارد نمایید."
 
-        await status_msg.delete()
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+
         await update.message.reply_text(
             f"{error_text}\n\nعملیات لغو شد.",
             reply_markup=MAIN_KEYBOARD
         )
-
-        # خاتمه دادن به گفتگو و لغو حالت Conversation
         return ConversationHandler.END
+
+    finally:
+        # تضمین پاکسازی فایل موقت تحت هر شرایطی
+        if os.path.exists(temp_image_path):
+            try:
+                os.remove(temp_image_path)
+            except Exception as clean_err:
+                logger.warning("Failed to remove temp image file: %s", clean_err)
 
 
 # ==========================================
