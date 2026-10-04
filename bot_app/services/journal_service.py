@@ -2,6 +2,7 @@ import re
 import os
 import logging
 from datetime import datetime, timezone
+from django.utils import timezone as t
 from django.core.files import File
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Tuple
@@ -12,60 +13,74 @@ from bot_app.models import TradeJournal, TelegramUser, MarketType
 
 logger = logging.getLogger(__name__)
 
+
 def dict_to_formatted_text(data: dict) -> str:
     """
-    دیکشنری استخراج‌شده از معامله را به فرمت متنی کلید-مقدار تبدیل می‌کند
-    تا کاربر بتواند آن را در تلگرام کپی و ویرایش کند.
+    دیکشنری معامله را به فرمت متنی تمام‌فیلد تبدیل می‌کند
+    تا کاربر تمام کلیدها را ببیند و بتواند مقادیر خالی یا موجود را ویرایش کند.
     """
     if not isinstance(data, dict):
-        return str(data)
+        data = {}
 
     lines = []
-    # ترتیب و نام کلیدهایی که می‌خواهیم در متن نمایش داده شوند
-    field_map = {
-        'symbol': 'SYMBOL',
-        'trade_type': 'TYPE',
-        'volume': 'VOLUME',
-        'entry_price': 'ENTRY',
-        'exit_price': 'EXIT',
-        'stop_loss': 'SL',
-        'take_profit': 'TP',
-        'profit': 'PROFIT',
-        'commission': 'COMMISSION',
-        'swap': 'SWAP',
-        'notes': 'NOTE'
-    }
 
-    for key, label in field_map.items():
+    # ساختار کامل فیلدها همراه با مقادیر پیش‌فرض
+    # اگر مقداری در data وجود داشته باشد جایگزین می‌شود، در غیر این صورت مقدار پیش‌فرض قرار می‌گیرد
+    fields = [
+        ('symbol', 'SYMBOL', 'BTCUSDT'),
+        ('trade_type', 'TYPE', 'BUY'),
+        ('volume', 'VOLUME', '0.01'),
+        ('entry_price', 'ENTRY', ''),
+        ('exit_price', 'EXIT', ''),
+        ('stop_loss', 'SL', ''),
+        ('take_profit', 'TP', ''),
+        ('profit', 'PROFIT', '0.00'),
+        ('commission', 'COMMISSION', '0.00'),
+        ('swap', 'SWAP', '0.00'),
+        ('result', 'RESULT', 'PENDING'),
+        ('entry_time', 'ENTRY_TIME', ''),
+        ('exit_time', 'EXIT_TIME', ''),
+        ('notes', 'NOTE', '')
+    ]
+
+    for key, label, default_val in fields:
         val = data.get(key)
-        # فقط فیلدهایی که مقدار دارند را به متن اضافه می‌کند
-        if val is not None and str(val).strip() != '':
-            lines.append(f"{label}: {val}")
 
-    # اگر دیکشنری خالی بود یک نمونه پیش‌فرض برمی‌گرداند
-    return "\n".join(lines) if lines else "SYMBOL: BTCUSDT\nTYPE: BUY\nENTRY: 65000"
+        # اگر مقدار None یا رشته خالی بود، از default_val استفاده کن
+        if val is None or str(val).strip() == '':
+            display_val = default_val
+        else:
+            display_val = str(val).strip()
+
+        lines.append(f"{label}: {display_val}")
+
+    return "\n".join(lines)
+
 
 # ==========================================
-# 1. پارسر متنی (مستقل از تلگرام)
+# 1. پارسر متنی اصلاح‌شده و مقاوم
 # ==========================================
 def parse_trade_text(text: str) -> Dict[str, Any]:
     data = {}
 
+    # الگوی عمومی اعداد اعشاری/منفی/مثبت
+    num_pattern = r'[-+]?\d*(?:\.\d+)?'
+
     patterns = {
         'symbol': r'(?:SYMBOL|نماد|جفت\s*ارز)[\s:=]+([A-Za-z0-9/._-]+)',
         'trade_type': r'(?:TYPE|نوع|پوزیشن)[\s:=]+(BUY|SELL|خرید|فروش)',
-        'entry_price': r'(?:ENTRY|ورود|قیمت\s*ورود)[\s:=]+([0-9.]+)',
-        'exit_price': r'(?:EXIT|خروج|قیمت\s*خروج)[\s:=]+([0-9.]+)',
-        'stop_loss': r'(?:SL|استاپ|حد\s*ضرر)[\s:=]+([0-9.]+)',
-        'take_profit': r'(?:TP|تارگت|حد\s*سود)[\s:=]+([0-9.]+)',
-        'volume': r'(?:VOLUME|LOT|حجم)[\s:=]+([0-9.]+)',
-        'profit': r'(?:PROFIT|PNL|سود|زیان)[\s:=]+([-+]?[0-9.]+)',
-        'commission': r'(?:COMMISSION|COMM|کمیسیون)[\s:=]+([-+]?[0-9.]+)',
-        'swap': r'(?:SWAP|سواپ)[\s:=]+([-+]?[0-9.]+)',
-        'result': r'(?:RESULT|نتیجه)[\s:=]+(WIN|LOSS|BE|PENDING|وین|لوس|وین‌شد|بسته‌شد)',
+        'entry_price': rf'(?:ENTRY|ورود|قیمت\s*ورود)[\s:=]+({num_pattern})',
+        'exit_price': rf'(?:EXIT|خروج|قیمت\s*خروج)[\s:=]+({num_pattern})',
+        'stop_loss': rf'(?:SL|استاپ|حد\s*ضرر)[\s:=]+({num_pattern})',
+        'take_profit': rf'(?:TP|تارگت|حد\s*سود)[\s:=]+({num_pattern})',
+        'volume': rf'(?:VOLUME|LOT|حجم)[\s:=]+({num_pattern})',
+        'profit': rf'(?:PROFIT|PNL|سود|زیان)[\s:=]+({num_pattern})',
+        'commission': rf'(?:COMMISSION|COMM|کمیسیون)[\s:=]+({num_pattern})',
+        'swap': rf'(?:SWAP|سواپ)[\s:=]+({num_pattern})',
+        'result': r'(?:RESULT|نتیجه)[\s:=]+(WIN|LOSS|BE|PENDING|وین|لوس|برد|باخت|یربه‌یر|بسته‌شد)',
+        'entry_time': r'(?:ENTRY_TIME|زمان\s*ورود)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|امروز|دیروز)',
+        'exit_time': r'(?:EXIT_TIME|زمان\s*خروج)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|امروز|دیروز)',
         'notes': r'(?:NOTE|NOTES|توضیحات|استراتژی)[\s:=]+(.+)',
-        'entry_time': r'(?:ENTRY_TIME|زمان\s*ورود)[\s:=]+([\d{4}/\d{2}/\d{2}\s\d{2}:\d{2}|\d{2}:\d{2}|امروز|دیروز]+)',
-        'exit_time': r'(?:EXIT_TIME|زمان\s*خروج)[\s:=]+([\d{4}/\d{2}/\d{2}\s\d{2}:\d{2}|\d{2}:\d{2}|امروز|دیروز]+)',
     }
 
     for key, pattern in patterns.items():
@@ -73,11 +88,17 @@ def parse_trade_text(text: str) -> Dict[str, Any]:
         if match:
             val = match.group(1).strip()
 
-            # تبدیل‌های خاص استانداردساز
+            # تبدیل‌های خاص و استانداردسازی خروجی
             if key == 'trade_type':
                 val = 'BUY' if val.upper() in ['BUY', 'خرید'] else 'SELL'
+
             elif key == 'result':
-                res_map = {'WIN': 'WIN', 'وین': 'WIN', 'LOSS': 'LOSS', 'لوس': 'LOSS', 'BE': 'BE'}
+                res_map = {
+                    'WIN': 'WIN', 'وین': 'WIN', 'برد': 'WIN',
+                    'LOSS': 'LOSS', 'لوس': 'LOSS', 'باخت': 'LOSS',
+                    'BE': 'BE', 'یربه‌یر': 'BE',
+                    'PENDING': 'PENDING'
+                }
                 val = res_map.get(val.upper(), 'PENDING')
 
             data[key] = val
@@ -88,6 +109,24 @@ def parse_trade_text(text: str) -> Dict[str, Any]:
 # ==========================================
 # 2. سرویس ذخیره در دیتابیس (مستقل از تلگرام)
 # ==========================================
+def _parse_datetime(dt_value: Any) -> datetime | None:
+    """تبدیل رشته یا تایم‌استمپ به datetime معتبر با منطقه زمانی UTC"""
+    if not dt_value:
+        return None
+    if isinstance(dt_value, datetime):
+        return dt_value
+    if isinstance(dt_value, (int, float)):
+        return datetime.fromtimestamp(dt_value, tz=timezone.utc)
+    if isinstance(dt_value, str):
+        try:
+            dt = datetime.fromisoformat(dt_value)
+            if timezone.is_naive(dt):
+                return timezone.make_aware(dt, timezone.utc)
+            return dt
+        except ValueError:
+            return None
+    return None
+
 @sync_to_async
 def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: str = None) -> Tuple[TradeJournal, str]:
     """
@@ -134,9 +173,9 @@ def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: 
                 result = 'BE'
 
         # مدیریت زمان‌بندی ورود و خروج
-        now = timezone.now()
-        entry_time = now  # در صورت عدم ارسال، زمان جاری ست می‌شود
-        exit_time = now if exit_price else None
+        now = t.now()
+        entry_time = _parse_datetime(trade_data.get('entry_time')) or now
+        exit_time = _parse_datetime(trade_data.get('exit_time')) or (now if exit_price else None)
 
         # تشخیص نوع مارکت
         market_type = MarketType.FOREX if any(
@@ -146,6 +185,7 @@ def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: 
         trade = TradeJournal.objects.create(
             user=user,
             symbol=symbol,
+            position_id=None,
             trade_type=trade_type,
             market_type=market_type,
             volume=volume,
