@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/6.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
-
+import os
 from pathlib import Path
 from decouple import config
 
@@ -126,5 +126,48 @@ STATIC_URL = 'static/'
 MAILERS = {
     'default': {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+    },
+}
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '%(asctime)s [%(levelname)s] %(name)s (line %(lineno)d): %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '[%(levelname)s] %(message)s',
+        },
+    },
+    'handlers': {
+        # نمایش لاگ‌ها در ترمینال/کنسول
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+            'level': 'INFO',
+        },
+        # ذخیره لاگ‌های خطا در فایل (اختیاری اما مفید)
+        'file_errors': {
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'errors.log'),
+            'formatter': 'verbose',
+            'level': 'ERROR',
+            'encoding': 'utf-8',
+        },
+    },
+    'loggers': {
+        # تنظیمات اختصاصی برای اپلیکیشن ربات شما
+        'bot_app': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # اگر فایل‌های خدمات یا اسکریپت‌ها خارج از bot_app هستند، کل سورس پروژه را پوشش می‌دهد
+        '': {
+            'handlers': ['console'],
+            'level': 'WARNING',  # برای کتابخانه‌های جانبی فقط Warning و Error چاپ شود تا کنسول شلوغ نشود
+        },
     },
 }

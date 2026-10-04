@@ -262,3 +262,64 @@ def calculate_today_stats(closed_deals):
     avg_loss = (abs(sum(losses)) / loss_count) if loss_count > 0 else 0.0
 
     return total_trades, win_count, loss_count, win_rate, net_profit, avg_win, avg_loss, profits_history
+
+
+def create_journal_heikin_ashi_chart(
+        df_ohlc: pd.DataFrame,
+        symbol: str,
+        entry_price: float = None,
+        sl_price: float = None,
+        tp_price: float = None
+) -> io.BytesIO:
+    ha_df = calculate_heikin_ashi(df_ohlc)
+
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(12, 6), dpi=150)
+    fig.patch.set_facecolor('#0d1117') # پس‌زمینه بسیار تیره نئونی
+    ax.set_facecolor('#0d1117')
+
+    up = ha_df[ha_df['Close'] >= ha_df['Open']]
+    down = ha_df[ha_df['Close'] < ha_df['Open']]
+
+    # پالت رنگی کندل‌های نئونی
+    col_up = '#00ffaa'    # سبز نئونی
+    col_down = '#ff2a6d'  # قرمز/صورتی نئونی
+
+    # سایه‌ها و بدنه کندل‌ها
+    ax.vlines(ha_df.index, ha_df['Low'], ha_df['High'], color='#6272a4', linewidth=0.8, alpha=0.5)
+    ax.vlines(up.index, up['Open'], up['Close'], color=col_up, linewidth=2.8)
+    ax.vlines(down.index, down['Open'], down['Close'], color=col_down, linewidth=2.8)
+
+    # تابع کمکی برای رسم خطوط صاف با افکت درخشش نئونی (Glow)
+    def draw_neon_line(y_val, color, label_text):
+        # خط پهن پس‌زمینه جهت ایجاد درخشش (Glow Effect)
+        ax.axhline(y=y_val, color=color, linestyle='-', linewidth=4.0, alpha=0.25)
+        # خط اصلی صاف
+        ax.axhline(y=y_val, color=color, linestyle='-', linewidth=1.6, alpha=0.95, label=label_text)
+
+    # ترسیم خطوط قیمت (صاف و نئونی)
+    if entry_price and float(entry_price) > 0:
+        draw_neon_line(float(entry_price), '#00d2d3', f'Entry: {entry_price}') # آبی نئونی استاندارد
+
+    if sl_price and float(sl_price) > 0:
+        draw_neon_line(float(sl_price), '#ff0055', f'SL: {sl_price}') # قرمز/صورتی نئونی
+
+    if tp_price and float(tp_price) > 0:
+        draw_neon_line(float(tp_price), '#00ff66', f'TP: {tp_price}') # سبز فسفری نئونی
+
+    # تنظیمات ظاهری چارت
+    ax.set_title(f"AUTOMATED JOURNAL CHART: {symbol} (400 HA Candles)", fontsize=11, color='#f8f8f2', pad=12, fontweight='bold')
+
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, labels, loc='upper left', facecolor='#161b22', edgecolor='#30363d', labelcolor='#f8f8f2', framealpha=0.85)
+
+    ax.grid(True, color='#21262d', linestyle='-', linewidth=0.7, alpha=0.6)
+
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none')
+    plt.close(fig)
+    buf.seek(0)
+    return buf

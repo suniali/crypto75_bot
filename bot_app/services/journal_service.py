@@ -1,13 +1,16 @@
 import re
 import os
+import logging
+from datetime import datetime, timezone
 from django.core.files import File
 from decimal import Decimal, InvalidOperation
 from typing import Dict, Any, Tuple
 from asgiref.sync import sync_to_async
-from django.utils import timezone
+from django.core.files.base import ContentFile
 
 from bot_app.models import TradeJournal, TelegramUser, MarketType
 
+logger = logging.getLogger(__name__)
 
 def dict_to_formatted_text(data: dict) -> str:
     """
@@ -174,3 +177,106 @@ def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: 
         return None, "❌ کاربر یافت نشد."
     except Exception as e:
         return None, f"❌ خطای سیستم: {str(e)}"
+
+@sync_to_async
+def sync_open_trade_to_db(chat_id: int, pos_data: dict):
+    """ثبت یا آپدیت پوزیشن باز در دیتابیس ژورنال"""
+    try:
+        user_obj, _ = TelegramUser.objects.get_or_create(chat_id=chat_id)
+
+        position_id = pos_data.get("ticket") or pos_data.get("position_id")
+        if not position_id:
+            return
+
+        open_timestamp = pos_data.get("time", 0)
+        if open_timestamp > 0:
+            entry_time = datetime.fromtimestamp(open_timestamp, tz=timezone.utc)
+        else:
+            entry_time = datetime.now(timezone.utc)
+
+        symbol = pos_data.get("symbol", "")
+        trade_type = str(pos_data.get("type", "BUY")).upper()
+
+        entry_price = pos_data.get("price_open", 0.0) or pos_data.get("entry_price", 0.0)
+        sl_price = pos_data.get("sl", 0.0)
+        tp_price = pos_data.get("tp", 0.0)
+        volume = pos_data.get("volume", 0.0)
+
+        TradeJournal.objects.get_or_create(
+            position_id=position_id,
+            defaults={
+                'user': user_obj,
+                'symbol': symbol,
+                'market_type': MarketType.FOREX,
+                'trade_type': trade_type,
+                'volume': volume,
+                'entry_price': entry_price,
+                'stop_loss': sl_price,
+                'take_profit': tp_price,
+                'entry_time': entry_time,
+                'is_active': True,
+            }
+        )
+    except Exception as e:
+        logger.error(f"❌ خطا در ثبت پوزیشن باز {pos_data.get('ticket')}: {e}", exc_info=True)
+
+@sync_to_async
+def get_sl_tp_from_db(position_id):
+    trade = TradeJournal.objects.filter(position_id=position_id).first()
+    if trade:
+        return trade.stop_loss, trade.take_profit
+    return None, None
+
+@sync_to_async
+def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
+    """ثبت نهایی معامله بسته‌شده، ذخیره سود خالص و چارت در ژورنال"""
+    try:
+        user_obj, _ = TelegramUser.objects.get_or_create(chat_id=chat_id)
+
+        position_id = deal.get("position_id") or deal.get("ticket") or deal.get("deal_id")
+        if not position_id:
+            return
+
+        # سود خالص از قبل در check_recent_closed_positions درست محاسبه شده است
+        net_profit = deal.get("profit", 0.0)
+        commission = deal.get("commission", 0.0)
+        swap = deal.get("swap", 0.0)
+
+        result = "WIN" if net_profit > 0 else "LOSS" if net_profit < 0 else "BREAKEVEN"
+
+        exit_timestamp = deal.get("time", 0)
+        if exit_timestamp > 0:
+            exit_time = datetime.fromtimestamp(exit_timestamp, tz=timezone.utc)
+        else:
+            exit_time = datetime.now(timezone.utc)
+
+        trade_obj = TradeJournal.objects.filter(position_id=position_id).first()
+
+        if not trade_obj:
+            trade_obj, created = TradeJournal.objects.get_or_create(
+                position_id=position_id,
+                user=user_obj,
+                symbol=deal.get("symbol", ""),
+                market_type=MarketType.FOREX,
+                volume=deal.get("volume", 0.0),
+                entry_price=deal.get("entry_price", 0.0),
+            )
+
+        # به روزرسانی فیلدهای مربوط به خروج
+        trade_obj.exit_price = deal.get("exit_price", 0.0)
+        trade_obj.exit_time = exit_time
+        trade_obj.profit = net_profit
+        trade_obj.commission = commission
+        trade_obj.swap = swap
+        trade_obj.result = result
+
+        if chart_buf:
+            chart_buf.seek(0)
+            filename = f"chart_{position_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            trade_obj.image.save(filename, ContentFile(chart_buf.read()), save=False)
+
+        trade_obj.save()
+        logger.info(f"✅ معامله {position_id} با موفقیت در ژورنال ثبت نهایی شد.")
+
+    except Exception as e:
+        logger.error(f"❌ خطا در ثبت نهایی معامله بسته‌شده {deal}: {e}", exc_info=True)
