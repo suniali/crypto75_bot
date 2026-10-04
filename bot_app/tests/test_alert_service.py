@@ -16,12 +16,12 @@ class TestAlertService:
 
     @pytest.fixture(autouse=True)
     async def setup_data(self):
-        """ایجاد داده‌های پایه برای تست‌ها"""
-        self.user1 = await TelegramUser.objects.acreate(
-            chat_id=123456789, username="testuser1"
+        """ایجاد داده‌های پایه برای تست‌ها به صورت امن"""
+        self.user1, _ = await TelegramUser.objects.aget_or_create(
+            chat_id=123456789, defaults={"username": "testuser1"}
         )
-        self.user2 = await TelegramUser.objects.acreate(
-            chat_id=987654321, username="testuser2"
+        self.user2, _ = await TelegramUser.objects.aget_or_create(
+            chat_id=987654321, defaults={"username": "testuser2"}
         )
 
     async def test_fetch_active_alerts(self):
