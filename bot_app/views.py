@@ -4,6 +4,8 @@ from datetime import timedelta
 import json
 from django.utils import timezone
 from django.shortcuts import render
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+
 from .models import TradeJournal
 
 
@@ -155,8 +157,21 @@ def journal_dashboard(request):
     symbols_list = list(symbol_pnl.keys())
     symbols_pnl_values = [float(round(symbol_pnl[s], 2)) for s in symbols_list]
 
+    # Pagination
+    paginator = Paginator(list(reversed(processed_trades)), 10)
+    page_number = request.GET.get('page', 1)
+
+    try:
+        trades = paginator.page(page_number)
+    except PageNotAnInteger:
+        # اگر شماره صفحه عدد نبود، صفحه اول را نشان بده
+        trades = paginator.page(1)
+    except EmptyPage:
+        # اگر شماره صفحه بیشتر از کل صفحات بود، صفحه آخر را نشان بده
+        trades = paginator.page(paginator.num_pages)
+
     context = {
-        'trades': list(reversed(processed_trades)),
+        'trades': trades,
         'current_period': period,
         'total_trades': total_trades,
         'win_rate': win_rate,
@@ -181,3 +196,4 @@ def journal_dashboard(request):
     }
 
     return render(request, 'dashboard.html', context)
+
