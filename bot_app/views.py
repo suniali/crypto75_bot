@@ -41,12 +41,12 @@ def journal_dashboard(request):
     symbol_pnl = defaultdict(Decimal)
     day_pnl = {i: Decimal('0.00') for i in range(7)}
 
-    planned_rr_list = []
-    realized_rr_list = []
+    chart_labels = ['شروع']
+    cumulative_pnl_data = [0.0]
+    drawdown_data = [0.0]
 
-    chart_labels = []
-    cumulative_pnl_data = []
-    drawdown_data = []
+    planned_rr_list = [0.0]
+    realized_rr_list = [0.0]
 
     running_total = Decimal('0.00')
     peak_pnl = Decimal('0.00')
