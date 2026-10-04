@@ -2,7 +2,6 @@
 import arabic_reshaper
 from bidi.algorithm import get_display
 
-
 def reshape_fa(text: str) -> str:
     if not text:
         return ""
