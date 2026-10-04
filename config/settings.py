@@ -162,7 +162,7 @@ LOGGING = {
         'bot_app': {
             'handlers': ['console', 'file_errors'],
             'level': 'INFO',
-            'propagate': True,
+            'propagate': False,
         },
         # اگر فایل‌های خدمات یا اسکریپت‌ها خارج از bot_app هستند، کل سورس پروژه را پوشش می‌دهد
         '': {
