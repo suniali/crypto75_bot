@@ -173,13 +173,23 @@ class TradeJournal(models.Model):
         ]
 
     @property
-    def net_profit(self) -> float:
-        """محاسبه سود/زیان خالص نهایی"""
-        return float(self.profit + self.commission + self.swap)
+    def net_profit(self) -> Decimal:
+        """محاسبه سود/زیان خالص نهایی با خروجی دقیق Decimal"""
+        p = self.profit or Decimal('0.00')
+
+        # اگر کمیسیون مثبت ذخیره شده، آن را منفی (منهای سود) می‌کنیم
+        c = self.commission or Decimal('0.00')
+        if c > 0:
+            c = -c
+
+        s = self.swap or Decimal('0.00')
+
+        # سود ناخالص + کمیسیون (منفی) + سوآپ
+        return round(p + c + s, 2)
 
     @property
     def planned_risk_reward(self) -> float:
-        """ریسک به ریوارد برنامه ریزی شده"""
+        """ریسک به ریوارد برنامه‌ریزی‌شده"""
         if self.stop_loss and self.take_profit and self.entry_price:
             risk = abs(self.entry_price - self.stop_loss)
             reward = abs(self.take_profit - self.entry_price)
@@ -189,10 +199,17 @@ class TradeJournal(models.Model):
 
     @property
     def realized_risk_reward(self) -> float:
-        """ریسک به ریوارد واقعی محقق شده براساس قیمت خروج"""
+        """ریسک به ریوارد واقعی محقق‌شده (فقط برای معاملات WIN)"""
+        if self.result != 'WIN':
+            return 0.0
+
         if self.stop_loss and self.exit_price and self.entry_price:
             risk = abs(self.entry_price - self.stop_loss)
-            realized_reward = self.exit_price - self.entry_price if self.trade_type == 'BUY' else self.entry_price - self.exit_price
+            realized_reward = (
+                self.exit_price - self.entry_price
+                if self.trade_type == 'BUY'
+                else self.entry_price - self.exit_price
+            )
             if risk > 0:
                 return round(float(realized_reward / risk), 2)
         return 0.0

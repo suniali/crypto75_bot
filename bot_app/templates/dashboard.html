@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>داشبورد ژورنال معاملاتی</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800&display=swap');
+        body {
+            font-family: 'Vazirmatn', sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+        }
+        .glass-card {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 1rem;
+        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b0f19; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+    </style>
+</head>
+<!-- ================= Modal 2027 Glassmorphism ================= -->
+<div id="tradeModal" class="fixed inset-0 z-50 hidden bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl">
+
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between p-5 border-b border-slate-800">
+            <div class="flex items-center gap-3">
+                <span id="modalSymbol" class="text-xl font-bold text-white">EURUSD</span>
+                <span id="modalType" class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase">BUY</span>
+                <span class="text-xs text-slate-400 font-mono bg-slate-800 px-2.5 py-1 rounded-lg">
+                    Ticket: #<span id="modalTicket">123456</span>
+                </span>
+            </div>
+            <button onclick="closeTradeModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="p-5 space-y-5 max-h-[80vh] overflow-y-auto">
+
+            <!-- Chart Image -->
+            <div id="modalImageContainer" class="hidden relative rounded-2xl overflow-hidden border border-white/10 bg-black/40 group">
+                <img id="modalImage" src="" alt="Trade Chart" class="w-full h-auto max-h-80 object-contain mx-auto">
+                <a id="modalImageZoom" href="" target="_blank" class="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md text-white text-xs px-3 py-1.5 rounded-xl flex items-center gap-2 hover:bg-black/80 transition">
+                    مشاهده تصویر کامل
+                </a>
+            </div>
+
+            <!-- Financial Details Grid (تفکیک مالی) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <!-- سود ناخالص -->
+                <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
+                    <span class="text-xs text-slate-400 block mb-1">سود ناخالص (Gross)</span>
+                    <span id="modalGrossProfit" class="text-base font-mono font-semibold text-slate-200">$0.00</span>
+                </div>
+
+                <!-- کمیسیون -->
+                <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
+                    <span class="text-xs text-slate-400 block mb-1">کمیسیون</span>
+                    <span id="modalCommission" class="text-base font-mono font-semibold text-amber-400">$0.00</span>
+                </div>
+
+                <!-- سواپ -->
+                <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
+                    <span class="text-xs text-slate-400 block mb-1">سواپ (Swap)</span>
+                    <span id="modalSwap" class="text-base font-mono font-semibold text-slate-300">$0.00</span>
+                </div>
+
+                <!-- سود خالص نهایی -->
+                <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-2xl">
+                    <span class="text-xs text-slate-400 block mb-1">سود خالص (Net)</span>
+                    <span id="modalNetProfit" class="text-lg font-mono font-bold">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Trade Execution Prices & R:R (قیمت‌های ورود/خروج/SL/TP) -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm font-mono">
+                <div class="bg-slate-800/20 p-3 rounded-xl border border-slate-800/60">
+                    <span class="text-xs text-slate-500 block">قیمت ورود</span>
+                    <span id="modalEntry" class="text-slate-200">-</span>
+                </div>
+                <div class="bg-slate-800/20 p-3 rounded-xl border border-slate-800/60">
+                    <span class="text-xs text-slate-500 block">قیمت خروج</span>
+                    <span id="modalExit" class="text-slate-200">-</span>
+                </div>
+                <div class="bg-slate-800/20 p-3 rounded-xl border border-slate-800/60">
+                    <span class="text-xs text-slate-500 block">حد ضرر (SL)</span>
+                    <span id="modalSL" class="text-rose-400">-</span>
+                </div>
+                <div class="bg-slate-800/20 p-3 rounded-xl border border-slate-800/60">
+                    <span class="text-xs text-slate-500 block">حد سود (TP)</span>
+                    <span id="modalTP" class="text-emerald-400">-</span>
+                </div>
+            </div>
+
+            <!-- Risk Reward & Time -->
+            <div class="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
+                <div class="flex gap-4">
+                    <span>R:R برنامه‌ریزی: <strong id="modalPlannedRR" class="text-slate-200 font-mono">-</strong></span>
+                    <span>R:R واقعی: <strong id="modalRealizedRR" class="text-slate-200 font-mono">-</strong></span>
+                </div>
+                <span id="modalTime" class="font-mono text-slate-500">2026-10-04 20:00</span>
+            </div>
+
+        </div>
+    </div>
+</div>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-7xl mx-auto space-y-8">
+
+        <!-- ۱. هدر داشبورد و فیلترهای زمانی -->
+        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div class="flex items-center gap-3">
+                <span class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                </span>
+                <div>
+                    <h1 class="text-2xl font-black text-white tracking-tight">داشبورد تحلیل ژورنال</h1>
+                    <p class="text-slate-400 text-xs mt-0.5">تحلیل عمیق عملکرد و الگوی معاملات</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 text-xs w-full lg:w-auto">
+                <a href="?period=daily" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'daily' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">روزانه</a>
+                <a href="?period=weekly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'weekly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">هفتگی</a>
+                <a href="?period=monthly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'monthly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">ماهانه</a>
+                <a href="?period=3months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '3months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۳ ماهه</a>
+                <a href="?period=6months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '6months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۶ ماهه</a>
+                <a href="?period=yearly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'yearly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">سالانه</a>
+                <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'all' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">کل</a>
+            </div>
+        </div>
+
+        <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
+
+            <!-- سود خالص -->
+            <div class="glass-card p-5 relative overflow-hidden">
+                <p class="text-xs font-medium text-gray-400">سود / زیان خالص نهایی</p>
+                <h3 class="text-2xl font-black mt-2 dir-ltr text-right {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-500{% endif %}">
+                    ${{ total_net_profit|floatformat:2 }}
+                </h3>
+                <div class="mt-3 flex justify-between text-[11px] text-gray-400 border-t border-gray-800 pt-2 dir-ltr">
+                    <span>کمیسیون: ${{ total_commission|floatformat:2 }}</span>
+                    <span>سوآپ: ${{ total_swap|floatformat:2 }}</span>
+                </div>
+            </div>
+
+            <!-- وین ریت -->
+            <div class="glass-card p-5">
+                <p class="text-xs font-medium text-gray-400">نرخ موفقیت (Win Rate)</p>
+                <div class="flex items-baseline gap-2 mt-2">
+                    <h3 class="text-2xl font-black text-white">%{{ win_rate }}</h3>
+                    <span class="text-xs text-emerald-400">({{ wins }} برد از {{ total_trades }})</span>
+                </div>
+                <!-- نوار پیشرفت -->
+                <div class="w-full bg-gray-800 h-2 rounded-full mt-4 overflow-hidden flex">
+                    <div class="bg-emerald-500 h-full" style="width: {{ win_rate }}%"></div>
+                    <div class="bg-rose-500 h-full" style="width: calc(100% - {{ win_rate }}%)"></div>
+                </div>
+            </div>
+
+            <!-- سودآوری نسبی / Profit Factor -->
+            <div class="glass-card p-5">
+                <p class="text-xs font-medium text-gray-400">فاکتور سودآوری (Profit Factor)</p>
+                <h3 class="text-2xl font-black text-indigo-400 mt-2">{{ profit_factor }}</h3>
+                <p class="text-xs text-gray-500 mt-3">ارزش سود حاصله نسبت به کل زیان</p>
+            </div>
+
+            <!-- حداکثر افت حساب -->
+            <div class="glass-card p-5">
+                <p class="text-xs font-medium text-gray-400">حداکثر افت حساب (Drawdown)</p>
+                <h3 class="text-2xl font-black text-rose-400 mt-2 dir-ltr text-right">${{ max_drawdown }}</h3>
+                <p class="text-xs text-gray-500 mt-3">بیشترین افت از نقطه اوج سود</p>
+            </div>
+
+            <!-- تعداد معاملات -->
+            <div class="glass-card p-5">
+                <p class="text-xs font-medium text-gray-400">کل پوزیشن‌های ثبت‌شده</p>
+                <h3 class="text-2xl font-black text-amber-400 mt-2">{{ total_trades }}</h3>
+                <div class="flex gap-2 mt-3 text-xs">
+                    <span class="text-emerald-400">برد: {{ wins }}</span> |
+                    <span class="text-rose-400">باخت: {{ losses }}</span> |
+                    <span class="text-gray-400">یربه‌یر: {{ be_count }}</span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- نمودار منحنی رشد حساب -->
+            <div class="glass-card p-6 lg:col-span-2">
+                <h2 class="text-lg font-bold text-white mb-4">📈 منحنی رشد حساب (Equity Curve)</h2>
+                <div class="h-72">
+                    <canvas id="pnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- نمودار دایره‌ای توزیع معاملات -->
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-bold text-white mb-4">🎯 توزیع نتایج معاملات</h2>
+                <div class="h-72 flex items-center justify-center">
+                    <canvas id="winLossChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ۴. بخش نمودارهای تحلیلی مکمل -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-bold text-white mb-4">📉 نمودار افت حساب (Drawdown)</h2>
+                <div class="h-60"><canvas id="ddChart"></canvas></div>
+            </div>
+
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-bold text-white mb-4">📅 عملکرد بر اساس روزهای هفته</h2>
+                <div class="h-60"><canvas id="dayPnlChart"></canvas></div>
+            </div>
+
+            <div class="glass-card p-6">
+                <h2 class="text-lg font-bold text-white mb-4">🔀 عملکرد بر اساس نماد (Symbol)</h2>
+                <div class="h-60"><canvas id="symbolPnlChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- ۵. مقایسه Risk to Reward -->
+        <div class="glass-card p-6">
+            <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
+            <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
+        </div>
+
+        <!-- ۶. جدول کامل ژورنال معاملات -->
+        <div class="glass-card p-6 overflow-hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">📋 ریز معاملات (Journal Entries)</h2>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-sm text-gray-300">
+                    <thead class="bg-gray-800/50 text-gray-400 uppercase text-xs border-b border-gray-800">
+                        <tr>
+                            <th class="p-3">نماد / پوزیشن</th>
+                            <th class="p-3">حجم</th>
+                            <th class="p-3">قیمت ورود / خروج</th>
+                            <th class="p-3">(سود ناخالص، کمیسیون، سوآپ)</th>
+                            <th class="p-3">SL / TP</th>
+                            <th class="p-3">R:R برنامه/واقعی</th>
+                            <th class="p-3">سود خالص ($)</th>
+                            <th class="p-3">نتیجه</th>
+                            <th class="p-3">زمان ورود</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        {% for trade in trades %}
+                        <tr class="trade-row cursor-pointer hover:bg-slate-800/50 transition"
+                            onclick="openTradeModal(this)"
+                            data-id="{{ trade.position_id|default:trade.id }}"
+                            data-symbol="{{ trade.symbol }}"
+                            data-type="{{ trade.trade_type }}"
+                            data-result="{{ trade.result }}"
+                            data-entry="{{ trade.fmt_entry|default:'-' }}"
+                            data-exit="{{ trade.fmt_exit|default:'-' }}"
+                            data-sl="{{ trade.fmt_sl|default:'-' }}"
+                            data-tp="{{ trade.fmt_tp|default:'-' }}"
+                            data-profit="${{ trade.profit|floatformat:2 }}"
+                            data-commission="${{ trade.fmt_comm|floatformat:2 }}"
+                            data-swap="${{ trade.swap|floatformat:2 }}"
+                            data-netprofit="${{ trade.net_profit|floatformat:2 }}"
+                            data-is-positive="{% if trade.net_profit >= 0 %}true{% else %}false{% endif %}"
+                            data-planned-rr="{{ trade.calc_planned_rr }}"
+                            data-realized-rr="{{ trade.calc_realized_rr }}"
+                            data-time="{{ trade.entry_time|date:'Y-m-d H:i' }}"
+                            data-image="{% if trade.image %}{{ trade.image.url }}{% endif %}">
+                            <!-- ستون نماد و آیدی پوزیشن -->
+                            <td class="p-3">
+                                <div class="flex flex-col">
+                                    <span class="font-bold text-slate-100">{{ trade.symbol }}</span>
+                                    <span class="text-xs text-slate-400 font-mono">
+                                        #{{ trade.position_id|default:trade.id }}
+                                    </span>
+                                </div>
+                            </td>
+
+                            <!-- حجم -->
+                            <td class="p-3 font-mono dir-ltr text-right">{{ trade.volume }}</td>
+
+                            <!-- قیمت‌ها -->
+                            <td class="p-3 font-mono dir-ltr text-right">
+                                <div>{{ trade.fmt_entry|default:"-" }}</div>
+                                <div class="text-xs text-gray-500">{{ trade.fmt_exit|default:"-" }}</div>
+                            </td>
+
+                            <!-- ستون جزییات مالی (سود ناخالص، کمیسیون، سوآپ) -->
+                            <td class="p-3 text-xs font-mono dir-ltr text-right">
+                                <div class="flex flex-col gap-0.5">
+                                    <!-- سود ناخالص -->
+                                    <div class="flex justify-between gap-2">
+                                        <span class="text-slate-500">Profit:</span>
+                                        <span class="{% if trade.profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                            ${{ trade.profit|floatformat:2 }}
+                                        </span>
+                                    </div>
+
+                                    <!-- کمیسیون -->
+                                    <div class="flex justify-between gap-2">
+                                        <span class="text-slate-500">Comm:</span>
+                                        <span class="text-amber-400/90">
+                                            ${{ trade.fmt_comm|floatformat:2 }}
+                                        </span>
+                                    </div>
+
+                                    <!-- سوآپ (اگر وجود داشت) -->
+                                    {% if trade.swap %}
+                                    <div class="flex justify-between gap-2 text-slate-400">
+                                        <span class="text-slate-500">Swap:</span>
+                                        <span>${{ trade.swap|floatformat:2 }}</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <!-- SL/TP -->
+                            <td class="p-3 text-xs font-mono dir-ltr text-right">
+                                <span class="text-rose-400">{{ trade.fmt_sl|default:"-" }}</span> /
+                                <span class="text-emerald-400">{{ trade.fmt_tp|default:"-" }}</span>
+                            </td>
+
+                            <!-- Risk/Reward -->
+                            <td class="p-3 font-mono dir-ltr text-right">
+                                <span class="text-gray-400">{{ trade.calc_planned_rr|default:"-" }}</span> /
+                                <span class="text-indigo-400 font-bold">
+                                    {% if trade.result == 'WIN' %}
+                                        {{ trade.calc_realized_rr }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </span>
+                            </td>
+
+                            <!-- سود خالص -->
+                            <td class="p-3 font-bold dir-ltr text-right {% if trade.net_profit >= 0 %}text-emerald-400{% else %}text-rose-500{% endif %}">
+                                ${{ trade.net_profit|floatformat:2 }}
+                            </td>
+
+                            <!-- نتیجه -->
+                            <td class="p-3">
+                                {% if trade.result == 'WIN' %}
+                                    <span class="px-2 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">WIN</span>
+                                {% elif trade.result == 'LOSS' %}
+                                    <span class="px-2 py-1 text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded">LOSS</span>
+                                {% elif trade.result == 'BE' %}
+                                    <span class="px-2 py-1 text-xs font-bold bg-gray-500/10 text-gray-400 border border-gray-500/30 rounded">BE</span>
+                                {% else %}
+                                    <span class="px-2 py-1 text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded">PENDING</span>
+                                {% endif %}
+                            </td>
+
+                            <!-- زمان -->
+                            <td class="p-3 text-xs text-gray-400 dir-ltr text-right">
+                                {{ trade.entry_time|default:trade.created_at|date:"Y-m-d H:i"|default:"-" }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center p-6 text-gray-500">هیچ معامله‌ای ثبت نشده است.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- اسکریپت رندر نمودارها -->
+    <script>
+        // تنظیم فونت سراسری برای تمامی نمودارها
+        Chart.defaults.font.family = 'Vazirmatn, sans-serif';
+
+        // دریافت متغیرها با مدیریت مقادیر پیش‌فرض
+        const pnlLabels = {{ chart_labels_json|default:"[]"|safe }};
+        const pnlData = {{ chart_pnl_json|default:"[]"|safe }};
+        const winLossData = {{ win_loss_json|default:"[]"|safe }};
+        const drawdownData = {{ drawdown_json|default:"[]"|safe }};
+        const daysNames = {{ days_names_json|default:"[]"|safe }};
+        const dayPnlData = {{ day_pnl_json|default:"[]"|safe }};
+        const symbolsData = {{ symbols_json|default:"[]"|safe }};
+        const symbolPnlData = {{ symbols_pnl_json|default:"[]"|safe }};
+        const plannedRrData = {{ planned_rr_json|default:"[]"|safe }};
+        const realizedRrData = {{ realized_rr_json|default:"[]"|safe }};
+
+        // ۱. نمودار رشد حساب (Equity Curve)
+        const ctxPnL = document.getElementById('pnlChart').getContext('2d');
+        const gradient = ctxPnL.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.4)');
+        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+
+        new Chart(ctxPnL, {
+            type: 'line',
+            data: {
+                labels: pnlLabels,
+                datasets: [{
+                    label: 'سود تراکمی ($)',
+                    data: pnlData,
+                    borderColor: '#10b981',
+                    borderWidth: 3,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.3,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // ۲. نمودار دایره‌ای برد/باخت
+        const ctxWinLoss = document.getElementById('winLossChart').getContext('2d');
+        new Chart(ctxWinLoss, {
+            type: 'doughnut',
+            data: {
+                labels: ['برد (Win)', 'باخت (Loss)', 'یربه‌یر (BE)'],
+                datasets: [{
+                    data: winLossData,
+                    backgroundColor: ['#10b981', '#f43f5e', '#6b7280'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#9ca3af' } }
+                },
+                cutout: '70%'
+            }
+        });
+
+        // ۳. نمودار افت حساب (Drawdown)
+        new Chart(document.getElementById('ddChart'), {
+            type: 'line',
+            data: {
+                labels: pnlLabels,
+                datasets: [{
+                    label: 'افت حساب ($)',
+                    data: drawdownData,
+                    borderColor: '#f43f5e',
+                    borderWidth: 1.5,
+                    fill: true,
+                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                    tension: 0.2,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // ۴. عملکرد بر اساس روزهای هفته
+        new Chart(document.getElementById('dayPnlChart'), {
+            type: 'bar',
+            data: {
+                labels: daysNames,
+                datasets: [{
+                    data: dayPnlData,
+                    backgroundColor: dayPnlData.map(v => v >= 0 ? '#10b981' : '#f43f5e'),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // ۵. عملکرد بر اساس نماد (با رنگ‌بندی داینامیک سبز/قرمز)
+        new Chart(document.getElementById('symbolPnlChart'), {
+            type: 'bar',
+            data: {
+                labels: symbolsData,
+                datasets: [{
+                    data: symbolPnlData,
+                    backgroundColor: symbolPnlData.map(v => v >= 0 ? '#10b981' : '#f43f5e'),
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // ۶. مقایسه R:R برنامه‌ریزی‌شده و واقعی
+        new Chart(document.getElementById('rrCompareChart'), {
+            type: 'bar',
+            data: {
+                labels: plannedRrData.map((_, i) => `#${i + 1}`),
+                datasets: [
+                    { label: 'برنامه‌ریزی', data: plannedRrData, backgroundColor: '#4b5563' },
+                    { label: 'واقعی', data: realizedRrData, backgroundColor: '#818cf8' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#9ca3af' } }
+                },
+                scales: {
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+
+        // تابع باز کردن مودال هوشمند 2027
+        function openTradeModal(row) {
+            // ۱. خواندن اطلاعات از data attributeها
+            const ticket = row.getAttribute('data-id');
+            const symbol = row.getAttribute('data-symbol');
+            const type = row.getAttribute('data-type');
+            const entry = row.getAttribute('data-entry');
+            const exit = row.getAttribute('data-exit');
+            const sl = row.getAttribute('data-sl');
+            const tp = row.getAttribute('data-tp');
+
+            const profit = row.getAttribute('data-profit');
+            const commission = row.getAttribute('data-commission');
+            const swap = row.getAttribute('data-swap');
+            const netProfit = row.getAttribute('data-netprofit');
+            const isPositive = row.getAttribute('data-is-positive') === 'true';
+
+            const plannedRR = row.getAttribute('data-planned-rr');
+            const realizedRR = row.getAttribute('data-realized-rr');
+            const time = row.getAttribute('data-time');
+            const imageUrl = row.getAttribute('data-image');
+
+            // ۲. ست کردن مقادیر هدر و آیدی
+            document.getElementById('modalTicket').textContent = ticket || '-';
+            document.getElementById('modalSymbol').textContent = symbol;
+
+            const typeElem = document.getElementById('modalType');
+            typeElem.textContent = type;
+            if (type === 'BUY') {
+                typeElem.className = 'px-2.5 py-1 rounded-lg text-xs font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+            } else {
+                typeElem.className = 'px-2.5 py-1 rounded-lg text-xs font-bold uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20';
+            }
+
+            // ۳. ست کردن جزییات مالی
+            document.getElementById('modalGrossProfit').textContent = profit;
+            document.getElementById('modalCommission').textContent = commission;
+            document.getElementById('modalSwap').textContent = swap;
+
+            const netProfitElem = document.getElementById('modalNetProfit');
+            netProfitElem.textContent = netProfit;
+            netProfitElem.className = `text-lg font-mono font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-500'}`;
+
+            // ۴. قیمت‌ها و R:R
+            document.getElementById('modalEntry').textContent = entry;
+            document.getElementById('modalExit').textContent = exit;
+            document.getElementById('modalSL').textContent = sl;
+            document.getElementById('modalTP').textContent = tp;
+            document.getElementById('modalPlannedRR').textContent = plannedRR;
+            document.getElementById('modalRealizedRR').textContent = realizedRR;
+            document.getElementById('modalTime').textContent = time;
+
+            // ۵. مدیریت تصویر
+            const imgContainer = document.getElementById('modalImageContainer');
+            const imgElem = document.getElementById('modalImage');
+            const imgZoom = document.getElementById('modalImageZoom');
+
+            if (imageUrl && imageUrl.trim() !== '' && imageUrl !== 'None') {
+                imgElem.src = imageUrl;
+                imgZoom.href = imageUrl;
+                imgContainer.classList.remove('hidden');
+            } else {
+                imgContainer.classList.add('hidden');
+            }
+
+            // نمایش مودال
+            document.getElementById('tradeModal').classList.remove('hidden');
+        }
+
+        function closeTradeModal() {
+            document.getElementById('tradeModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
