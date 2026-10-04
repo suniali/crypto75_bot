@@ -8,6 +8,7 @@ import colorama
 from pathlib import Path
 from PIL import Image
 from decouple import config
+from decimal import Decimal, InvalidOperation
 
 colorama.init(autoreset=True)
 
@@ -2183,7 +2184,8 @@ async def start_manual_edit_handler(update: Update, context: ContextTypes.DEFAUL
 # ==========================================
 async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """گام ۳-ج: دریافت متن اصلاح‌شده کاربر، پارس مجدد و نمایش پیش‌نمایش تایید"""
-    edited_text = update.message.text.strip()
+    edited_text = update.message.text.strip() if update.message and update.message.text else ""
+
     if not edited_text:
         await update.message.reply_text("⚠️ متن ارسالی خالی است. لطفاً متن اصلاح‌شده را ارسال کنید.")
         return EDITING_JOURNAL_DATA
@@ -2191,22 +2193,32 @@ async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT
     # پارس مجدد متن اصلاح‌شده
     parsed_data = parse_trade_text(edited_text)
 
-    if not parsed_data.get('symbol') or not parsed_data.get('entry_price'):
+    if not parsed_data or not parsed_data.get('symbol') or not parsed_data.get('entry_price'):
         await update.message.reply_text(
             "⚠️ **فرمت متنی تشخیص داده نشد!**\n"
-            "حداقل باید `SYMBOL` و `ENTRY` وارد شده باشند.\n"
-            "لطفاً مجدداً متن اصلاح‌شده را بفرستید."
+            "حداقل باید `SYMBOL` و `ENTRY` وارد شده باشند.\n\n"
+            "مثال:\n"
+            "`BTCUSDT BUY Entry: 64200 Exit: 65000 Profit: 150`\n\n"
+            "لطفاً مجدداً متن اصلاح‌شده را بفرستید.",
+            parse_mode="Markdown"
         )
         return EDITING_JOURNAL_DATA
 
-    # به‌روزرسانی داده‌های پارس‌شده در context
+    # به‌روزرسانی داده‌های پارس‌شده در context (بدون دستکاری temp_image_path)
     context.user_data['extracted_journal_data'] = parsed_data
 
-    # محاسبه پیش‌نمایش سود خالص
-    p = float(parsed_data.get('profit', 0))
-    c = float(parsed_data.get('commission', 0))
-    s = float(parsed_data.get('swap', 0))
-    net_pnl = p + c + s
+    # محاسبه ایمن پیش‌نمایش سود خالص با Decimal (برای جلوگیری از خطای float)
+    try:
+        p = Decimal(str(parsed_data.get('profit', '0') or '0'))
+        c = Decimal(str(parsed_data.get('commission', '0') or '0'))
+        s = Decimal(str(parsed_data.get('swap', '0') or '0'))
+        net_pnl = p + c + s
+    except (InvalidOperation, TypeError, ValueError):
+        p, c, s, net_pnl = Decimal('0'), Decimal('0'), Decimal('0'), Decimal('0')
+
+    # بررسی اینکه آیا عکسی همراه این نشست بوده یا خیر
+    has_image = bool(context.user_data.get('temp_image_path'))
+    image_status = "🖼️ **تصویر چارت:** ضمیمه شده است" if has_image else "📝 **نوع ثبت:** ثبت متنی/دستی"
 
     msg = (
         f"✍️ **اطلاعات ویرایش‌شده توسط شما:**\n\n"
@@ -2214,8 +2226,9 @@ async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT
         f"📦 **حجم:** `{parsed_data.get('volume', '0.01')}` لات/واحد\n"
         f"🏁 **ورود:** `{parsed_data.get('entry_price')}` | **خروج:** `{parsed_data.get('exit_price', '-')}`\n"
         f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
-        f"💵 **سود خام:** `${p:.2f}` | 💸 **کمیسیون:** `${c:.2f}` | 🔄 **سواپ:** `${s:.2f}`\n"
-        f"📊 **سود خالص:** `${net_pnl:.2f}`\n\n"
+        f"💵 **سود خام:** `${p:,.2f}` | 💸 **کمیسیون:** `${c:,.2f}` | 🔄 **سواپ:** `${s:,.2f}`\n"
+        f"📊 **سود خالص:** `${net_pnl:,.2f}`\n"
+        f"{image_status}\n\n"
         f"آیا اطلاعات جدید مورد تأیید است؟"
     )
 
@@ -2245,39 +2258,40 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
         await query.edit_message_text("❌ اطلاعات معامله یافت نشد یا منقضی شده است.")
         return ConversationHandler.END
 
-    # ۱. فراخوانی تابع سرویس دیتابیس
-    trade_obj, result_msg = await create_trade_from_dict(chat_id, trade_data,image_path)
+    try:
+        # ۱. فراخوانی تابع سرویس دیتابیس
+        trade_obj, result_msg = await create_trade_from_dict(chat_id, trade_data,image_path)
 
-    if trade_obj:
-        # تضمین پاکسازی فایل موقت تحت هر شرایطی
-        if os.path.exists(image_path):
+        if trade_obj:
+            await query.edit_message_text("✅ *داده‌ها با موفقیت در دیتابیس ذخیره شدند.*", parse_mode="Markdown")
+
+            final_msg = (
+                f"🎉 **معامله جدید در ژورنال ثبت شد:**\n\n"
+                f"🆔 **شناسه معامله:** `#{trade_obj.id}`\n"
+                f"📌 **نماد:** `{trade_obj.symbol}` ({trade_obj.trade_type})\n"
+                f"📊 **سود/زیان خالص:** `${trade_obj.net_profit:,.2f}`\n"
+                f"🏷️ **وضعیت:** `{trade_obj.result}`\n\n"
+                f"📌 {result_msg}"
+            )
+
+            await query.message.reply_text(final_msg, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
+            context.user_data.pop('extracted_journal_data', None)
+            return ConversationHandler.END
+        else:
+            # در صورت بروز خطای اعتبارسنجی/دیتابیس
+            await query.edit_message_text(
+                f"❌ **خطا در ثبت معامله:**\n\n{result_msg}\n\nلطفاً مجدداً تلاش کنید.",
+                parse_mode="Markdown"
+            )
+            return CONFIRM_JOURNAL_DATA
+
+    finally:
+        # تضمین پاک‌سازی فایل موقت تحت هر شرایطی
+        if image_path and os.path.exists(image_path):
             try:
                 os.remove(image_path)
             except Exception as clean_err:
-                logger.warning("Failed to remove temp image file: %s", clean_err)
-
-        await query.edit_message_text("✅ *داده‌ها با موفقیت در دیتابیس ذخیره شدند.*", parse_mode="Markdown")
-
-        final_msg = (
-            f"🎉 **معامله جدید در ژورنال ثبت شد:**\n\n"
-            f"🆔 **شناسه معامله:** `#{trade_obj.id}`\n"
-            f"📌 **نماد:** `{trade_obj.symbol}` ({trade_obj.trade_type})\n"
-            f"📊 **سود/زیان خالص:** `${trade_obj.net_profit:,.2f}`\n"
-            f"🏷️ **وضعیت:** `{trade_obj.result}`\n\n"
-            f"📌 {result_msg}"
-        )
-
-        await query.message.reply_text(final_msg, parse_mode="Markdown", reply_markup=MAIN_KEYBOARD)
-        context.user_data.pop('extracted_journal_data', None)
-        return ConversationHandler.END
-    else:
-        # در صورت بروز خطای اعتبارسنجی/دیتابیس
-        await query.edit_message_text(
-            f"❌ **خطا در ثبت معامله:**\n\n{result_msg}\n\nلطفاً مجدداً تلاش کنید.",
-            parse_mode="Markdown"
-        )
-        return CONFIRM_JOURNAL_DATA
-
+                logger.warning(f"Failed to remove temp image file {image_path}: {clean_err}")
 
 # ==========================================
 # 4. لغو عملیات
@@ -2337,27 +2351,38 @@ async def start_manual_trade_wizard(update: Update, context: ContextTypes.DEFAUL
 
 async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش تمامی جزییات مالی استخراج‌شده به کاربر قبل از ثبت نهایی"""
-    user_text = update.message.text.strip()
+    user_text = update.message.text.strip() if update.message and update.message.text else ""
     if not user_text:
-        await update.message.reply_text("⚠️ متن ارسالی خالی است.")
+        await update.message.reply_text("⚠️ متن ارسالی خالی است. لطفاً جزئیات معامله را ارسال کنید.")
         return WAITING_FOR_MANUAL_TRADE_INPUT
 
     parsed_data = parse_trade_text(user_text)
 
-    if not parsed_data.get('symbol') or not parsed_data.get('entry_price'):
+    if not parsed_data or not parsed_data.get('symbol') or not parsed_data.get('entry_price'):
         await update.message.reply_text(
-            "⚠️ **اطلاعات ناقص است!**\n"
-            "حداقل باید `SYMBOL` و `ENTRY` مشخص باشند."
+            "⚠️ **اطلاعات ناقص یا نامعتبر است!**\n"
+            "حداقل باید `SYMBOL` و `ENTRY` مشخص باشند.\n\n"
+            "💡 **نمونه فرمت ورودی صحیح:**\n"
+            "`BTCUSDT BUY Entry: 64200 Exit: 65000 Profit: 150 SL: 63500 TP: 66000`",
+            parse_mode="Markdown"
         )
         return WAITING_FOR_MANUAL_TRADE_INPUT
 
+    # ذخیره داده‌های استخراج‌شده در context
     context.user_data['extracted_journal_data'] = parsed_data
 
-    # محاسبه پیش‌نمایش سود خالص
-    p = float(parsed_data.get('profit', 0))
-    c = float(parsed_data.get('commission', 0))
-    s = float(parsed_data.get('swap', 0))
-    net_pnl = p + c + s
+    # محاسبه ایمن پیش‌نمایش سود خالص با Decimal
+    try:
+        p = Decimal(str(parsed_data.get('profit', '0') or '0'))
+        c = Decimal(str(parsed_data.get('commission', '0') or '0'))
+        s = Decimal(str(parsed_data.get('swap', '0') or '0'))
+        net_pnl = p + c + s
+    except (InvalidOperation, TypeError, ValueError):
+        p, c, s, net_pnl = Decimal('0'), Decimal('0'), Decimal('0'), Decimal('0')
+
+    # بررسی وضعیت وجود تصویر در نشست کاربر
+    has_image = bool(context.user_data.get('temp_image_path'))
+    image_status = "🖼️ **تصویر چارت:** ضمیمه شده است" if has_image else "📝 **نوع ثبت:** ثبت متنی/دستی"
 
     msg = (
         f"🔍 **پیش‌نمایش معامله استخراج‌شده:**\n\n"
@@ -2366,12 +2391,13 @@ async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAU
         f"🏁 **قیمت ورود:** `{parsed_data.get('entry_price')}`\n"
         f"🏁 **قیمت خروج:** `{parsed_data.get('exit_price', 'هنوز باز/تعیین نشده')}`\n"
         f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
-        f"💵 **سود خام:** `${p:.2f}`\n"
-        f"💸 **کمیسیون:** `${c:.2f}`\n"
-        f"🔄 **سواپ:** `${s:.2f}`\n"
-        f"📊 **سود خالص (Net PnL):** `${net_pnl:.2f}`\n\n"
+        f"💵 **سود خام:** `${p:,.2f}`\n"
+        f"💸 **کمیسیون:** `${c:,.2f}`\n"
+        f"🔄 **سواپ:** `${s:,.2f}`\n"
+        f"📊 **سود خالص (Net PnL):** `${net_pnl:,.2f}`\n\n"
         f"🏷️ **وضعیت:** `{parsed_data.get('result', 'PENDING')}`\n"
-        f"📝 **توضیحات:** `{parsed_data.get('notes', '-')}`\n\n"
+        f"📝 **توضیحات:** `{parsed_data.get('notes', '-')}`\n"
+        f"{image_status}\n\n"
         f"آیا اطلاعات فوق مورد تأیید است؟"
     )
 
