@@ -279,6 +279,7 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
 
         # سود خالص از قبل در check_recent_closed_positions درست محاسبه شده است
         net_profit = deal.get("profit", 0.0)
+        gross_profit=deal.get("gross_profit",0.0)
         commission = deal.get("commission", 0.0)
         swap = deal.get("swap", 0.0)
 
@@ -305,7 +306,7 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
         # به روزرسانی فیلدهای مربوط به خروج
         trade_obj.exit_price = deal.get("exit_price", 0.0)
         trade_obj.exit_time = exit_time
-        trade_obj.profit = net_profit
+        trade_obj.profit = gross_profit
         trade_obj.commission = commission
         trade_obj.swap = swap
         trade_obj.result = result
