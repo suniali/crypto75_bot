@@ -1,7 +1,7 @@
 import re
 import os
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 from django.utils import timezone as t
 from django.core.files import File
 from decimal import Decimal, InvalidOperation
@@ -60,6 +60,43 @@ def dict_to_formatted_text(data: dict) -> str:
 # ==========================================
 # 1. پارسر متنی اصلاح‌شده و مقاوم
 # ==========================================
+def format_user_time(time_str: str):
+    if not time_str:
+        return None
+
+    now = t.now()  # خود این Aware است
+    time_str = time_str.strip()
+
+    # ۱. پردازش کلمات میانبر
+    if time_str.lower() in ['امروز', 'today']:
+        return now
+
+    if time_str.lower() in ['دیروز', 'yesterday']:
+        return now - timedelta(days=1)
+
+    # ۲. اگر فقط ساعت زده بود (مثل 12:48)
+    if re.match(r'^\d{1,2}:\d{2}(?::\d{2})?$', time_str):
+        today_date = now.strftime('%Y-%m-%d')
+        time_str = f"{today_date} {time_str}"
+
+    # ۳. تبدیل رشته به شیء datetime و اضافه کردن Timezone برای جانگو
+    formats = [
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M",
+        "%Y/%m/%d %H:%M:%S",
+    ]
+
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(time_str, fmt)
+            # 💥 کلید حل RuntimeWarning اینجاست:
+            return t.make_aware(dt)
+        except ValueError:
+            continue
+
+    return None
+
 def parse_trade_text(text: str) -> Dict[str, Any]:
     data = {}
 
@@ -77,16 +114,22 @@ def parse_trade_text(text: str) -> Dict[str, Any]:
         'profit': rf'(?:PROFIT|PNL|سود|زیان)[\s:=]+({num_pattern})',
         'commission': rf'(?:COMMISSION|COMM|کمیسیون)[\s:=]+({num_pattern})',
         'swap': rf'(?:SWAP|سواپ)[\s:=]+({num_pattern})',
-        'result': r'(?:RESULT|نتیجه)[\s:=]+(WIN|LOSS|BE|PENDING|وین|لوس|برد|باخت|یربه‌یر|بسته‌شد)',
-        'entry_time': r'(?:ENTRY_TIME|زمان\s*ورود)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|امروز|دیروز)',
-        'exit_time': r'(?:EXIT_TIME|زمان\s*خروج)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|امروز|دیروز)',
-        'notes': r'(?:NOTE|NOTES|توضیحات|استراتژی)[\s:=]+(.+)',
+        # پشتیبانی از نیم‌فاصله (\u200c) و فاصله معمولی (\s*) در یر‌به‌یر و سایر کلمات
+        'result': r'(?:RESULT|نتیجه)[\s:=]+(WIN|LOSS|BE|PENDING|وین|لوس|برد|باخت|یر[\s\u200c]*به[\s\u200c]*یر|بسته\s*شد)',
+        'entry_time': r'(?:ENTRY_TIME|زمان\s*ورود)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|امروز|دیروز)',
+        'exit_time': r'(?:EXIT_TIME|زمان\s*خروج)[\s:=]+(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?|\d{1,2}:\d{2}|\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|امروز|دیروز)',
+
+        'notes': r'(?:NOTE|NOTES|توضیحات|استراتژی)[\s:=]+([^\n]+)',
     }
 
     for key, pattern in patterns.items():
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             val = match.group(1).strip()
+
+            # استانداردسازی زمان‌های ورودی
+            if key in ['entry_time', 'exit_time']:
+                val = format_user_time(val)
 
             # تبدیل‌های خاص و استانداردسازی خروجی
             if key == 'trade_type':
@@ -109,23 +152,6 @@ def parse_trade_text(text: str) -> Dict[str, Any]:
 # ==========================================
 # 2. سرویس ذخیره در دیتابیس (مستقل از تلگرام)
 # ==========================================
-def _parse_datetime(dt_value: Any) -> datetime | None:
-    """تبدیل رشته یا تایم‌استمپ به datetime معتبر با منطقه زمانی UTC"""
-    if not dt_value:
-        return None
-    if isinstance(dt_value, datetime):
-        return dt_value
-    if isinstance(dt_value, (int, float)):
-        return datetime.fromtimestamp(dt_value, tz=timezone.utc)
-    if isinstance(dt_value, str):
-        try:
-            dt = datetime.fromisoformat(dt_value)
-            if timezone.is_naive(dt):
-                return timezone.make_aware(dt, timezone.utc)
-            return dt
-        except ValueError:
-            return None
-    return None
 
 @sync_to_async
 def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: str = None) -> Tuple[TradeJournal, str]:
@@ -174,8 +200,8 @@ def create_trade_from_dict(user_id: int, trade_data: Dict[str, Any],image_path: 
 
         # مدیریت زمان‌بندی ورود و خروج
         now = t.now()
-        entry_time = _parse_datetime(trade_data.get('entry_time')) or now
-        exit_time = _parse_datetime(trade_data.get('exit_time')) or (now if exit_price else None)
+        entry_time = trade_data.get('entry_time') or now
+        exit_time = trade_data.get('exit_time') or (now if exit_price else None)
 
         # تشخیص نوع مارکت
         market_type = MarketType.FOREX if any(

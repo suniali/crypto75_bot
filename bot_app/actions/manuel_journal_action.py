@@ -31,7 +31,10 @@ async def start_manual_trade_wizard(update: Update, context: ContextTypes.DEFAUL
         "TP: 1.0920\n"
         "PROFIT: 60.00\n"
         "COMMISSION: -2.50\n"
-        "SWAP: -0.80\n"
+        "SWAP: -0.0\n"
+        "RESULT: WIN/LOSS/PENDING\n"
+        "ENTRY_TIME: 2026-10-04 14:30\n"
+        "EXIT_TIME: 2026-10-04 18:00\n"
         "NOTE: شکست خط ترند ۴ ساعته\n"
         "```"
     )
