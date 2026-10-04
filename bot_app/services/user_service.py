@@ -3,7 +3,7 @@ from asgiref.sync import sync_to_async
 
 from bot_app.models import TelegramUser
 
-logger = logging.getLogger("alert_service")
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # TelegramUser Services

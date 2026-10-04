@@ -3,7 +3,7 @@ from asgiref.sync import sync_to_async
 from django.db import IntegrityError
 from bot_app.models import TelegramUser,UserAlert,MarketType
 
-logger = logging.getLogger("alert_service")
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # UserAlert Services (استفاده‌شده در price_checker.py و Handlers)

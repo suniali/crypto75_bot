@@ -1,7 +1,6 @@
 import io
 import asyncio
 import logging
-from logging.handlers import RotatingFileHandler
 import httpx
 
 from bot_app.models import UserAlert
@@ -10,32 +9,7 @@ from bot_app.services.mt5_service import get_forex_price
 from bot_app.services.chart_service import create_heikin_ashi_chart
 from bot_app.services.api_service import get_crypto_price, fetch_recent_klines
 
-# ------------------------------------------------------------------
-# Logging Configuration
-# ------------------------------------------------------------------
-logger = logging.getLogger("price_checker")
-
-if not logger.handlers:
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    # استفاده از RotatingFileHandler برای جلوگیری از حجیم شدن فایل Log
-    file_handler = RotatingFileHandler(
-        "price_alerts.log",
-        maxBytes=5 * 1024 * 1024,  # ۵ مگابایت
-        backupCount=3,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Logic & Processing Worker

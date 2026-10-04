@@ -6,32 +6,7 @@ import pandas as pd
 
 from bot_app.services.mt5_service import get_rates_data
 
-# ------------------------------------------------------------------
-# Logging Configuration (Rotating File Handler)
-# ------------------------------------------------------------------
-logger = logging.getLogger("api_service")
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
-if not logger.handlers:
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-
-    # چرخش فایل لاگ پس از رسیدن به ۵ مگابایت
-    file_handler = RotatingFileHandler(
-        "api_service.log",
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # API Services & Fetching Logic
