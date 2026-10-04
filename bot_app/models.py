@@ -125,6 +125,7 @@ class TradeJournal(models.Model):
     ]
 
     user = models.ForeignKey(TelegramUser, on_delete=models.CASCADE, related_name='trades', verbose_name="کاربر")
+    position_id = models.BigIntegerField(null=True, blank=True, unique=True,verbose_name="شناسه پوزیشن")
     symbol = models.CharField(max_length=20, verbose_name="نماد معاملاتی")
     market_type = models.CharField(max_length=10, choices=MarketType.choices, default=MarketType.CRYPTO,
                                    verbose_name="نوع مارکت")

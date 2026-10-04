@@ -3,12 +3,10 @@ import logging
 import os
 import sys
 import httpx
-from pathlib import Path
-from datetime import datetime
-
-from PIL import Image
 import django
 import colorama
+from pathlib import Path
+from PIL import Image
 from decouple import config
 
 colorama.init(autoreset=True)
@@ -87,7 +85,6 @@ from bot_app.services.mt5_service import (
     update_position_sltp,
     get_market_watch_symbols,
     get_trades_history,
-    check_recent_closed_positions,
 )
 from bot_app.services.report_service import generate_pdf_report
 from bot_app.services.alert_service import (
@@ -104,17 +101,15 @@ from bot_app.services.watchlist_service import (
 from bot_app.price_checker import process_alert
 from bot_app.services.chart_service import (
     create_pending_alert_chart,
-    generate_pro_daily_dashboard,
-    calculate_today_stats
 )
 from bot_app.services.api_service import fetch_recent_klines
 
 from bot_app.services.journal_service import (
     parse_trade_text,
     create_trade_from_dict,
-    dict_to_formatted_text
+    dict_to_formatted_text,
 )
-
+from bot_app.loops.sl_tp_monitor_loop import sl_tp_monitor_loop
 from bot_app.models import MarketType
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
@@ -2642,122 +2637,6 @@ async def worker_loop(symbol: str, timeframe: str, market_type: str, chat_id: in
     except asyncio.CancelledError:
         logger.info("🛑 [STOPPED] RSI Monitor task cancelled for %s (%s)", symbol, timeframe)
 
-
-async def sl_tp_monitor_loop(chat_id: int, bot):
-    logger.info("🚀 [STARTED] Global SL/TP Monitor Task")
-
-    # ۱. محاسبه تعداد ساعات سپری‌شده از 00:00 بامداد امروز
-    now = datetime.now()
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    hours_today = max(1, int((now - start_of_today).total_seconds() / 3600) + 1)
-
-    # دریافت اولیه معاملات امروز جهت نادیده گرفتن موارد قبلی
-    initial_deals = await asyncio.to_thread(check_recent_closed_positions, hours_back=hours_today)
-    notified_deals = {deal["deal_id"] for deal in initial_deals} if initial_deals else set()
-    logger.info(f"🔰 SL/TP Monitor ready. Ignored {len(notified_deals)} past deals from today.")
-
-    try:
-        while True:
-            try:
-                now = datetime.now()
-                start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                hours_today = max(1, int((now - start_of_today).total_seconds() / 3600) + 1)
-
-                closed_deals = await asyncio.to_thread(check_recent_closed_positions, hours_today)
-
-                if closed_deals:
-                    new_deals_notified_count = 0
-
-                    # ۲. حلقه ارسال پیام برای معاملات جدید
-                    for deal in closed_deals:
-                        deal_id = deal["deal_id"]
-
-                        if deal_id not in notified_deals:
-                            net_profit = deal.get("profit", 0.0) or 0.0
-                            gross_profit = deal.get("gross_profit", net_profit) or 0.0
-                            commission = deal.get("commission", 0.0) or 0.0
-                            swap = deal.get("swap", 0.0) or 0.0
-
-                            profit_icon = "🟢" if net_profit >= 0 else "🔴"
-
-                            # ساخت پیام اختصاصی معامله با تفکیک هزینه‌ها
-                            alert_msg = (
-                                f"🔔 <b>هشدار بسته‌شدن پوزیشن!</b>\n\n"
-                                f"🎫 <b>تیکت:</b> <code>{deal['position_id']}</code>\n"
-                                f"📌 <b>نماد:</b> <b>{deal['symbol']}</b>\n"
-                                f"📌 <b>علت خروج:</b> {deal['exit_type']}\n"
-                                f"📊 <b>حجم:</b> <code>{deal['volume']}</code> لات\n"
-                                f"🏁 <b>قیمت خروج:</b> <code>{deal['exit_price']}</code>\n"
-                                f"───────────────────\n"
-                                f"💵 <b>سود ناخالص:</b> <code>${gross_profit:,.2f}</code>\n"
-                                f"💸 <b>کمیسیون (ورود+خروج):</b> <code>${commission:,.2f}</code>\n"
-                                f"🌙 <b>سوآپ:</b> <code>${swap:,.2f}</code>\n"
-                                f"───────────────────\n"
-                                f"{profit_icon} <b>سود/زیان خالص معامله:</b> <b><code>${net_profit:,.2f}</code></b>"
-                            )
-
-                            # ارسال پیام هشدار خروج معامله
-                            await bot.send_message(
-                                chat_id=chat_id,
-                                text=alert_msg,
-                                parse_mode="HTML"
-                            )
-                            logger.info(f"✅ Alert sent for NEW Deal {deal_id}")
-
-                            notified_deals.add(deal_id)
-                            new_deals_notified_count += 1
-
-                    # ۳. ارسال داشبورد عملکرد روزانه در صورت وجود معامله جدید
-                    if new_deals_notified_count > 0:
-                        stats = await asyncio.to_thread(calculate_today_stats, closed_deals)
-
-                        if stats:
-                            total_trades, wins, losses, win_rate, net_profit, avg_win, avg_loss, profits_history = stats
-                            net_icon = "🚀" if net_profit >= 0 else "🔻"
-
-                            # محاسبه مجموع کمیسیون و سوآپ کل امروز جهت درج در داشبورد
-                            total_commission = sum(d.get("commission", 0.0) for d in closed_deals)
-                            total_swap = sum(d.get("swap", 0.0) for d in closed_deals)
-                            total_gross = sum(d.get("gross_profit", 0.0) for d in closed_deals)
-
-                            summary_msg = (
-                                f"📊 <b>گزارش عملکرد کل امروز ({datetime.now().strftime('%Y-%m-%d')})</b>\n\n"
-                                f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
-                                f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
-                                f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
-                                f"📈 <b>میانگین سود:</b> <code>${avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>${avg_loss:,.2f}</code>\n"
-                                f"───────────────────\n"
-                                f"💵 <b>مجموع سود ناخالص:</b> <code>${total_gross:,.2f}</code>\n"
-                                f"💸 <b>مجموع کمیسیون‌ها:</b> <code>${total_commission:,.2f}</code>\n"
-                                f"🌙 <b>مجموع سوآپ:</b> <code>${total_swap:,.2f}</code>\n"
-                                f"───────────────────\n"
-                                f"{net_icon} <b>سود/زیان خالص کل امروز:</b> <b><code>${net_profit:,.2f}</code></b>"
-                            )
-
-                            chart_buf = await asyncio.to_thread(
-                                generate_pro_daily_dashboard, wins, losses, net_profit, win_rate, avg_win, avg_loss,
-                                profits_history
-                            )
-
-                            if chart_buf:
-                                await bot.send_photo(
-                                    chat_id=chat_id,
-                                    photo=chart_buf,
-                                    caption=summary_msg,
-                                    parse_mode="HTML"
-                                )
-                                logger.info("📊 Daily Dashboard sent as a separate message.")
-
-                                if hasattr(chart_buf, 'close'):
-                                    chart_buf.close()
-
-            except Exception as e:
-                logger.error("Error in SL/TP monitor loop: %s", e, exc_info=True)
-
-            await asyncio.sleep(5)
-
-    except asyncio.CancelledError:
-        logger.info("🛑 [STOPPED] Global SL/TP Monitor Task")
 
 # ------------------------------------------------------------------
 # 14. Application Startup & Main Execution

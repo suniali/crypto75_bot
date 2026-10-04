@@ -37,7 +37,7 @@ def make_inactive(modeladmin, request, queryset):
 class TradeJournalAdmin(admin.ModelAdmin):
     # ستون‌های نمایشی در جدول ادمین
     list_display = [
-        'id', 'user', 'symbol', 'trade_type', 'volume',
+        'id', 'user', 'symbol','position_id', 'trade_type', 'volume',
         'entry_price', 'exit_price', 'net_profit_display',
         'result', 'is_active', 'entry_time'
     ]
@@ -46,7 +46,7 @@ class TradeJournalAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'result', 'trade_type', 'symbol', 'created_at']
 
     # قابلیت جستجو
-    search_fields = ['symbol', 'user__username', 'user__telegram_id', 'notes']
+    search_fields = ['symbol','position_id', 'user__username', 'user__telegram_id', 'notes']
 
     # ویرایش سریع مستقیم از روی جدول (بدون باز کردن صفحه)
     list_editable = ['is_active', 'result']

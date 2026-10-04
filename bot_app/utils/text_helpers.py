@@ -22,3 +22,12 @@ def fix_telegram_rtl(text: str) -> str:
     if not text:
         return ""
     return "\u200f" + str(text).replace("\n", "\n\u200f")
+
+def fmt_price(val):
+    if val is None or val == '' or val == 0:
+        return '-'
+    try:
+        # تبدیل به عدد و گرد کردن تا ۵ رقم اعشار + حذف صوفرهای اضافه سمت راست
+        return f"{float(val):.5f}".rstrip('0').rstrip('.')
+    except (ValueError, TypeError):
+        return str(val)
