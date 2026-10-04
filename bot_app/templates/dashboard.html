@@ -381,7 +381,53 @@
                 </table>
             </div>
         </div>
+        <!-- بخش کنترل صفحه‌بندی (Pagination Controls) -->
+        {% if trades.has_other_pages %}
+            <div class="flex items-center justify-between pt-4 mt-4 border-t border-gray-800 text-xs font-mono">
+                <div class="text-gray-400">
+                    نمایش {{ trades.start_index }} تا {{ trades.end_index }} از {{ trades.paginator.count }} معامله
+                </div>
 
+                <div class="flex items-center gap-1">
+                    <!-- دکمه قبلی -->
+                    {% if trades.has_previous %}
+                        <a href="?page={{ trades.previous_page_number }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                            قبلی
+                        </a>
+                    {% else %}
+                        <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
+                            قبلی
+                        </span>
+                    {% endif %}
+
+                    <!-- شماره صفحات -->
+                    <div class="flex gap-1">
+                        {% for num in trades.paginator.page_range %}
+                            {% if trades.number == num %}
+                                <span class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold">
+                                    {{ num }}
+                                </span>
+                            {% elif num > trades.number|add:'-3' and num < trades.number|add:'3' %}
+                                <a href="?page={{ num }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                                    {{ num }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    <!-- دکمه بعدی -->
+                    {% if trades.has_next %}
+                        <a href="?page={{ trades.next_page_number }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                            بعدی
+                        </a>
+                    {% else %}
+                        <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
+                            بعدی
+                        </span>
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
     </div>
 
     <!-- اسکریپت رندر نمودارها -->
