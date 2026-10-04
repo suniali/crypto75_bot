@@ -21,26 +21,7 @@ if str(BASE_DIR) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-# ------------------------------------------------------------------
-# 2. Logging Configuration
-# ------------------------------------------------------------------
-logger = logging.getLogger("telegram_bot")
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
-# Console Handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
-# File Handler
-file_handler = logging.FileHandler("telegram_bot.log", encoding="utf-8")
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # 3. Imports & Configurations

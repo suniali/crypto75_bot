@@ -4,30 +4,7 @@ from logging.handlers import RotatingFileHandler
 import MetaTrader5 as mt5
 from datetime import datetime, timedelta, timezone
 
-# ------------------------------------------------------------------
-# Logging Configuration
-# ------------------------------------------------------------------
-logger = logging.getLogger("mt5_service")
-logger.setLevel(logging.INFO)
-
-formatter = logging.Formatter(
-    fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-
-if not logger.handlers:
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    file_handler = RotatingFileHandler(
-        "mt5_service.log",
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8"
-    )
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Constants & Configurations

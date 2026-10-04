@@ -9,8 +9,8 @@ import mplfinance as mpf
 import matplotlib.gridspec as gridspec
 
 from datetime import datetime, date
-# خاموش کردن لوگ‌های غیرضروری فونت مت‌پلات‌لیب
-logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+
+logger = logging.getLogger(__name__)
 
 
 def calculate_heikin_ashi(df_ohlc: pd.DataFrame) -> pd.DataFrame:

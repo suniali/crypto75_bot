@@ -21,26 +21,7 @@ from bot_app.utils.math_helpers import calculate_symbol_breakdown, calculate_tra
 
 API_KEY = config('GEMINI_API_KEY', default='')
 
-# ------------------------------------------------------------------
-# Logging Configuration
-# ------------------------------------------------------------------
-logger = logging.getLogger("analysis_service")
-
-if not logger.handlers:
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)-7s | %(funcName)s:%(lineno)d - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-
-    file_handler = logging.FileHandler("analysis_service.log", encoding="utf-8")
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Indicator & Technical Analysis Functions
