@@ -268,7 +268,7 @@ def sync_open_trade_to_db(chat_id: int, pos_data: dict):
         tp_price = pos_data.get("tp", 0.0)
         volume = pos_data.get("volume", 0.0)
 
-        TradeJournal.objects.get_or_create(
+        TradeJournal.objects.update_or_create(
             position_id=position_id,
             defaults={
                 'user': user_obj,
