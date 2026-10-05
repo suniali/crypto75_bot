@@ -47,7 +47,7 @@ from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
 from bot_app.workers import ACTIVE_WORKERS
 
 from bot_app.services.mt5_service import start_mt5_connection,stop_mt5_connection
-from bot_app.services.user_service import set_users_blocked_status
+from bot_app.services.user_service import set_users_blocked_status,get_or_create_user
 from bot_app.services.watchlist_service import get_all_watchlist
 
 from bot_app.loops.alert_loop import check_alerts_loop
@@ -130,7 +130,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("User %s (chat_id: %s) started the bot.", user_name, chat_id)
 
     try:
-        await set_users_blocked_status(chat_id,False)
+        await get_or_create_user(chat_id,user_name)
         logger.info("✅ User %s marked as is_blocked=False in Database.", chat_id)
     except Exception as e:
         logger.error("Failed to update is_blocked in DB for user %s: %s", chat_id, e)
