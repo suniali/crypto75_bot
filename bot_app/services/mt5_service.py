@@ -1,8 +1,10 @@
 import threading
 import logging
-from logging.handlers import RotatingFileHandler
 import MetaTrader5 as mt5
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+
+from bot_app.models import TelegramUser,TradeJournal
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,14 @@ def start_mt5_connection() -> bool:
             logger.critical("Failed to initialize MT5 on startup. Error: %s", mt5.last_error())
             _mt5_connected = False
             return False
+
         _mt5_connected = True
         logger.info("MT5 connection established successfully at startup.")
+
+        sync_thread = threading.Thread(target=_broker_sync_worker, daemon=True)
+        sync_thread.start()
+        logger.info("🚀 Broker sync thread spawned in background.")
+
         return True
 
 
@@ -84,6 +92,124 @@ class mt5_session:
 # ------------------------------------------------------------------
 # Helper Functions
 # ------------------------------------------------------------------
+def _broker_sync_worker():
+    with mt5_session() as ok:
+        if not ok:
+            logger.error(ERROR_CANNOT_CONNECT_TO_METATRADER+" For Sync Worker!!!")
+            return None
+        try:
+            # تعیین بازه زمانی کامل (از سال ۲۰۱۵ تا الان)
+            utc_from = datetime(2015, 1, 1, tzinfo=timezone.utc)
+            utc_to = datetime.now(timezone.utc)
+
+            deals = mt5.history_deals_get(utc_from, utc_to)
+            if deals is None:
+                logger.warning(f"⚠️ No history deals found or error: {mt5.last_error()}")
+                return
+
+            logger.info(f"🔄 Total deals fetched from MT5: {len(deals)}")
+
+            # پیدا کردن یا ساخت کاربر پیش‌فرض برای اتصال معاملات به او
+            user = TelegramUser.objects.first()
+
+            if not user:
+                logger.error("❌ No TelegramUser found in database to assign trades!")
+                return
+
+            # گروه‌بندی دیل‌ها بر اساس position_id برای استخراج دقیق ورود و خروج
+            positions_dict = {}
+            for deal in deals:
+                pos_id = deal.position_id
+                if pos_id == 0:
+                    # اگر پوزیشن آیدی نداشت، از خود تیلیت دیل به عنوان شناسه یکتا استفاده کن
+                    pos_id = deal.ticket
+
+                if pos_id not in positions_dict:
+                    positions_dict[pos_id] = {
+                        'symbol': deal.symbol,
+                        'volume': Decimal('0.00'),
+                        'profit': Decimal('0.00'),
+                        'commission': Decimal('0.00'),
+                        'swap': Decimal('0.00'),
+                        'entry_price': Decimal('0.00'),
+                        'exit_price': Decimal('0.00'),
+                        'entry_time': None,
+                        'exit_time': None,
+                        'type': None,
+                        'deals_count': 0
+                    }
+                p_data = positions_dict[pos_id]
+                p_data['symbol'] = deal.symbol
+                p_data['profit'] += Decimal(str(deal.profit))
+                p_data['commission'] += Decimal(str(deal.commission))
+                p_data['swap'] += Decimal(str(deal.swap))
+
+                deal_time = datetime.fromtimestamp(deal.time, tz=timezone.utc)
+
+                # تشخیص نوع معامله (ورود یا خروج)
+                if deal.entry == mt5.DEAL_ENTRY_IN:
+                    p_data['entry_price'] = Decimal(str(deal.price))
+                    p_data['entry_time'] = deal_time
+                    p_data['type'] = 'BUY' if deal.type == mt5.DEAL_TYPE_BUY else 'SELL'
+                elif deal.entry in [mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT]:
+                    p_data['exit_price'] = Decimal(str(deal.price))
+                    p_data['exit_time'] = deal_time
+
+                p_data['volume'] = max(p_data['volume'], Decimal(str(deal.volume)))
+                p_data['deals_count'] += 1
+
+                # حالا بررسی و ذخیره در دیتابیس
+            synced_count = 0
+            for pos_id, data in positions_dict.items():
+                # ۱. بررسی اینکه آیا این position_id از قبل در دیتابیس هست یا خیر
+                if TradeJournal.objects.filter(position_id=pos_id).exists():
+                    continue
+
+                # اگر قیمت ورود یا خروج خالی ماند، مقدار پیش‌فرض بگذاریم
+                entry_p = data['entry_price'] if data['entry_price'] > 0 else Decimal('0.00')
+                exit_p = data['exit_price'] if data['exit_price'] > 0 else entry_p
+
+                entry_t = data['entry_time'] or timezone.now()
+                exit_t = data['exit_time'] or entry_t
+
+                profit = data['profit']
+                commission = data['commission']
+                swap = data['swap']
+                net_profit = profit + commission + swap
+
+                # تعیین نتیجه
+                if net_profit > 0:
+                    result = 'WIN'
+                elif net_profit < 0:
+                    result = 'LOSS'
+                else:
+                    result = 'BE'
+
+                # ۲. ثبت نهایی در مدل TradeJournal با تمام جزئیات جدول شما
+                TradeJournal.objects.create(
+                    user=user,
+                    position_id=pos_id,
+                    symbol=data['symbol'],
+                    market_type='FOREX',  # یا مقدار مناسب بر اساس مارکت شما
+                    trade_type=data['type'] or 'BUY',
+                    volume=data['volume'],
+                    entry_price=entry_p,
+                    exit_price=exit_p,
+                    profit=profit,
+                    commission=commission,
+                    swap=swap,
+                    result=result,
+                    notes="همگام‌سازی خودکار از تاریخچه کامل متاتریدر",
+                    entry_time=entry_t,
+                    exit_time=exit_t,
+                    is_active=True
+                )
+                synced_count += 1
+                logger.info(f"✅ Position #{pos_id} synced successfully.")
+
+            logger.info(f"🎉 Broker background sync completed. {synced_count} new trades added.")
+        except Exception as e:
+            logger.exception(f"❌ Error in broker background sync worker: {e}")
 
 def get_forex_price(symbol: str) -> float | None:
     """دریافت قیمت لحظه‌ای Bid از متاتریدر ۵"""
