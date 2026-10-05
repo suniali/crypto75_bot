@@ -200,10 +200,27 @@ def get_forex_price(symbol: str) -> float | None:
         return float(tick.bid)
 
 
+def get_or_find_symbol(target_symbol):
+    """
+    پیدا کردن نام صحیح نماد با استفاده از مارکت واچ و کل نمادهای بروکر
+    """
+    # تبدیل ورودی به حروف بزرگ برای تطابق کامل با استانداردهای متاتریدر
+    target_symbol_upper = target_symbol.strip().upper()
+
+    # ۱. اول بررسی کن مستقیم وجود دارد یا نه (با نام اصلی یا حروف بزرگ)
+    symbol_info = mt5.symbol_info(target_symbol) or mt5.symbol_info(target_symbol_upper)
+    if symbol_info is not None:
+        actual_name = symbol_info.name
+        if not symbol_info.visible:
+            mt5.symbol_select(actual_name, True)
+        return actual_name  # نام استاندارد و واقعی بروکر را برمی‌گرداند
+
+
+    return target_symbol
+
 def get_rates_data(symbol: str, timeframe: str):
     """دریافت کندل‌های اخیر نماد برای ترسیم چارت یا تحلیل تکنیکال"""
     logger.info("Fetching Data rates for Symbol: %s, Timeframe: %s", symbol, timeframe)
-
     with mt5_session() as ok:
         if not ok:
             logger.error("Failed to fetch data rates for %s, error code: %s", symbol, mt5.last_error())
@@ -211,7 +228,8 @@ def get_rates_data(symbol: str, timeframe: str):
 
         try:
             interval = TIMEFRAME_TO_MT5_TIMEFRAME.get(timeframe, mt5.TIMEFRAME_M30)
-            rates = mt5.copy_rates_from_pos(symbol, interval, 0, 100)
+            target_symbol = get_or_find_symbol(symbol)
+            rates = mt5.copy_rates_from_pos(target_symbol, interval, 0, 100)
 
             if rates is None or len(rates) == 0:
                 logger.warning("No candle data returned for %s (%s)", symbol, timeframe)
