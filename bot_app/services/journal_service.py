@@ -284,7 +284,7 @@ def sync_open_trade_to_db(chat_id: int, pos_data: dict):
             }
         )
     except Exception as e:
-        logger.error(f"❌ خطا در ثبت پوزیشن باز {pos_data.get('ticket')}: {e}", exc_info=True)
+        logger.error(f"❌ Error saving open position #{pos_data.get('ticket')}: {e}", exc_info=True)
 
 @sync_to_async
 def get_sl_tp_from_db(position_id):
@@ -343,7 +343,7 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
             trade_obj.image.save(filename, ContentFile(chart_buf.read()), save=False)
 
         trade_obj.save()
-        logger.info(f"✅ معامله {position_id} با موفقیت در ژورنال ثبت نهایی شد.")
+        logger.info(f"✅ Trade #{position_id} successfully saved to the journal.")
 
     except Exception as e:
-        logger.error(f"❌ خطا در ثبت نهایی معامله بسته‌شده {deal}: {e}", exc_info=True)
+        logger.error(f"❌ Error saving closed trade {deal}: {e}", exc_info=True)

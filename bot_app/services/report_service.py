@@ -30,7 +30,7 @@ FONT_PATH = os.path.join(ROOT_DIR, "Vazirmatn-Regular.ttf")
 
 if os.path.exists(FONT_PATH):
     pdfmetrics.registerFont(TTFont('Vazir', FONT_PATH))
-    print(f"✅ فونت با موفقیت بارگذاری شد: {FONT_PATH}")
+    print(f"✅ Font successfully loaded: {FONT_PATH}")
 else:
     print(f"⚠️ warning: {FONT_PATH} not found. Falling back to Helvetica.")
 

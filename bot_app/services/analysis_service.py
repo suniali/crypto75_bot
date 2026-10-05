@@ -443,7 +443,7 @@ async def get_ai_market_view(symbol: str, rsi_val: float, rsi_status: str, diver
                 except Exception as api_err:
                     err_str = str(api_err)
                     if "404" in err_str or "NOT_FOUND" in err_str:
-                        logger.warning("مدل %s یافت نشد. سوئیچ به مدل بعدی...", model_name)
+                        logger.warning("Model %s not found. Switching to the next model...", model_name)
                         break
 
                     logger.warning("Gemini API Error (%s) attempt %d: %s", model_name, attempt + 1, api_err)
