@@ -111,6 +111,38 @@
                 </div>
                 <span id="modalTime" class="font-mono text-slate-500">2026-10-04 20:00</span>
             </div>
+            <!-- Trade Notes Section -->
+            <div class="bg-slate-800/30 border border-slate-800/80 rounded-2xl p-4 transition-all duration-300 hover:border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        Trade Notes & Psychology
+                    </span>
+                    <button onclick="toggleNoteEdit()" id="editNoteBtn" class="text-xs text-indigo-400 hover:text-indigo-300 transition font-medium">
+                        Edit
+                    </button>
+                </div>
+
+                <!-- Display Mode -->
+                <div id="modalNote" class="text-sm text-slate-300 leading-relaxed min-h-[40px] whitespace-pre-wrap font-sans">
+
+                </div>
+
+                <!-- Edit Mode (Hidden by default) -->
+                <div id="noteEditView" class="hidden space-y-3 mt-2">
+                    <textarea id="modalNoteInput" rows="3" class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-sans transition" placeholder="Write your trade review or psychology notes..."></textarea>
+                    <div class="flex justify-end gap-2">
+                        <button onclick="toggleNoteEdit()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition">
+                            Cancel
+                        </button>
+                        <button onclick="saveTradeNote()" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-xl transition shadow-lg shadow-indigo-600/20">
+                            Save Note
+                        </button>
+                    </div>
+                </div>
+            </div>
 
         </div>
     </div>
@@ -282,6 +314,7 @@
                             data-planned-rr="{{ trade.calc_planned_rr }}"
                             data-realized-rr="{{ trade.calc_realized_rr }}"
                             data-time="{{ trade.entry_time|date:'Y-m-d H:i' }}"
+                            data-note="{{ trade.notes }}"
                             data-image="{% if trade.image %}{{ trade.image.url }}{% endif %}">
                             <!-- ستون نماد و آیدی پوزیشن -->
                             <td class="p-3">
@@ -597,6 +630,7 @@
             }
         });
 
+        let currentTicketId = null;
         // تابع باز کردن مودال هوشمند 2027
         function openTradeModal(row) {
             // ۱. خواندن اطلاعات از data attributeها
@@ -617,7 +651,9 @@
             const plannedRR = row.getAttribute('data-planned-rr');
             const realizedRR = row.getAttribute('data-realized-rr');
             const time = row.getAttribute('data-time');
+            const note = row.getAttribute('data-note');
             const imageUrl = row.getAttribute('data-image');
+            currentTicketId = ticket;
 
             // ۲. ست کردن مقادیر هدر و آیدی
             document.getElementById('modalTicket').textContent = ticket || '-';
@@ -648,6 +684,7 @@
             document.getElementById('modalPlannedRR').textContent = plannedRR;
             document.getElementById('modalRealizedRR').textContent = realizedRR;
             document.getElementById('modalTime').textContent = time;
+            document.getElementById('modalNote').textContent = note;
 
             // ۵. مدیریت تصویر
             const imgContainer = document.getElementById('modalImageContainer');
@@ -668,6 +705,72 @@
 
         function closeTradeModal() {
             document.getElementById('tradeModal').classList.add('hidden');
+        }
+
+        function toggleNoteEdit() {
+            const displayView = document.getElementById('noteDisplayView');
+            const editView = document.getElementById('noteEditView');
+            const editBtn = document.getElementById('editNoteBtn');
+
+            if (editView.classList.contains('hidden')) {
+                editView.classList.remove('hidden');
+                displayView.classList.add('hidden');
+                editBtn.textContent = 'Cancel';
+                document.getElementById('modalNoteInput').value = displayView.textContent.trim() === 'No notes added yet.' ? '' : displayView.textContent;
+            } else {
+                editView.classList.add('hidden');
+                displayView.classList.remove('hidden');
+                editBtn.textContent = 'Edit';
+            }
+        }
+
+        // تابع استاندارد برای خواندن توکن CSRF از کوکی‌های مرورگر
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    // بررسی نام کوکی مورد نظر (csrftoken)
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        // تابع به‌روزرسانی یادداشت معامله همراه با ارسال هدر امنیتی CSRF
+        async function saveTradeNote() {
+            const noteText = document.getElementById('modalNoteInput').value;
+            const csrftoken = getCookie('csrftoken'); // استخراج توکن از کوکی
+
+            if (!currentTicketId) {
+                console.error("❌ Error: Trade ticket ID is missing!");
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/journal/update-note`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken // قرار دادن توکن در هدر درخواست برای احراز هویت جنگو
+                    },
+                    body: JSON.stringify({ ticket: currentTicketId, note: noteText })
+                });
+
+                if (response.ok) {
+                    document.getElementById('modalNote').textContent = noteText || 'No notes added yet.';
+                    toggleNoteEdit();
+                    console.info(`✅ Note successfully updated for trade #${currentTicketId}`);
+                } else {
+                    console.error(`❌ Failed to update note for trade #${currentTicketId}`);
+                }
+            } catch (error) {
+                console.error(`❌ Network error while saving note: ${error}`);
+            }
         }
     </script>
 </body>

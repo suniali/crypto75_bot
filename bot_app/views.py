@@ -1,13 +1,18 @@
+import json
+import logging
 from decimal import Decimal
 from collections import defaultdict
 from datetime import timedelta
-import json
 from django.utils import timezone
 from django.shortcuts import render
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 
 from .models import TradeJournal
 
+
+logger = logging.getLogger(__name__)
 
 def journal_dashboard(request):
     # ۱. دریافت بازه زمانی از URL
@@ -197,3 +202,36 @@ def journal_dashboard(request):
 
     return render(request, 'dashboard.html', context)
 
+
+@require_POST
+def update_trade_note_api(request):
+    """
+    API endpoint to update trade notes and psychological reviews.
+    """
+    import json
+    try:
+        data = json.loads(request.body)
+        ticket = data.get('ticket')
+        new_note = data.get('note', '').strip()
+
+
+        if not ticket:
+            logger.warning("⚠️️ Update note request rejected: Missing trade ticket.")
+            return JsonResponse({'success': False, 'error': 'Missing ticket parameter'}, status=400)
+
+        # Find the trade record in the journal database
+        trade = TradeJournal.objects.filter(position_id=ticket).first()
+        if not trade:
+            logger.warning(f"⚠️ Trade record #{ticket} not found in the journal.")
+            return JsonResponse({'success': False, 'error': 'Trade not found'}, status=404)
+
+        # Update the note field
+        trade.notes = new_note
+        trade.save(update_fields=['notes'])
+
+        logger.info(f"✅ Note successfully updated for trade #{ticket}.")
+        return JsonResponse({'success': True, 'message': 'Note updated successfully'})
+
+    except Exception as e:
+        logger.error(f"❌ Error processing trade note update: {e}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
