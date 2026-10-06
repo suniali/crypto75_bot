@@ -493,13 +493,16 @@
                 datasets: [{
                     label: 'سود تراکمی ($)',
                     data: pnlData,
-                    borderColor: '#10b981',
                     borderWidth: 3,
                     fill: true,
-                    backgroundColor: gradient,
                     tension: 0.3,
                     pointRadius: 3,
-                    pointHoverRadius: 6
+                    pointHoverRadius: 6,
+                    // اضافه شدن قابلیت تغییر رنگ هوشمند خط و پس‌زمینه بر اساس مثبت یا منفی بودن
+                    segment: {
+                        borderColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? '#ef4444' : '#10b981',
+                        backgroundColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? 'rgba(239, 68, 68, 0.15)' : gradient
+                    }
                 }]
             },
             options: {
@@ -508,7 +511,12 @@
                 plugins: { legend: { display: false } },
                 scales: {
                     x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
-                    y: { beginAtZero: true, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                    y: {
+                        // اگر می‌خواهی خط صفر محور Y دقیقاً وسط یا متناسب باشد، beginAtZero معمولا روی true خوب است
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#9ca3af' }
+                    }
                 }
             }
         });
