@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from decimal import Decimal
 from collections import defaultdict
 from datetime import timedelta
@@ -155,6 +156,28 @@ def journal_dashboard(request):
     win_rate = round((wins / total_trades * 100), 1) if total_trades > 0 else 0.0
     total_net_profit = float(round(running_total, 2))
 
+    # میانگین سود و زیان
+    avg_win = float(round(gross_wins / wins, 2)) if wins > 0 else 0.0
+    avg_loss = float(round(gross_losses / losses, 2)) if losses > 0 else 0.0
+
+    # نسبت Payoff (میانگین سود به میانگین زیان)
+    payoff_ratio = round(avg_win / avg_loss, 2) if avg_loss > 0 else (avg_win if avg_win > 0 else 0.0)
+
+    # امید ریاضی (Expectancy)
+    win_prob = wins / total_trades if total_trades > 0 else 0.0
+    loss_prob = losses / total_trades if total_trades > 0 else 0.0
+    expectancy = round((win_prob * avg_win) - (loss_prob * avg_loss), 2) if total_trades > 0 else 0.0
+
+    # محاسبه Sharpe Ratio بر اساس سود/زیان هر معامله
+    trade_pnls = [float(t.net_profit) for t in processed_trades if t.net_profit is not None]
+    if len(trade_pnls) > 1:
+        mean_pnl = sum(trade_pnls) / len(trade_pnls)
+        variance = sum((x - mean_pnl) ** 2 for x in trade_pnls) / len(trade_pnls)
+        std_dev = math.sqrt(variance)
+        sharpe_ratio = round(mean_pnl / std_dev, 2) if std_dev > 0 else 0.0
+    else:
+        sharpe_ratio = 0.0
+
     # محاسبه دقیق Profit Factor
     if gross_losses > 0:
         profit_factor = round(float(gross_wins / gross_losses), 2)
@@ -190,6 +213,11 @@ def journal_dashboard(request):
         'be_count': be_count,
         'total_net_profit': total_net_profit,
         'profit_factor': profit_factor,
+        'avg_win': avg_win,
+        'avg_loss': avg_loss,
+        'payoff_ratio': payoff_ratio,
+        'expectancy': expectancy,
+        'sharpe_ratio': sharpe_ratio,
         'max_drawdown': float(round(max_drawdown, 2)),
         'total_commission': float(round(total_commission, 2)),
         'total_swap': float(round(total_swap, 2)),

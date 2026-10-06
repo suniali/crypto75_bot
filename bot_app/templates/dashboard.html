@@ -228,6 +228,42 @@
                 </div>
             </div>
 
+            <!-- Sharpe Ratio -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">نسبت شارپ (Sharpe)</span>
+                <span class="text-lg font-mono font-bold text-indigo-400">{{ sharpe_ratio }}</span>
+            </div>
+
+            <!-- Payoff Ratio -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">نسبت پرداخت (Payoff)</span>
+                <span class="text-lg font-mono font-bold text-emerald-400">1:{{ payoff_ratio }}</span>
+            </div>
+
+            <!-- Expectancy -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">امید ریاضی (Expectancy)</span>
+                <span class="text-lg font-mono font-bold {% if expectancy >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">${{ expectancy }}</span>
+            </div>
+
+            <!-- Average Loss -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">میانگین زیان (Avg Loss)</span>
+                <span class="text-lg font-mono font-bold text-rose-400">-${{ avg_loss }}</span>
+            </div>
+
+            <!-- Max Drawdown -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">حداکثر افت (Max DD)</span>
+                <span class="text-lg font-mono font-bold text-rose-400">${{ max_drawdown }}</span>
+            </div>
+
+            <!-- Profit Factor -->
+            <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                <span class="text-xs text-slate-400 block mb-1">فاکتور سود (PF)</span>
+                <span class="text-lg font-mono font-bold text-amber-400">{{ profit_factor }}</span>
+            </div>
+
         </div>
 
         <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
