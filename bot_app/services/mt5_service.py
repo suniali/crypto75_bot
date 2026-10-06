@@ -126,7 +126,7 @@ def _broker_sync_worker():
                 if deal.entry not in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_OUT_BY, mt5.DEAL_ENTRY_INOUT):
                     continue
 
-                ticket = deal.ticket
+                ticket = deal.position_id
 
                 # ۱. اگر این تیکت قبلاً در دیتابیس بود، رد شو
                 if TradeJournal.objects.filter(position_id=ticket).exists():
