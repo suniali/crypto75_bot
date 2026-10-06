@@ -15,12 +15,21 @@ from .models import TradeJournal
 logger = logging.getLogger(__name__)
 
 def journal_dashboard(request):
-    # ۱. دریافت بازه زمانی از URL
+    """
+    Dashboard view for trade journal analytics, filtering, and pagination.
+    """
+    # ۱. دریافت بازه زمانی از URL (اصلاح بازه‌های روزانه و هفتگی)
     period = request.GET.get('period', 'weekly').lower()
     now = timezone.now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     if period == 'daily':
-        start_date = now - timedelta(days=1)
+        # از ساعت ۰۰:۰۰ امروز تا الان
+        start_date = today_start
+    elif period == 'weekly':
+        # شروع هفته از روز شنبه (محاسبه دقیق فاصله تا شنبه گذشته)
+        days_since_saturday = (now.weekday() - 5) % 7
+        start_date = today_start - timedelta(days=days_since_saturday)
     elif period == 'monthly':
         start_date = now - timedelta(days=30)
     elif period == '3months':
@@ -33,20 +42,21 @@ def journal_dashboard(request):
         start_date = None
     else:
         period = 'weekly'
-        start_date = now - timedelta(days=7)
+        days_since_saturday = (now.weekday() - 5) % 7
+        start_date = today_start - timedelta(days=days_since_saturday)
 
     trades_qs = TradeJournal.active_objects.all()
     if start_date:
         trades_qs = trades_qs.filter(entry_time__gte=start_date)
 
-    # مرتب‌‌سازی صعودی
+    # مرتب‌سازی صعودی برای محاسبه دقیق PnL تجمعی و نمودارها
     trades_ascending = trades_qs.order_by('entry_time', 'created_at')
 
     processed_trades = []
     symbol_pnl = defaultdict(Decimal)
     day_pnl = {i: Decimal('0.00') for i in range(7)}
 
-    chart_labels = ['شروع']
+    chart_labels = ['Start']
     cumulative_pnl_data = [0.0]
     drawdown_data = [0.0]
 
@@ -79,7 +89,7 @@ def journal_dashboard(request):
                 planned_val = round(float(reward / risk), 2)
                 planned_rr = f"1:{planned_val:g}"
 
-        # R:R واقعی (فقط برای WIN)
+        # R:R واقعی (محاسبه برای برآیند مثبت یا WIN)
         realized_val = 0.0
         realized_rr = "-"
         if trade.result == 'WIN' and entry and sl and exit_p:
@@ -89,10 +99,10 @@ def journal_dashboard(request):
                 realized_val = round(float(actual_reward / risk), 2)
                 realized_rr = f"1:{realized_val:g}"
 
-        # دریافت سود خالص مستقیماً از Decimal (مطمئن شوید net_profit در مدل Decimal برمی‌گرداند)
+        # سود خالص
         pnl = Decimal(str(trade.net_profit)) if trade.net_profit is not None else Decimal('0.00')
 
-        # کمیسیون و سوآپ به صورت قدر مطلق برای جمع کل
+        # کمیسیون و سواپ
         comm = abs(Decimal(str(trade.commission))) if trade.commission is not None else Decimal('0.00')
         swp = Decimal(str(trade.swap)) if trade.swap is not None else Decimal('0.00')
 
@@ -126,11 +136,8 @@ def journal_dashboard(request):
         cumulative_pnl_data.append(float(round(running_total, 2)))
         drawdown_data.append(float(round(current_dd, 2)))
 
-        # مقداردهی فرمت‌شده کمیسیون و سود برای تمپلیت
-        comm_val = abs(Decimal(str(trade.commission))) if trade.commission is not None else Decimal('0.00')
-        trade.fmt_comm = float(comm_val)
-
         # مقادیر فرمت‌شده برای تمپلیت
+        trade.fmt_comm = float(comm)
         trade.fmt_entry = float(entry) if entry else None
         trade.fmt_exit = float(exit_p) if exit_p else None
         trade.fmt_sl = float(sl) if sl else None
@@ -156,23 +163,21 @@ def journal_dashboard(request):
     else:
         profit_factor = 0.0
 
-    days_names = ['دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنج‌شنبه', 'جمعه', 'شنبه', 'یکشنبه']
+    days_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     day_pnl_values = [float(round(day_pnl[i], 2)) for i in range(7)]
 
     symbols_list = list(symbol_pnl.keys())
     symbols_pnl_values = [float(round(symbol_pnl[s], 2)) for s in symbols_list]
 
-    # Pagination
+    # Pagination (نمایش معکوس برای اینکه جدیدترین معاملات در صفحه اول جدول قرار گیرند)
     paginator = Paginator(list(reversed(processed_trades)), 10)
     page_number = request.GET.get('page', 1)
 
     try:
         trades = paginator.page(page_number)
     except PageNotAnInteger:
-        # اگر شماره صفحه عدد نبود، صفحه اول را نشان بده
         trades = paginator.page(1)
     except EmptyPage:
-        # اگر شماره صفحه بیشتر از کل صفحات بود، صفحه آخر را نشان بده
         trades = paginator.page(paginator.num_pages)
 
     context = {
