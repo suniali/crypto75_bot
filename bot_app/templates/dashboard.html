@@ -367,12 +367,12 @@
                             </td>
 
                             <!-- حجم -->
-                            <td class="p-3 font-mono dir-ltr text-right">{{ trade.volume }}</td>
+                            <td class="p-3 font-mono dir-ltr text-right">{{ trade.volume|floatformat:2 }}</td>
 
                             <!-- قیمت‌ها -->
                             <td class="p-3 font-mono dir-ltr text-right">
-                                <div>{{ trade.fmt_entry|default:"-" }}</div>
-                                <div class="text-xs text-gray-500">{{ trade.fmt_exit|default:"-" }}</div>
+                                <div>{{ trade.fmt_entry|default:"-"|floatformat:5 }}</div>
+                                <div class="text-xs text-gray-500">{{ trade.fmt_exit|default:"-"|floatformat:5 }}</div>
                             </td>
 
                             <!-- ستون جزییات مالی (سود ناخالص، کمیسیون، سوآپ) -->
