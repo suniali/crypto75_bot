@@ -104,7 +104,7 @@ def journal_dashboard(request):
         pnl = Decimal(str(trade.net_profit)) if trade.net_profit is not None else Decimal('0.00')
 
         # کمیسیون و سواپ
-        comm = abs(Decimal(str(trade.commission))) if trade.commission is not None else Decimal('0.00')
+        comm = Decimal(str(trade.commission)) if trade.commission is not None else Decimal('0.00')
         swp = Decimal(str(trade.swap)) if trade.swap is not None else Decimal('0.00')
 
         total_commission += comm
@@ -159,6 +159,7 @@ def journal_dashboard(request):
     # میانگین سود و زیان
     avg_win = float(round(gross_wins / wins, 2)) if wins > 0 else 0.0
     avg_loss = float(round(gross_losses / losses, 2)) if losses > 0 else 0.0
+    print(f'avrage win : {avg_win}, avg loss: {avg_loss}')
 
     # نسبت Payoff (میانگین سود به میانگین زیان)
     payoff_ratio = round(avg_win / avg_loss, 2) if avg_loss > 0 else (avg_win if avg_win > 0 else 0.0)

@@ -206,7 +206,12 @@
             <!-- سودآوری نسبی / Profit Factor -->
             <div class="glass-card p-5">
                 <p class="text-xs font-medium text-gray-400">فاکتور سودآوری (Profit Factor)</p>
-                <h3 class="text-2xl font-black text-indigo-400 mt-2">{{ profit_factor }}</h3>
+                <h3 class="text-2xl font-black mt-2
+                    {% if profit_factor >= 1.5 %}text-emerald-400
+                    {% elif profit_factor >= 1.0 %}text-amber-400
+                    {% else %}text-rose-400{% endif %}">
+                    {{ profit_factor }}
+                </h3>
                 <p class="text-xs text-gray-500 mt-3">ارزش سود حاصله نسبت به کل زیان</p>
             </div>
 
@@ -231,13 +236,24 @@
             <!-- Sharpe Ratio -->
             <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
                 <span class="text-xs text-slate-400 block mb-1">نسبت شارپ (Sharpe)</span>
-                <span class="text-lg font-mono font-bold text-indigo-400">{{ sharpe_ratio }}</span>
+                <span class="text-lg font-mono font-bold
+                    {% if sharpe_ratio >= 2.0 %}text-emerald-400
+                    {% elif sharpe_ratio >= 1.0 %}text-indigo-400
+                    {% elif sharpe_ratio >= 0 %}text-amber-400
+                    {% else %}text-rose-400{% endif %}">
+                    {{ sharpe_ratio }}
+                </span>
             </div>
 
             <!-- Payoff Ratio -->
             <div class="glass-card p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
                 <span class="text-xs text-slate-400 block mb-1">نسبت پرداخت (Payoff)</span>
-                <span class="text-lg font-mono font-bold text-emerald-400">1:{{ payoff_ratio }}</span>
+                <span class="text-lg font-mono font-bold
+                    {% if payoff_ratio >= 2 %}text-emerald-400
+                    {% elif payoff_ratio >= 1 %}text-amber-400
+                    {% else %}text-rose-400{% endif %}">
+                    1:{{ payoff_ratio }}
+                </span>
             </div>
 
             <!-- Expectancy -->
