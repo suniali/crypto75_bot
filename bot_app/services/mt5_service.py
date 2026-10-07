@@ -105,7 +105,7 @@ def _broker_sync_worker():
             deals = mt5.history_deals_get(utc_from, utc_to)
             if deals is None:
                 logger.warning(f"⚠️ No history deals found or error: {mt5.last_error()}")
-                return
+                return None
 
             logger.info(f"🔄 Total deals fetched from MT5: {len(deals)}")
 
@@ -114,7 +114,7 @@ def _broker_sync_worker():
 
             if not user:
                 logger.error("❌ No TelegramUser found in database to assign trades!")
-                return
+                return None
             synced_count = 0
             for deal in deals:
                 # ۱. فیلتر کردن واریز، برداشت و سایر عملیات غیرتجاری (فقط BUY و SELL مجاز هستند)
