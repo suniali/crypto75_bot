@@ -3,6 +3,8 @@ import sys
 import asyncio
 import logging
 import django
+import time
+import httpx
 import warnings
 import colorama
 

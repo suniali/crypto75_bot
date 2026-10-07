@@ -267,9 +267,9 @@ def calculate_today_stats(closed_deals):
 def create_journal_heikin_ashi_chart(
         df_ohlc: pd.DataFrame,
         symbol: str,
-        entry_price: float = None,
-        sl_price: float = None,
-        tp_price: float = None
+        entry_price: float = 0.0,
+        sl_price: float = 0.0,
+        tp_price: float = 0.0
 ) -> io.BytesIO:
     ha_df = calculate_heikin_ashi(df_ohlc)
 
