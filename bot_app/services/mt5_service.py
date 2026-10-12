@@ -228,8 +228,7 @@ def get_rates_data(symbol: str, timeframe: str):
 
         try:
             interval = TIMEFRAME_TO_MT5_TIMEFRAME.get(timeframe, mt5.TIMEFRAME_M30)
-            target_symbol = get_or_find_symbol(symbol)
-            rates = mt5.copy_rates_from_pos(target_symbol, interval, 0, 100)
+            rates = mt5.copy_rates_from_pos(symbol, interval, 0, 1000)
 
             if rates is None or len(rates) == 0:
                 logger.warning("No candle data returned for %s (%s)", symbol, timeframe)

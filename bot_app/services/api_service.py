@@ -57,7 +57,6 @@ async def fetch_recent_klines(
     دریافت کندل‌های اخیر برای فارکس (MetaTrader5) یا کریپتو (Binance)
     و خروجی به‌صورت pandas.DataFrame استاندارد شده برای mplfinance
     """
-    symbol = symbol.upper()
     try:
         # -------------------------------------------------------------
         # ۱. بخش فارکس (با استفاده از MetaTrader5)
