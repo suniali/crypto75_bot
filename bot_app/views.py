@@ -300,3 +300,52 @@ def py_backup_view(request):
         return JsonResponse({"status": "success", "message": f"بک‌آپ با موفقیت ذخیره شد: {backup_filename}"})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def list_backups_view(request):
+    """لیست تمام فایل‌های بک‌آپ موجود را برمی‌گرداند"""
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    BACKUP_DIR = BASE_DIR / "backups"
+
+    if not BACKUP_DIR.exists():
+        return JsonResponse({"status": "success", "backups": []})
+
+    # پیدا کردن و مرتب‌سازی فایل‌ها بر اساس تاریخ (جدیدترین اول)
+    backups = sorted(BACKUP_DIR.glob("db_backup_*.sqlite3"), key=os.path.getmtime, reverse=True)
+    backup_list = [b.name for b in backups]
+
+    return JsonResponse({"status": "success", "backups": backup_list})
+
+
+@require_POST
+def restore_backup_view(request):
+    """فایل بک‌آپ انتخابی را جایگزین دیتابیس اصلی می‌کند"""
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "متد غیرمجاز"}, status=400)
+
+    import json
+    try:
+        data = json.loads(request.body)
+        filename = data.get("filename")
+        if not filename:
+            return JsonResponse({"status": "error", "message": "نام فایل مشخص نشده است"}, status=400)
+
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        DB_FILE = BASE_DIR / "db.sqlite3"
+        BACKUP_DIR = BASE_DIR / "backups"
+        target_backup = BACKUP_DIR / filename
+
+        if not target_backup.exists():
+            return JsonResponse({"status": "error", "message": "فایل بک‌آپ مورد نظر پیدا نشد"}, status=404)
+
+        # قبل از جایگزینی، یک ایمنی موقت از وضعیت فعلی می‌گیریم
+        emergency_backup = BACKUP_DIR / "emergency_before_restore.sqlite3"
+        if DB_FILE.exists():
+            shutil.copy2(DB_FILE, emergency_backup)
+
+        # جایگزینی فایل بک‌آپ با دیتابیس اصلی
+        shutil.copy2(target_backup, DB_FILE)
+
+        return JsonResponse({"status": "success", "message": f"دیتابیس با موفقیت از روی فایل {filename} بازیابی شد!"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
