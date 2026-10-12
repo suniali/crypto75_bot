@@ -147,10 +147,41 @@
         </div>
     </div>
 </div>
+
+<!-- مودال انتخاب بک‌آپ -->
+<div id="restoreModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-md mx-4 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+
+        <!-- هدر مودال -->
+        <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+            <h3 class="text-white font-semibold text-base flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                انتخاب نسخه پشتیبان برای بازگردانی
+            </h3>
+            <button onclick="closeRestoreModal()" class="text-slate-400 hover:text-white transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- لیست بک‌آپ‌ها -->
+        <div id="backupListContainer" class="p-6 overflow-y-auto space-y-2.5 flex-1">
+            <div class="text-center text-slate-500 py-4">در حال بارگذاری لیست بک‌آپ‌ها...</div>
+        </div>
+
+        <!-- فوتر مودال -->
+        <div class="px-6 py-4 border-t border-slate-800 bg-slate-950/50 flex justify-end gap-3">
+            <button onclick="closeRestoreModal()" class="px-4 py-2 rounded-xl text-sm font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors">
+                انصراف
+            </button>
+        </div>
+    </div>
+</div>
+
 <body class="p-4 md:p-8 min-h-screen">
 
     <div class="max-w-7xl mx-auto space-y-8">
-
         <!-- ۱. هدر داشبورد و فیلترهای زمانی -->
         <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div class="flex items-center gap-3">
@@ -163,34 +194,56 @@
                 </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2 bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 text-xs w-full lg:w-auto">
-                <a href="?period=daily" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'daily' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">روزانه</a>
-                <a href="?period=weekly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'weekly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">هفتگی</a>
-                <a href="?period=monthly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'monthly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">ماهانه</a>
-                <a href="?period=3months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '3months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۳ ماهه</a>
-                <a href="?period=6months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '6months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۶ ماهه</a>
-                <a href="?period=yearly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'yearly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">سالانه</a>
-                <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'all' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">کل</a>
+            <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-2 bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 text-xs w-full lg:w-auto">
+                    <a href="?period=daily" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'daily' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">روزانه</a>
+                    <a href="?period=weekly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'weekly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">هفتگی</a>
+                    <a href="?period=monthly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'monthly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">ماهانه</a>
+                    <a href="?period=3months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '3months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۳ ماهه</a>
+                    <a href="?period=6months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '6months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۶ ماهه</a>
+                    <a href="?period=yearly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'yearly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">سالانه</a>
+                    <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'all' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">کل</a>
+                </div>
+
+                <!-- مدیریت بکآپ -->
+                <div class="relative inline-block right" id="dbDropdownContainer">
+                    <!-- آیکون دکمه اصلی -->
+                    <button onclick="toggleDbMenu(event)"
+                        class="p-2.5 rounded-xl bg-slate-800/60 text-slate-300 hover:text-white hover:bg-slate-700/80
+                               border border-slate-700/50 shadow-sm backdrop-blur-md transition-all duration-200 active:scale-95"
+                        title="مدیریت دیتابیس">
+                        <svg class="w-5 h-5 text-slate-400 hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
+                        </svg>
+                    </button>
+
+                    <!-- منوی کشویی (Dropdown Menu) -->
+                    <div id="dbDropdownMenu" class="absolute left-0 mt-2 w-48 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl py-1.5 hidden z-50 backdrop-blur-xl">
+                        <!-- گزینه پشتیبان‌گیری -->
+                        <button id="backupBtn" onclick="triggerBackup(); closeDbMenu();"
+                            class="w-full text-right px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
+                            </svg>
+                            <span>پشتیبان‌گیری دیتابیس</span>
+                        </button>
+
+                        <!-- خط جداکننده -->
+                        <div class="h-px bg-slate-800 my-1"></div>
+
+                        <!-- گزینه بازگردانی -->
+                        <button onclick="openRestoreModal(); closeDbMenu();"
+                            class="w-full text-right px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            <span>بازگردانی دیتابیس</span>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- بکاپ گیری -->
-        <button id="backupBtn" onclick="triggerBackup()"
-                class="group inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium
-                       bg-slate-800/60 text-slate-300 hover:text-white
-                       hover:bg-slate-700/80 active:scale-95 transition-all duration-200
-                       border border-slate-700/50 shadow-sm backdrop-blur-md">
-
-                <!-- آیکون دیسک/بک‌آپ ملایم -->
-                <svg class="w-4 h-4 text-slate-400 group-hover:text-emerald-400 transition-colors duration-200" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
-                </svg>
-
-                <span>پشتیبان‌گیری دیتابیس</span>
-
-                <!-- نشانگر وضعیت کوچک و آرام -->
-                <span class="w-1.5 h-1.5 rounded-full bg-slate-500 group-hover:bg-emerald-400 transition-colors duration-200"></span>
-            </button>
 
         <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5">
@@ -868,6 +921,99 @@
                 btn.style.opacity = '1';
             });
         }
+
+        function openRestoreModal() {
+            const modal = document.getElementById('restoreModal');
+            modal.classList.remove('hidden');
+            loadBackupsList();
+        }
+
+        function closeRestoreModal() {
+            const modal = document.getElementById('restoreModal');
+            modal.classList.add('hidden');
+        }
+
+        function loadBackupsList() {
+            const container = document.getElementById('backupListContainer');
+            container.innerHTML = '<div class="text-center text-slate-400 py-4">در حال دریافت لیست...</div>';
+
+            fetch("{% url 'list_backups' %}")
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    if(data.backups.length === 0) {
+                        container.innerHTML = '<div class="text-center text-slate-500 py-4">هیچ فایل پشتیبانی یافت نشد!</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.backups.forEach(filename => {
+                        html += `
+                            <div class="flex items-center justify-between p-3 rounded-xl bg-slate-800/40 border border-slate-700/40 hover:bg-slate-800 transition-colors">
+                                <span class="text-slate-300 text-sm font-mono">${filename}</span>
+                                <button onclick="confirmAndRestore('${filename}')"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-400 hover:bg-amber-500 hover:text-slate-950 transition-colors border border-amber-500/20">
+                                    بازگردانی
+                                </button>
+                            </div>
+                        `;
+                    });
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-center text-red-400 py-4">خطا در دریافت لیست بک‌آپ‌ها</div>';
+                }
+            })
+            .catch(error => {
+                container.innerHTML = '<div class="text-center text-red-400 py-4">خطای ارتباط با سرور</div>';
+                console.error(error);
+            });
+        }
+
+        function confirmAndRestore(filename) {
+            if(!confirm(`آیا مطمئن هستید که می‌خواهید دیتابیس را به نسخه "${filename}" بازگردانی کنید؟ اطلاعات فعلی جایگزین خواهند شد.`)) {
+                return;
+            }
+
+            fetch("{% url 'restore_backup' %}", {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ filename: filename })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    alert('✅ ' + data.message);
+                    closeRestoreModal();
+                    location.reload(); // رفرش صفحه برای اعمال تغییرات دیتابیس جدید
+                } else {
+                    alert('❌ خطا در بازگردانی: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('❌ خطای ارتباط با سرور!');
+                console.error(error);
+            });
+        }
+
+        // منو کشویی بک آپ
+        function toggleDbMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('dbDropdownMenu');
+            menu.classList.toggle('hidden');
+        }
+
+        function closeDbMenu() {
+            const menu = document.getElementById('dbDropdownMenu');
+            menu.classList.add('hidden');
+        }
+
+        // بستن منو با کلیک در هر جای صفحه
+        window.addEventListener('click', function() {
+            closeDbMenu();
+        });
     </script>
 </body>
 </html>
