@@ -1,9 +1,13 @@
+import os
 import json
 import logging
 import math
+import shutil
+
+from pathlib import Path
 from decimal import Decimal
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta,datetime
 from django.utils import timezone
 from django.shortcuts import render
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -269,3 +273,30 @@ def update_trade_note_api(request):
     except Exception as e:
         logger.error(f"❌ Error processing trade note update: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@require_POST
+def py_backup_view(request):
+    BASE_DIR = Path(__file__).resolve().parent.parent # با توجه به ساختار پروژه شما
+    DB_FILE = BASE_DIR / "db.sqlite3"
+    BACKUP_DIR = BASE_DIR / "backups"
+
+    if not DB_FILE.exists():
+        return JsonResponse({"status": "error", "message": "فایل دیتابیس پیدا نشد!"}, status=404)
+
+    try:
+        BACKUP_DIR.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        backup_filename = f"db_backup_{timestamp}.sqlite3"
+        backup_path = BACKUP_DIR / backup_filename
+
+        shutil.copy2(DB_FILE, backup_path)
+
+        # نگهداری فقط ۱۰ بک‌آپ آخر برای جلوگیری از پر شدن حافظه
+        backups = sorted(BACKUP_DIR.glob("db_backup_*.sqlite3"), key=os.path.getmtime)
+        if len(backups) > 10:
+            for old_backup in backups[:-10]:
+                old_backup.unlink()
+
+        return JsonResponse({"status": "success", "message": f"بک‌آپ با موفقیت ذخیره شد: {backup_filename}"})
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
