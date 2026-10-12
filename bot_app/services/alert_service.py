@@ -47,7 +47,7 @@ def create_user_alert(
     try:
         alert = UserAlert.objects.create(
             user=user,
-            symbol=symbol.upper(),
+            symbol=symbol,
             target_price=target_price,
             market_type=market_type,
             is_active=True
