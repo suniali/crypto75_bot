@@ -63,7 +63,7 @@ async def fetch_recent_klines(
         # -------------------------------------------------------------
         if is_forex:
             # اجرا در ThreadPoolExecutor چون MetaTrader5 به‌صورت Sync کار می‌کند
-            rates, msg = await asyncio.to_thread(get_rates_data, symbol, interval)
+            rates, msg = await asyncio.to_thread(get_rates_data, symbol, interval, limit)
 
             if rates is False or rates is None or len(rates) == 0:
                 logger.warning("Failed to fetch MT5 rates for %s: %s", symbol, msg)

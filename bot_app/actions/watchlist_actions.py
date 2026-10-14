@@ -245,10 +245,10 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        symbol = query.data.replace("sym_", "").upper()
+        symbol = query.data.replace("sym_", "")
         message_func = query.edit_message_text
     else:
-        symbol = update.message.text.strip().upper()
+        symbol = update.message.text.strip()
         message_func = update.message.reply_text
 
     context.user_data['symbol'] = symbol
