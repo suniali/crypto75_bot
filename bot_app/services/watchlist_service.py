@@ -18,7 +18,7 @@ def save_watchlist_item(user: TelegramUser, symbol: str, timeframe: str, market_
     """
     obj, created = Watchlist.objects.get_or_create(
         user=user,
-        symbol=symbol.upper(),
+        symbol=symbol,
         time_frame=timeframe,
         market_type=market_type
     )
@@ -37,7 +37,7 @@ def delete_from_watchlist(symbol: str, timeframe: str, market_type: str) -> bool
     خروجی: True در صورت حذف موفق، False در صورت عدم وجود
     """
     deleted_count, _ = Watchlist.objects.filter(
-        symbol=symbol.upper(),
+        symbol=symbol,
         time_frame=timeframe,
         market_type=market_type
     ).delete()

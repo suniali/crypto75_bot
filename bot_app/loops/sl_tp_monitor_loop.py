@@ -109,7 +109,7 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
                     journal_chart_buf = None
                     try:
                         df_ohlc = await fetch_recent_klines(
-                            client=None, symbol=symbol, interval="1m", limit=400, is_forex=True
+                            client=None, symbol=symbol, interval="1m", limit=1000, is_forex=True
                         )
                         if df_ohlc is not None and not df_ohlc.empty:
                             journal_chart_buf = create_journal_heikin_ashi_chart(

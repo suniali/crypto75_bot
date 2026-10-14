@@ -218,7 +218,7 @@ def get_or_find_symbol(target_symbol):
 
     return target_symbol
 
-def get_rates_data(symbol: str, timeframe: str):
+def get_rates_data(symbol: str, timeframe: str, limit: int = 100):
     """دریافت کندل‌های اخیر نماد برای ترسیم چارت یا تحلیل تکنیکال"""
     logger.info("Fetching Data rates for Symbol: %s, Timeframe: %s", symbol, timeframe)
     with mt5_session() as ok:
@@ -228,7 +228,7 @@ def get_rates_data(symbol: str, timeframe: str):
 
         try:
             interval = TIMEFRAME_TO_MT5_TIMEFRAME.get(timeframe, mt5.TIMEFRAME_M30)
-            rates = mt5.copy_rates_from_pos(symbol, interval, 0, 1000)
+            rates = mt5.copy_rates_from_pos(symbol, interval, 0, limit)
 
             if rates is None or len(rates) == 0:
                 logger.warning("No candle data returned for %s (%s)", symbol, timeframe)
