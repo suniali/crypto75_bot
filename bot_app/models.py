@@ -14,6 +14,8 @@ class TelegramUser(models.Model):
     chat_id = models.BigIntegerField(unique=True, db_index=True, verbose_name="آیدی چت تلگرام")
     username = models.CharField(max_length=100, null=True, blank=True, verbose_name="نام کاربری")
     first_name = models.CharField(max_length=100, null=True, blank=True, verbose_name="نام")
+    initial_balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('100.00'), verbose_name="موجودی اولیه")
+    currency = models.CharField(max_length=10, default="USD", verbose_name="ارز پایه")
     is_blocked = models.BooleanField(default=False, verbose_name="بلاک شده")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ عضویت")
 
@@ -23,7 +25,8 @@ class TelegramUser(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"@{self.username}" if self.username else str(self.chat_id)
+        username_display =f'{self.username}' if self.username else str(self.chat_id)
+        return f"@{username_display} - ${self.initial_balance}" 
 
 
 # ==========================================
