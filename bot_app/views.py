@@ -164,8 +164,7 @@ def journal_dashboard(request):
     # میانگین سود و زیان
     avg_win = float(round(gross_wins / wins, 2)) if wins > 0 else 0.0
     avg_loss = float(round(gross_losses / losses, 2)) if losses > 0 else 0.0
-    print(f'avrage win : {avg_win}, avg loss: {avg_loss}')
-
+    
     # نسبت Payoff (میانگین سود به میانگین زیان)
     payoff_ratio = round(avg_win / avg_loss, 2) if avg_loss > 0 else (avg_win if avg_win > 0 else 0.0)
 
