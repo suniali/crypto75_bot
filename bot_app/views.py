@@ -14,7 +14,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import TradeJournal
+from .models import TradeJournal,TelegramUser
 from .utils.month_calender_data import get_monthly_calendar_data,calculate_streaks
 
 
@@ -220,7 +220,14 @@ def journal_dashboard(request):
     radar_data = [entry_score, risk_score, exit_score, stability_score, tempo_score]
 
     # بالانس اولیه پیش‌فرض جهت درصدها
-    initial_balance = Decimal('100.00')
+    chat_id = request.session.get('chat_id')
+    account = TelegramUser.objects.filter(chat_id=chat_id, is_blocked=False).first()
+    if account:
+        initial_balance = account.initial_balance
+    else:
+        initial_balance = Decimal('100.00')
+
+
     gain_percent = round((total_net_profit / float(initial_balance)) * 100, 2)
 
     # بازدهی بازه‌ها
@@ -309,7 +316,7 @@ def journal_dashboard(request):
     req_year = int(request.GET.get('year', timezone.now().year))
     req_month = int(request.GET.get('month', timezone.now().month))
     
-    cal_data = get_monthly_calendar_data(req_year, req_month)
+    cal_data = get_monthly_calendar_data(req_year, req_month,initial_balance)
     context.update(cal_data)
 
     return render(request, 'dashboard.html', context)

@@ -451,21 +451,33 @@
                         </div>
                         
                         <div class="grid grid-cols-4 gap-1.5 text-center font-mono text-xs dir-ltr">
+                            <!-- روزانه -->
                             <div class="bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/60">
                                 <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">روزانه</span>
-                                <span class="font-bold text-sky-400 text-[11px]">{% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%</span>
+                                <span class="font-bold text-[11px] {% if period_returns.daily >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    {% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%
+                                </span>
                             </div>
+                            <!-- هفتگی -->
                             <div class="bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/60">
                                 <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">هفتگی</span>
-                                <span class="font-bold text-sky-400 text-[11px]">{% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%</span>
+                                <span class="font-bold text-[11px] {% if period_returns.weekly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    {% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%
+                                </span>
                             </div>
+                            <!-- ماهانه -->
                             <div class="bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/60">
                                 <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">ماهانه</span>
-                                <span class="font-bold text-sky-400 text-[11px]">{% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%</span>
+                                <span class="font-bold text-[11px] {% if period_returns.monthly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    {% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%
+                                </span>
                             </div>
+                            <!-- سالانه -->
                             <div class="bg-slate-900/40 p-1.5 rounded-lg border border-slate-800/60">
                                 <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">سالانه</span>
-                                <span class="font-bold text-sky-400 text-[11px]">{% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%</span>
+                                <span class="font-bold text-[11px] {% if period_returns.annualized >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    {% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -477,8 +489,8 @@
                     <span class="text-rose-400 font-bold dir-ltr">{{ max_drawdown }}%</span>
                 </div>
             </div>
-
         </div>
+        
 
         <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
