@@ -309,7 +309,14 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
         commission = deal.get("commission", 0.0)
         swap = deal.get("swap", 0.0)
 
-        result = "WIN" if net_profit > 0 else "LOSS" if net_profit < 0 else "BREAKEVEN"
+        be_threshold = user_obj.initial_balance * Decimal('0.01')  # ۱٪ از موجودی اولیه به عنوان آستانه BE
+
+        if abs(net_profit) <= be_threshold:
+            result = 'BE'
+        elif net_profit > 0:
+            result = 'WIN'
+        else:
+            result = 'LOSS'
 
         exit_timestamp = deal.get("time", 0)
         if exit_timestamp > 0:
