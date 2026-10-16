@@ -15,6 +15,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from .models import TradeJournal
+from .utils.month_calender_data import get_monthly_calendar_data
 
 
 logger = logging.getLogger(__name__)
@@ -238,6 +239,13 @@ def journal_dashboard(request):
         'realized_rr_json': json.dumps(realized_rr_list),
     }
 
+    # دریافت سال و ماه از پارامترهای URL یا استفاده از ماه جاری
+    req_year = int(request.GET.get('year', timezone.now().year))
+    req_month = int(request.GET.get('month', timezone.now().month))
+    
+    cal_data = get_monthly_calendar_data(req_year, req_month)
+    context.update(cal_data)
+
     return render(request, 'dashboard.html', context)
 
 
@@ -349,3 +357,49 @@ def restore_backup_view(request):
         return JsonResponse({"status": "success", "message": f"دیتابیس با موفقیت از روی فایل {filename} بازیابی شد!"})
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+def day_trades_api_view(request):
+    date_str = request.GET.get('date')  # فرمت: YYYY-MM-DD
+    if not date_str:
+        return JsonResponse({"status": "error", "message": "تاریخ مشخص نشده است"}, status=400)
+    
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "فرمت تاریخ نامعتبر است"}, status=400)
+        
+    trades = TradeJournal.active_objects.filter(entry_time__date=target_date).order_by('entry_time')
+    
+    trades_data = []
+    for t in trades:
+        net_pnl = float(t.net_profit) if t.net_profit is not None else 0.0
+        
+        # فرمت‌دهی قیمت‌ها تا 5 رقم اعشار (اگر مقدار داشته باشند)
+        def fmt_price(val):
+            return f"{val:.5f}" if val is not None else '-'
+
+        trades_data.append({
+            'id': t.id,
+            'symbol': t.symbol,
+            'trade_type': t.trade_type,  # BUY یا SELL
+            'result': t.result,          # WIN, LOSS, BE, PENDING
+            'volume': str(t.volume) if t.volume else '-',
+            'entry_price': fmt_price(t.entry_price),
+            'exit_price': fmt_price(t.exit_price),
+            'stop_loss': fmt_price(t.stop_loss),
+            'take_profit': fmt_price(t.take_profit),
+            'commission': float(t.commission) if t.commission else 0.0,
+            'swap': float(t.swap) if t.swap else 0.0,
+            'net_profit': net_pnl,
+            'notes': t.notes if t.notes else '',
+            'image_url': t.image.url if t.image else None,
+            'entry_time': t.entry_time.strftime('%H:%M:%S') if t.entry_time else '-',
+            'exit_time': t.exit_time.strftime('%H:%M:%S') if t.exit_time else '-',
+        })
+        
+    return JsonResponse({
+        "status": "success",
+        "date": date_str,
+        "trades": trades_data
+    })
