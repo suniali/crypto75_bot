@@ -373,8 +373,99 @@
                 <span class="text-xs text-slate-400 block mb-1">میانگین زیان (Avg Loss)</span>
                 <span class="text-lg font-mono font-bold text-rose-400">-${{ avg_loss }}</span>
             </div>
-
         </div>
+        <!-- گرید بخش جدید: Winstreak + Radar + Performance -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 my-8">
+    
+            <!-- ۱. کارت Performance -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider">عملکرد کل (PERFORMANCE)</h3>
+                        <span class="text-xs font-mono px-2 py-1 rounded-lg dir-ltr font-bold
+                            {% if gain_percent >= 0 %}bg-emerald-500/10 text-emerald-400{% else %}bg-rose-500/10 text-rose-400{% endif %}">
+                            رشد: {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
+                        </span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-xs my-2 dir-ltr">
+                        <!-- Daily -->
+                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 block font-sans">روزانه</span>
+                            <span class="font-bold {% if period_returns.daily >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%
+                            </span>
+                        </div>
+                        <!-- Weekly -->
+                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 block font-sans">هفتگی</span>
+                            <span class="font-bold {% if period_returns.weekly >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%
+                            </span>
+                        </div>
+                        <!-- Monthly -->
+                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 block font-sans">ماهانه</span>
+                            <span class="font-bold {% if period_returns.monthly >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%
+                            </span>
+                        </div>
+                        <!-- Annual -->
+                        <div class="bg-slate-900/50 p-2.5 rounded-xl border border-slate-800">
+                            <span class="text-[10px] text-slate-500 block font-sans">سالانه</span>
+                            <span class="font-bold {% if period_returns.annualized >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5 text-xs text-slate-400 font-mono border-t border-slate-800 pt-3 mt-2 dir-ltr flex flex-col">
+                    <div class="flex justify-between font-sans"><span>بیشترین افت حساب (Max DD):</span><span class="text-rose-400 font-mono">-${{ max_drawdown }}</span></div>
+                    <div class="flex justify-between font-sans"><span>سود خالص (Net PnL):</span><span class="{% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} font-mono">{% if total_net_profit >= 0 %}+{% else %}-{% endif %}${{ total_net_profit|stringformat:"s"|cut:"-" }}</span></div>
+                </div>
+            </div>
+
+            <!-- ۲. نمودار رادار WaveScore Radar -->
+            <div class="glass-card p-6 flex flex-col items-center justify-center relative">
+                <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-2 self-start">رادار ارزیابی سیستم</h3>
+                <div class="w-full h-52 relative flex items-center justify-center">
+                    <canvas id="radarChart"></canvas>
+                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none dir-ltr">
+                        <span class="text-2xl font-black text-white font-mono opacity-90">{{ radar_score_overall }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ۳. کارت Winstreak -->
+            <div class="glass-card p-6 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-300 uppercase tracking-wider mb-4 text-right">زنجیره برد و باخت (WINSTREAK)</h3>
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                            <span class="text-xs text-slate-400 block mb-1">روزهای متوالی</span>
+                            <div class="flex items-center justify-center gap-2 dir-ltr">
+                                <span class="text-xl font-black text-amber-400 font-mono">{{ streaks.max_win_streak_days }}</span>
+                                <span class="text-xs text-rose-400 font-mono">({{ streaks.max_loss_streak_days }})</span>
+                            </div>
+                        </div>
+                        <div class="bg-slate-900/60 p-4 rounded-2xl border border-slate-800">
+                            <span class="text-xs text-slate-400 block mb-1">معاملات متوالی</span>
+                            <div class="flex items-center justify-center gap-2 dir-ltr">
+                                <span class="text-xl font-black text-sky-400 font-mono">{{ streaks.max_win_streak_trades }}</span>
+                                <span class="text-xs text-rose-400 font-mono">({{ streaks.max_loss_streak_trades }})</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-800 text-xs text-slate-400 flex justify-between">
+                    <span>نرخ پایداری سیستم</span>
+                    <span class="{{ stability_color }} font-bold">{{ stability_label }}</span>
+                </div>
+            </div>
+
+        </div>  
+
 
         <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -505,6 +596,9 @@
                                     <span class="block text-xs font-mono font-black tracking-tight
                                         {% if day.pnl > 0 %}text-sky-400{% elif day.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
                                         {% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
+                                    </span>
+                                    <span class="block text-[10px] font-mono text-slate-500">
+                                        {% if day.pnl_percent >= 0 %}+{% endif %}{{ day.pnl_percent }}%
                                     </span>
                                 </div>
                                 {% endif %}
@@ -1268,6 +1362,38 @@
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeDayTradesModal();
+            }
+        });
+
+        // اسکریپت رندر نمودار رادار WaveScore
+        const radarCtx = document.getElementById('radarChart').getContext('2d');
+        new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: ['Entry', 'Risk', 'Exit', 'Stability', 'Tempo'],
+                datasets: [{
+                    data: {{ radar_json|safe }},
+                    backgroundColor: 'rgba(99, 102, 241, 0.25)',
+                    borderColor: '#818cf8',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#f43f5e',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        pointLabels: { color: '#94a3b8', font: { size: 10, family: 'monospace' } },
+                        ticks: { display: false },
+                        suggestedMin: 0,
+                        suggestedMax: 100
+                    }
+                }
             }
         });
     </script>
