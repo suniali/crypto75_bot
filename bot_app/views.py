@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from .models import TradeJournal
-from .utils.month_calender_data import get_monthly_calendar_data
+from .utils.month_calender_data import get_monthly_calendar_data,calculate_streaks
 
 
 logger = logging.getLogger(__name__)
@@ -192,6 +192,43 @@ def journal_dashboard(request):
     else:
         profit_factor = 0.0
 
+    # محاسبه متوالی‌ها (Winstreaks)
+    streaks_data = calculate_streaks(processed_trades)
+
+    # تعیین هوشمند نرخ پایداری سیستم بر اساس عملکرد کل
+    if profit_factor >= 2.0 and win_rate >= 50:
+        stability_label = "عالی و باثبات"
+        stability_color = "text-emerald-400"
+    elif profit_factor >= 1.2 and win_rate >= 40:
+        stability_label = "بسیار خوب"
+        stability_color = "text-emerald-400"
+    elif profit_factor >= 1.0:
+        stability_label = "نرمال / لب‌مرز"
+        stability_color = "text-amber-400"
+    else:
+        stability_label = "نیاز به بازنگری ریسک"
+        stability_color = "text-rose-400"
+
+    # محاسبه امتیازات Radar (بر اساس ۵ معیار تخصصی)
+    entry_score = min(100, int(win_rate * 1.5))
+    exit_score = min(100, int(payoff_ratio * 35))
+    risk_score = max(10, 100 - int(abs(float(max_drawdown)) / 50))
+    stability_score = min(100, int((sharpe_ratio + 1) * 30))
+    tempo_score = min(100, int(total_trades * 3))
+    radar_score_overall = int((entry_score + exit_score + risk_score + stability_score + tempo_score) / 5)
+
+    radar_data = [entry_score, risk_score, exit_score, stability_score, tempo_score]
+
+    # بالانس اولیه پیش‌فرض جهت درصدها
+    initial_balance = Decimal('100.00')
+    gain_percent = round((total_net_profit / float(initial_balance)) * 100, 2)
+
+    # بازدهی بازه‌ها
+    period_daily_return = round(total_net_profit / 30 / float(initial_balance) * 100, 2) if total_trades > 0 else 0.0
+    period_weekly_return = round(total_net_profit / 4 / float(initial_balance) * 100, 2) if total_trades > 0 else 0.0
+    period_monthly_return = gain_percent
+    period_annual_return = round(gain_percent * 12, 2)
+
     days_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     day_pnl_values = [float(round(day_pnl[i], 2)) for i in range(7)]
 
@@ -227,6 +264,18 @@ def journal_dashboard(request):
         'max_drawdown': float(round(max_drawdown, 2)),
         'total_commission': float(round(total_commission, 2)),
         'total_swap': float(round(total_swap, 2)),
+        'streaks': streaks_data,
+        'stability_label': stability_label,
+        'stability_color': stability_color,
+        'radar_score_overall': radar_score_overall,
+        'radar_json': json.dumps(radar_data),
+        'gain_percent': gain_percent,
+        'period_returns': {
+            'daily': period_daily_return,
+            'weekly': period_weekly_return,
+            'monthly': period_monthly_return,
+            'annualized': period_annual_return,
+        },
         'chart_labels_json': json.dumps(chart_labels),
         'chart_pnl_json': json.dumps(cumulative_pnl_data),
         'drawdown_json': json.dumps(drawdown_data),
