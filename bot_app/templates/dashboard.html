@@ -409,8 +409,17 @@
             <!-- ۲. کارت WaveScore Radar (رادار ارزیابی) -->
             <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between items-center relative">
                 <div class="w-full flex justify-between items-center mb-1">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">رادار ارزیابی حساب <span class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-mono uppercase font-bold">پرو</span></h3>
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">رادار ارزیابی حساب </h3>
+                    
+                    <!-- بج وضعیت رنگی خودکار -->
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold
+                        {% if radar_score_overall >= 75 %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                        {% elif radar_score_overall >= 50 %}bg-sky-500/10 text-sky-400 border border-sky-500/20
+                        {% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
+                        {% if radar_score_overall >= 75 %}وضعیت عالی{% elif radar_score_overall >= 50 %}وضعیت نرمال{% else %}نیازمند بازنگری{% endif %}
+                    </span>
                 </div>
+
                 <div class="w-full h-48 relative flex items-center justify-center">
                     <canvas id="radarChart"></canvas>
                     <div class="absolute inset-0 flex items-center justify-center pointer-events-none dir-ltr">
@@ -1391,6 +1400,26 @@
         });
 
         // اسکریپت رندر نمودار رادار WaveScore
+        const overallScore = Number("{{ radar_score_overall }}") || 0;
+    
+        let radarBorderColor = '#818cf8'; // پیش‌فرض (آبی ملایم)
+        let radarBgColor = 'rgba(99, 102, 241, 0.25)';
+        let pointColor = '#6366f1';
+
+        if (overallScore >= 75) {
+            radarBorderColor = '#34d399'; // سبز ایمن
+            radarBgColor = 'rgba(52, 211, 153, 0.25)';
+            pointColor = '#10b981';
+        } else if (overallScore >= 50) {
+            radarBorderColor = '#38bdf8'; // آبی پرو (نرمال)
+            radarBgColor = 'rgba(56, 189, 248, 0.25)';
+            pointColor = '#0ea5e9';
+        } else {
+            radarBorderColor = '#f43f5e'; // قرمز هشدار
+            radarBgColor = 'rgba(244, 63, 94, 0.25)';
+            pointColor = '#e11d48';
+        }
+
         const radarCtx = document.getElementById('radarChart').getContext('2d');
         new Chart(radarCtx, {
             type: 'radar',
@@ -1398,10 +1427,10 @@
                 labels: ['Entry', 'Risk', 'Exit', 'Stability', 'Tempo'],
                 datasets: [{
                     data: {{ radar_json|safe }},
-                    backgroundColor: 'rgba(99, 102, 241, 0.25)',
-                    borderColor: '#818cf8',
+                    backgroundColor: radarBgColor,
+                    borderColor: radarBorderColor,
                     borderWidth: 2,
-                    pointBackgroundColor: '#f43f5e',
+                    pointBackgroundColor: pointColor,
                     pointRadius: 4
                 }]
             },
