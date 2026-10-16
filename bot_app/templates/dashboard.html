@@ -179,6 +179,41 @@
     </div>
 </div>
 
+<!-- مودال نمایش معاملات روزانه (2027 Glassmorphism) -->
+<div id="dayTradesModal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden">
+    <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl mx-4 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        
+        <!-- هدر مودال -->
+        <div class="px-6 py-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/40">
+            <div>
+                <h3 class="text-white font-bold text-base flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse"></span>
+                    معاملات روز: <span id="modalDateTitle" class="font-mono text-sky-400"></span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-0.5">جزئیات کامل پوزیشن‌های ثبت‌شده در این تاریخ</p>
+            </div>
+            <button onclick="closeDayTradesModal()" class="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- محتوای لیست معاملات -->
+        <div id="dayTradesContainer" class="p-6 overflow-y-auto space-y-3 flex-1">
+            <div class="text-center text-slate-500 py-8">در حال بارگذاری اطلاعات...</div>
+        </div>
+        
+        <!-- فوتر مودال -->
+        <div class="px-6 py-4 border-t border-slate-800/80 bg-slate-950/60 flex justify-between items-center text-xs text-slate-400">
+            <span>سیستم ژورنال هوشمند</span>
+            <button onclick="closeDayTradesModal()" class="px-5 py-2 rounded-xl font-medium bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white transition-colors">
+                بستن
+            </button>
+        </div>
+    </div>
+</div>
+
 <body class="p-4 md:p-8 min-h-screen">
 
     <div class="max-w-7xl mx-auto space-y-8">
@@ -382,6 +417,115 @@
         <div class="glass-card p-6">
             <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
             <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
+        </div>
+
+        <!-- تقویم معاملاتی ماهانه (Trader Heatmap Calendar) -->
+        <div class="glass-card p-5 rounded-2xl bg-[#0f172a]/90 border border-slate-800/80 shadow-2xl">
+            
+            <!-- هدر تقویم: کنترل ماه + خلاصه آمار -->
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 border-b border-slate-800/80 pb-4">
+                
+                <!-- انوگیشن ماه (قبلی / بعدی) -->
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                        <a href="?year={% if current_month == 1 %}{{ current_year|add:-1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 1 %}12{% else %}{{ current_month|add:-1 }}{% endif %}" 
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </a>
+                        <span class="text-sm font-bold text-white px-3 font-mono">{{ month_name }}</span>
+                        <a href="?year={% if current_month == 12 %}{{ current_year|add:1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 12 %}1{% else %}{{ current_month|add:1 }}{% endif %}" 
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- آمار خلاصه ماه -->
+                <div class="flex items-center gap-6 text-xs font-mono">
+                    <div class="text-center">
+                        <span class="text-slate-500 block text-[10px] uppercase">Trades</span>
+                        <span class="text-sky-400 font-bold text-sm">{{ month_trades_count }}</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="text-slate-500 block text-[10px] uppercase">Wins</span>
+                        <span class="text-emerald-400 font-bold text-sm">{{ month_wins_count }}</span>
+                    </div>
+                    <div class="text-center">
+                        <span class="text-slate-500 block text-[10px] uppercase">Profits</span>
+                        <span class="font-bold text-sm {% if month_total_pnl >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                            {% if month_total_pnl >= 0 %}+${{ month_total_pnl|floatformat:2 }}{% else %}-${{ month_total_pnl|floatformat:2|slice:"1:" }}{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- جدول شبکه تقویم -->
+            <div class="w-full overflow-x-auto">
+                <div class="min-w-[700px]">
+                    
+                    <!-- عناوین روزهای هفته + Total -->
+                    <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold text-slate-400 mb-3 font-mono">
+                        <div>Sun</div>
+                        <div>Mon</div>
+                        <div>Tue</div>
+                        <div>Wed</div>
+                        <div>Thu</div>
+                        <div>Fri</div>
+                        <div>Sat</div>
+                        <div class="text-slate-200 border-l border-slate-800 pl-2">Total</div>
+                    </div>
+
+                    <!-- هفته‌ها -->
+                    <div class="space-y-2">
+                        {% for week in calendar_weeks %}
+                        <div class="grid grid-cols-8 gap-2">
+                            
+                            <!-- روزهای هفته -->
+                            {% for day in week.days %}
+                            <div {% if day.is_current_month %}onclick="openDayTradesModal('{{ day.date_str }}', event)"{% endif %}
+                                class="relative h-20 p-2 rounded-xl border flex flex-col justify-between transition-all duration-200 dir-ltr text-left
+                                {% if day.status == 'profit' %}
+                                    bg-sky-950/30 border-sky-500/40 hover:border-sky-400 shadow-sm shadow-sky-950/50
+                                {% elif day.status == 'loss' %}
+                                    bg-rose-950/30 border-rose-500/40 hover:border-rose-400 shadow-sm shadow-rose-950/50
+                                {% elif day.status == 'other_month' %}
+                                    bg-slate-900/20 border-slate-900 text-slate-600 opacity-40
+                                {% else %}
+                                    bg-slate-900/60 border-slate-800/80 hover:border-slate-700 text-slate-400
+                                {% endif %}">
+                                
+                                <!-- شماره روز -->
+                                <span class="text-[11px] font-mono font-bold {% if not day.is_current_month %}text-slate-600{% else %}text-slate-400{% endif %}">
+                                    {{ day.day_num }}
+                                </span>
+
+                                <!-- مقدار سود / زیان -->
+                                {% if day.is_current_month and day.count > 0 %}
+                                <div class="text-center my-auto">
+                                    <span class="block text-xs font-mono font-black tracking-tight
+                                        {% if day.pnl > 0 %}text-sky-400{% elif day.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
+                                        {% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+
+                            <!-- کارت جمع هفتگی (Total) -->
+                            <div class="relative h-20 p-2 rounded-xl border border-slate-800 bg-slate-900/90 flex flex-col justify-center items-center dir-ltr">
+                                <span class="text-[10px] text-slate-500 font-mono block mb-1">WEEK</span>
+                                <span class="text-xs font-mono font-black tracking-tight
+                                    {% if week.week_total_pnl > 0 %}text-sky-400{% elif week.week_total_pnl < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
+                                    {% if week.week_total_pnl > 0 %}+${{ week.week_total_pnl|floatformat:2 }}{% elif week.week_total_pnl < 0 %}-${{ week.week_total_pnl|floatformat:2|slice:"1:" }}{% else %}$0.00{% endif %}
+                                </span>
+                            </div>
+
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                </div>
+            </div>
         </div>
 
         <!-- ۶. جدول کامل ژورنال معاملات -->
@@ -1013,6 +1157,118 @@
         // بستن منو با کلیک در هر جای صفحه
         window.addEventListener('click', function() {
             closeDbMenu();
+        });
+
+        <!-- اسکریپت‌های مدیریت مودال معاملات روز -->
+        function openDayTradesModal(dateStr, event) {
+            if(event) event.stopPropagation();
+            const modal = document.getElementById('dayTradesModal');
+            const title = document.getElementById('modalDateTitle');
+            const container = document.getElementById('dayTradesContainer');
+            
+            title.innerText = dateStr;
+            container.innerHTML = '<div class="text-center text-slate-400 py-8">در حال دریافت اطلاعات معاملات...</div>';
+            modal.classList.remove('hidden');
+            
+            fetch(`{% url 'day_trades_api' %}?date=${dateStr}`)
+            .then(response => response.json())
+            .then(data => {
+                if(data.status === 'success') {
+                    if(data.trades.length === 0) {
+                        container.innerHTML = '<div class="text-center text-slate-500 py-10">هیچ معامله‌ای در این روز ثبت نشده است.</div>';
+                        return;
+                    }
+                    
+                    let html = '<div class="space-y-4">';
+                    data.trades.forEach(t => {
+                        const isWin = t.result === 'WIN';
+                        const isLoss = t.result === 'LOSS';
+                        
+                        html += `
+                            <div class="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:bg-slate-800/60 transition-all space-y-3">
+                                <!-- هدر کارت معامله -->
+                                <div class="flex items-center justify-between border-b border-slate-700/40 pb-3">
+                                    <div class="flex items-center gap-3">
+                                        <span class="px-3 py-1 rounded-xl text-xs font-bold font-mono ${t.trade_type === 'BUY' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}">
+                                            ${t.trade_type}
+                                        </span>
+                                        <div>
+                                            <h4 class="text-white font-black text-sm font-mono tracking-wide">${t.symbol}</h4>
+                                            <span class="text-[11px] text-slate-400 font-mono">ورود: ${t.entry_time} | خروج: ${t.exit_time}</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="block text-base font-black font-mono ${isWin ? 'text-sky-400' : (isLoss ? 'text-rose-400' : 'text-slate-300')}">
+                                            ${t.net_profit >= 0 ? '+' : ''}$${t.net_profit.toFixed(2)}
+                                        </span>
+                                        <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md ${isWin ? 'bg-sky-500/10 text-sky-400' : (isLoss ? 'bg-rose-500/10 text-rose-400' : 'bg-slate-700 text-slate-300')}">
+                                            ${t.result}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- جزئیات قیمت‌ها و حجم (تا ۵ رقم اعشار) -->
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono bg-slate-950/40 p-3 rounded-xl border border-slate-800/60">
+                                    <div>
+                                        <span class="text-slate-500 block text-[10px]">حجم:</span>
+                                        <span class="text-slate-200 font-bold">${t.volume}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-500 block text-[10px]">قیمت ورود:</span>
+                                        <span class="text-slate-200 font-bold">${t.entry_price}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-500 block text-[10px]">قیمت خروج:</span>
+                                        <span class="text-slate-200 font-bold">${t.exit_price}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-slate-500 block text-[10px]">حد ضرر / سود:</span>
+                                        <span class="text-slate-400">${t.stop_loss} / ${t.take_profit}</span>
+                                    </div>
+                                </div>
+
+                                <!-- هزینه‌ها (کمیسیون و سواپ) -->
+                                <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono px-1">
+                                    <span>کمیسیون: <strong class="text-slate-300">-$${t.commission.toFixed(2)}</strong></span>
+                                    <span>سوآپ: <strong class="text-slate-300">$${t.swap.toFixed(2)}</strong></span>
+                                </div>
+
+                                <!-- یادداشت یا تصویر چارت در صورت وجود -->
+                                ${t.notes ? `<div class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800"><strong>یادداشت:</strong> ${t.notes}</div>` : ''}
+                                ${t.image_url ? `<div class="mt-2"><a href="${t.image_url}" target="_blank" class="text-xs text-indigo-400 hover:underline flex items-center gap-1">📎 مشاهده تصویر چارت معامله</a></div>` : ''}
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-center text-red-400 py-8">خطا در دریافت اطلاعات معاملات</div>';
+                }
+            })
+            .catch(error => {
+                container.innerHTML = '<div class="text-center text-red-400 py-8">خطای ارتباط با سرور</div>';
+                console.error(error);
+            });
+        }
+
+        function closeDayTradesModal() {
+            const modal = document.getElementById('dayTradesModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto'; // بازگرداندن اسکرول صفحه
+        }
+
+        // بستن مودال با کلیک روی پس‌زمینه تار (خارج از باکس مودال)
+        document.getElementById('dayTradesModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDayTradesModal();
+            }
+        });
+
+        // بستن مودال با دکمه Escape کیبورد
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeDayTradesModal();
+            }
         });
     </script>
 </body>
