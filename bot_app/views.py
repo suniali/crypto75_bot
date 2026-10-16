@@ -246,6 +246,21 @@ def journal_dashboard(request):
     except EmptyPage:
         trades = paginator.page(paginator.num_pages)
 
+    # محاسبه پویا و دقیق ارزیابی سطح ریسک حساب بر اساس Drawdown
+    abs_dd = abs(float(max_drawdown))
+    if abs_dd <= 5.0:
+        risk_level_label = "پایین (ایمن)"
+        risk_level_color = "text-emerald-400"
+    elif abs_dd <= 15.0:
+        risk_level_label = "متوسط (کنترل‌شده)"
+        risk_level_color = "text-sky-400"
+    elif abs_dd <= 25.0:
+        risk_level_label = "بالا (هشدار)"
+        risk_level_color = "text-amber-400"
+    else:
+        risk_level_label = "بسیار بالا (خطرناک)"
+        risk_level_color = "text-rose-400"
+
     context = {
         'trades': trades,
         'current_period': period,
@@ -286,6 +301,8 @@ def journal_dashboard(request):
         'symbols_pnl_json': json.dumps(symbols_pnl_values),
         'planned_rr_json': json.dumps(planned_rr_list),
         'realized_rr_json': json.dumps(realized_rr_list),
+        'risk_level_label': risk_level_label,
+        'risk_level_color': risk_level_color,
     }
 
     # دریافت سال و ماه از پارامترهای URL یا استفاده از ماه جاری
