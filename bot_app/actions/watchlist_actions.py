@@ -60,16 +60,18 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
         row = []
 
         for watch in watchlist:
-            sym = str(watch.symbol).replace("_", "\\_")
+            sym = str(watch.symbol)
             tf = str(watch.time_frame)
             m_type = str(watch.market_type)
 
             msg += f"• `{sym}` ({tf}) - {m_type}\n"
 
+            sym= sym.replace("_", "+")  # اصلاح نماد برای نمایش درست در دکمه‌ها
+            
             row.append(
                 InlineKeyboardButton(
                     f"❌ {watch.symbol} ({tf})",
-                    callback_data=f"del_watchlist_{watch.symbol}_{tf}_{m_type}"
+                    callback_data=f"del_watchlist_{sym}_{tf}_{m_type}"
                 )
             )
             if len(row) == 2:
@@ -111,16 +113,16 @@ async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT
     query = update.callback_query
     if query:
         await query.answer()
-
+    
     _, _, symbol, timeframe, market_type = query.data.split('_')
-
+    
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("✅ بله، مطمئنم", callback_data=f"confirm_del_watchlist_{symbol}_{timeframe}_{market_type}"),
             InlineKeyboardButton("❌ انصراف", callback_data="showWatchlist"),
         ]
     ])
-
+    symbol = symbol.replace("+", "_")  # اصلاح نماد برای نمایش درست در متن هشدار
     text = (
         "⚠️ **هشدار: آیا اطمینان دارید؟**\n\n"
         f"با تایید این گزینه نماد `{symbol}` ({timeframe}) از واچ‌لیست حذف خواهد شد!"
@@ -131,15 +133,17 @@ async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT
 
 async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    chat_id = update.effective_chat.id
 
     # پاسخ لحظه‌ای به دکمه برای از بین بردن تأخیر ظاهری
     await query.answer("در حال پردازش...", show_alert=False)
 
     _, _, _, symbol, timeframe, market_type = query.data.split("_")
+    symbol = symbol.replace("+", "_")  # اصلاح نماد برای نمایش درست در متن هشدار
     logger.info("Deleting item from watchlist: %s (%s, %s)", symbol, timeframe, market_type)
 
     # متوقف ساختن تسک پایش پس‌زمینه
-    worker_key = f"{symbol}_{timeframe}_{market_type}"
+    worker_key = f"{chat_id}_{symbol}_{timeframe}_{market_type}"
     if worker_key in ACTIVE_WORKERS:
         ACTIVE_WORKERS[worker_key].cancel()
         del ACTIVE_WORKERS[worker_key]
