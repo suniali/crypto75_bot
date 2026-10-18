@@ -807,7 +807,7 @@
                 <div class="flex items-center gap-1">
                     <!-- دکمه قبلی -->
                     {% if trades.has_previous %}
-                        <a href="?page={{ trades.previous_page_number }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                        <a href="?page={{ trades.previous_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
                             قبلی
                         </a>
                     {% else %}
@@ -824,7 +824,7 @@
                                     {{ num }}
                                 </span>
                             {% elif num > trades.number|add:'-3' and num < trades.number|add:'3' %}
-                                <a href="?page={{ num }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                                <a href="?page={{ num }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
                                     {{ num }}
                                 </a>
                             {% endif %}
@@ -833,7 +833,7 @@
 
                     <!-- دکمه بعدی -->
                     {% if trades.has_next %}
-                        <a href="?page={{ trades.next_page_number }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                        <a href="?page={{ trades.next_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
                             بعدی
                         </a>
                     {% else %}
