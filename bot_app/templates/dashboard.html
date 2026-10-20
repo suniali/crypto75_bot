@@ -293,13 +293,20 @@
                         </h3>
                         <span class="text-[10px] text-slate-500 font-mono mt-1 block">برآیند حساب</span>
                     </div>
-                    <!-- حلقه دایره‌ای گرافیکی سبز / قرمز -->
-                    <div class="relative w-16 h-16 flex items-center justify-center rounded-full border-4 border-slate-800 {% if total_net_profit >= 0 %}border-t-emerald-400 shadow-emerald-500/10{% else %}border-t-rose-500 shadow-rose-500/10{% endif %} shadow-lg">
-                        <span class="text-[10px] font-mono font-bold {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
-                            {% if total_net_profit >= 0 %}سود{% else %}زیان{% endif %}
-                        </span>
+
+                    <!-- 🎯 حلقه دایره‌ای واقعی و پویا -->
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg"
+                        style="background: conic-gradient({% if total_net_profit >= 0 %}#34d399{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                        
+                        <!-- هسته داخلی دایره -->
+                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                            <span class="text-[10px] font-mono font-bold {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                {% if total_net_profit >= 0 %}+{% else %}-{% endif %}{{ abs_gain_percent|floatformat:1 }}%
+                            </span>
+                        </div>
                     </div>
                 </div>
+
                 <div class="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-[11px] text-slate-400 font-mono dir-ltr">
                     <span>کمیسیون: <strong class="text-slate-300">-${{ total_commission|floatformat:2 }}</strong></span>
                     <span>سوآپ: <strong class="text-slate-300">${{ total_swap|floatformat:2 }}</strong></span>
@@ -314,9 +321,15 @@
                         <h3 class="text-2xl font-black font-mono text-sky-400">%{{ win_rate }}</h3>
                         <span class="text-[10px] text-slate-500 font-mono mt-1 block">از {{ total_trades }} معامله</span>
                     </div>
-                    <!-- نمودار دایره‌ای / حلقه‌ای مدرن -->
-                    <div class="relative w-16 h-16 flex items-center justify-center rounded-full border-4 border-slate-800 border-t-sky-400 shadow-lg shadow-sky-500/10">
-                        <span class="text-xs font-mono font-bold text-slate-200">%{{ win_rate }}</span>
+                    
+                    <!-- 🎯 نمودار حلقه‌ای پویا بر اساس وین‌ریت واقعی -->
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-sky-500/10"
+                        style="background: conic-gradient(#38bdf8 {{ win_rate_angle }}deg, #1e293b 0deg);">
+                        
+                        <!-- هسته داخلی توخالی (Doughnut) -->
+                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                            <span class="text-xs font-mono font-bold text-slate-200 dir-ltr">%{{ win_rate }}</span>
+                        </div>
                     </div>
                 </div>
                 
@@ -349,9 +362,17 @@
                         </h3>
                         <span class="text-[10px] text-slate-500 font-mono mt-1 block">بازده نسبت به ریسک</span>
                     </div>
-                    <!-- حلقه دایره‌ای گرافیکی CSS برای فاکتور سودآوری -->
-                    <div class="relative w-16 h-16 flex items-center justify-center rounded-full border-4 border-slate-800 {% if profit_factor >= 1.2 %}border-t-sky-400 shadow-sky-500/10{% else %}border-t-amber-400 shadow-amber-500/10{% endif %} shadow-lg">
-                        <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %}">PF</span>
+                    
+                    <!-- 🎯 حلقه دایره‌ای پویای Profit Factor -->
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if profit_factor >= 1.2 %}shadow-sky-500/10{% else %}shadow-amber-500/10{% endif %}"
+                        style="background: conic-gradient({% if profit_factor >= 1.2 %}#38bdf8{% else %}#fbbf24{% endif %} {{ pf_angle }}deg, #1e293b 0deg);">
+                        
+                        <!-- هسته داخلی توخالی (Doughnut) -->
+                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                            <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %} dir-ltr">
+                                PF
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -380,9 +401,17 @@
                         </h3>
                         <span class="text-[10px] text-slate-500 font-mono mt-1 block">افت از قله (Peak)</span>
                     </div>
-                    <!-- حلقه دایره‌ای گرافیکی قرمز برای Drawdown -->
-                    <div class="relative w-16 h-16 flex items-center justify-center rounded-full border-4 border-slate-800 border-t-rose-500 shadow-lg shadow-rose-500/10">
-                        <span class="text-xs font-mono font-bold text-rose-400">DD</span>
+                    
+                    <!-- 🎯 حلقه دایره‌ای پویای Drawdown -->
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-rose-500/10"
+                        style="background: conic-gradient(#f43f5e {{ dd_angle }}deg, #1e293b 0deg);">
+                        
+                        <!-- هسته داخلی توخالی (Doughnut) -->
+                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                            <span class="text-xs font-mono font-bold text-rose-400 dir-ltr">
+                                DD
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -482,7 +511,7 @@
             <!-- کارت عملکرد کل (Overall Performance) - نسخه ارتقایافته و گیمیفاید -->
             <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
                 <div>
-                    <!-- هدر کارت به همراه حلقه دایره‌ای درصد رشد -->
+                    <!-- هدر کارت به همراه حلقه دایره‌ای پویای درصد رشد -->
                     <div class="flex items-center justify-between mb-3">
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">عملکرد کل (Performance)</span>
@@ -492,11 +521,16 @@
                             <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">سود خالص کل (NET P&L)</span>
                         </div>
                         
-                        <!-- حلقه دایره‌ای گرافیکی CSS برای درصد رشد (Gain) -->
-                        <div class="relative w-16 h-16 flex items-center justify-center rounded-full border-4 border-slate-800 {% if gain_percent >= 0 %}border-t-sky-400 shadow-sky-500/10{% else %}border-t-rose-500 shadow-rose-500/10{% endif %} shadow-lg">
-                            <span class="text-[11px] font-mono font-bold {% if gain_percent >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
-                            </span>
+                        <!-- 🎯 حلقه دایره‌ای پویای درصد رشد (Gain) -->
+                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if gain_percent >= 0 %}shadow-sky-500/10{% else %}shadow-rose-500/10{% endif %}"
+                            style="background: conic-gradient({% if gain_percent >= 0 %}#38bdf8{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                            
+                            <!-- هسته داخلی توخالی (Doughnut) -->
+                            <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                                <span class="text-[10px] font-mono font-bold {% if gain_percent >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                    {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -546,7 +580,6 @@
                     <span class="text-rose-400 font-bold dir-ltr">{{ max_drawdown }}%</span>
                 </div>
             </div>
-        </div>
         
 
         <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->

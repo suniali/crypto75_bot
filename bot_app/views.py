@@ -267,6 +267,19 @@ def journal_dashboard(request):
         risk_level_label = "بسیار بالا (خطرناک)"
         risk_level_color = "text-rose-400"
 
+    abs_gain_percent = abs(gain_percent)
+
+    # تبدیل درصد به زاویه (۳۶۰ درجه) برای CSS conic-gradient
+    # محدود کردن حداکثر زاویه به ۳۶۰ درجه
+    gauge_angle = min(360, int((abs_gain_percent / 100) * 360)) if abs_gain_percent > 0 else 0
+    # تبدیل درصد وین‌ریت به زاویه برای حلقه دایره‌ای (۳۶۰ درجه)
+    win_rate_angle = int((win_rate / 100) * 360) if win_rate > 0 else 0
+    # تبدیل Profit Factor به زاویه (فرض: حداکثر مطلوب ۳.۰ معادل دایره کامل ۳۶۰ درجه)
+    pf_angle = min(360, int((float(profit_factor) / 3.0) * 360)) if profit_factor > 0 else 0
+    # تبدیل حداکثر افت حساب به زاویه (فرض: حداکثر مقیاس بحرانی ۵۰٪ افت معادل ۳۶۰ درجه)
+    # اگر خواستید حساس‌تر یا بازتر باشد می‌توانید عدد مخرج (50.0) را تغییر دهید
+    dd_angle = min(360, int((abs(float(max_drawdown)) / 50.0) * 360)) if max_drawdown else 0
+
     context = {
         'trades': trades,
         'current_period': period,
@@ -309,6 +322,12 @@ def journal_dashboard(request):
         'realized_rr_json': json.dumps(realized_rr_list),
         'risk_level_label': risk_level_label,
         'risk_level_color': risk_level_color,
+        'gain_percent': gain_percent,
+        'abs_gain_percent': abs_gain_percent,
+        'gauge_angle': gauge_angle,
+        'win_rate_angle': win_rate_angle,
+        'pf_angle': pf_angle,
+        'dd_angle': dd_angle,
     }
 
     # دریافت سال و ماه از پارامترهای URL یا استفاده از ماه جاری
