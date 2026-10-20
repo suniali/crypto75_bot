@@ -5,4 +5,4 @@ echo Starting Django Server and Telegram Bot in Windows Terminal...
 call .venv\Scripts\activate
 
 :: باز کردن سرور جنگو و ربات در تب‌های جداگانه در ویندوز ترمینال
-wt -d . cmd /k ".venv\Scripts\activate && python manage.py runserver" ; split-pane -d . cmd /k ".venv\Scripts\activate && python ./bot_app/bot.py"
+wt -d . cmd /k ".venv\Scripts\activate && python run_app.py" ; split-pane -d . cmd /k ".venv\Scripts\activate && python ./bot_app/bot.py"
