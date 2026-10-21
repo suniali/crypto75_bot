@@ -288,10 +288,10 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     # ۵. ارسال یا ویرایش پیام
     if query:
-        msg = await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        msg = await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
         message_id = msg.message_id
     else:
-        msg = await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        msg = await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
         message_id = msg.message_id
 
     # ۶. تنظیم و شروع تایمر آپدیت زنده (هر ۳ ثانیه یک‌بار)
