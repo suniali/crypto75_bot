@@ -311,9 +311,9 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
 
         be_threshold = user_obj.initial_balance * Decimal('0.01')  # ۱٪ از موجودی اولیه به عنوان آستانه BE
 
-        if abs(net_profit) <= be_threshold:
+        if 0 <= net_profit <= be_threshold:
             result = 'BE'
-        elif net_profit > 0:
+        elif net_profit >= be_threshold:
             result = 'WIN'
         else:
             result = 'LOSS'
