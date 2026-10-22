@@ -161,7 +161,6 @@ def get_user_progression_plan(user):
             trend_color = "text-amber-400"
 
     return {
-        'total_net_profit': total_net_profit,
         'current_level_num': current_level['level_num'],
         'current_risk': current_level['risk_per_trade'],
         'completion_percentage': completion_percentage,
