@@ -21,14 +21,11 @@ from .utils.month_calender_data import get_monthly_calendar_data,calculate_strea
 logger = logging.getLogger(__name__)
 
 def get_user_progression_plan():
+    all_trades = TradeJournal.active_objects.all()
     base_risk = 1.0 
     
-    all_trades = TradeJournal.active_objects.all()
-
-    # محاسبه کل سود خالص انباشته حساب
     total_net_profit = sum(float(t.net_profit) for t in all_trades)
     
-    # تعریف ساختار مراحل
     levels = []
     current_cumulative_profit = 0.0
     
@@ -57,27 +54,27 @@ def get_user_progression_plan():
             'payout_amount': payout_amount
         })
 
-    # 🛑 بررسی وضعیت ضرر کل (حساب در ضرر است)
+    earned_hearts_in_level = 0
+    required_recovery_hearts = 0
+
     if total_net_profit < 0:
         active_level_idx = 0
         current_level = levels[0]
         next_4_levels = levels[0:4]
         
-        # محاسبه دقیق درصد پسرفت:
-        # مثلاً هدف سود سطح اول ۱۶ دلار است؛ اگر کاربر مثلاً ۸ دلار در ضرر باشد، یعنی ۵۰٪ از گام نخست عقب افتاده است.
-        first_stage_target = float(levels[0]['cumulative_profit']) # معمولاً ۱۶ دلار
-        
-        # محاسبه درصد افت (می‌توانید مخرج را بسته به ریسک خودتان تنظیم کنید)
+        first_stage_target = float(levels[0]['cumulative_profit'])
         calculated_drawdown = (abs(total_net_profit) / first_stage_target) * 100
-        completion_percentage = min(100, max(0, int(calculated_drawdown)))
+        completion_percentage = min(100, max(1, int(calculated_drawdown)))
+        
+        # محاسبه دقیق قلب‌های جبران بر اساس سود هر قلب در سطح جاری (ریسک * 4)
+        profit_per_heart = current_level['risk_per_trade'] * 4
+        required_recovery_hearts = int(abs(total_net_profit) / base_risk) + (1 if abs(total_net_profit) % profit_per_heart > 0 else 0)
         
         trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}$): نیازمند جبران ⚠️"
         trend_color = "text-rose-400"
         is_in_loss = True
-        display_progress = completion_percentage
     else:
         is_in_loss = False
-        # پیدا کردن مرحله فعال کاربر بر اساس سود خالص مثبت
         active_level_idx = 0
         for i, lvl in enumerate(levels):
             if total_net_profit <= lvl['cumulative_profit']:
@@ -92,10 +89,12 @@ def get_user_progression_plan():
         
         prev_cumulative = levels[active_level_idx - 1]['cumulative_profit'] if active_level_idx > 0 else 0
         progress_in_level = total_net_profit - prev_cumulative
-        level_span = current_level['stage_profit']
+        level_span = float(current_level['stage_profit'])
         
-        completion_percentage = min(100, max(0, int((progress_in_level / float(level_span)) * 100))) if level_span > 0 else 0
-        display_progress = completion_percentage
+        completion_percentage = min(100, max(0, int((progress_in_level / level_span) * 100))) if level_span > 0 else 0
+        
+        profit_per_heart = current_level['risk_per_trade'] * 4
+        earned_hearts_in_level = int(progress_in_level / profit_per_heart) if profit_per_heart > 0 else 0
         
         if total_net_profit >= current_level['cumulative_profit']:
             trend_status = "روند رو به رشد و عالی 🚀"
@@ -111,8 +110,11 @@ def get_user_progression_plan():
         'total_net_profit': total_net_profit,
         'current_level_num': current_level['level_num'],
         'current_risk': current_level['risk_per_trade'],
-        'completion_percentage': display_progress,
+        'completion_percentage': completion_percentage,
         'is_in_loss': is_in_loss,
+        'earned_hearts_in_level': earned_hearts_in_level,
+        'required_recovery_hearts': required_recovery_hearts,
+        'target_hearts': current_level['target_hearts'],
         'next_4_levels': next_4_levels,
         'trend_status': trend_status,
         'trend_color': trend_color,
