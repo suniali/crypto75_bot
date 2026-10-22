@@ -20,6 +20,104 @@ from .utils.month_calender_data import get_monthly_calendar_data,calculate_strea
 
 logger = logging.getLogger(__name__)
 
+def get_user_progression_plan():
+    base_risk = 1.0 
+    
+    all_trades = TradeJournal.active_objects.all()
+
+    # محاسبه کل سود خالص انباشته حساب
+    total_net_profit = sum(float(t.net_profit) for t in all_trades)
+    
+    # تعریف ساختار مراحل
+    levels = []
+    current_cumulative_profit = 0.0
+    
+    for lvl in range(1, 101):
+        if lvl <= 2:
+            risk_per_trade = base_risk
+        elif lvl <= 4:
+            risk_per_trade = base_risk * 2
+        else:
+            risk_per_trade = base_risk * (3 + (lvl - 5) // 2)
+            
+        target_hearts = 4
+        stage_profit = risk_per_trade * 4 * target_hearts
+        current_cumulative_profit += stage_profit
+        
+        has_payout = (lvl % 4 == 0)
+        payout_amount = current_cumulative_profit * 0.10 if has_payout else 0.0
+        
+        levels.append({
+            'level_num': lvl,
+            'risk_per_trade': risk_per_trade,
+            'target_hearts': target_hearts,
+            'stage_profit': stage_profit,
+            'cumulative_profit': current_cumulative_profit,
+            'has_payout': has_payout,
+            'payout_amount': payout_amount
+        })
+
+    # 🛑 بررسی وضعیت ضرر کل (حساب در ضرر است)
+    if total_net_profit < 0:
+        active_level_idx = 0
+        current_level = levels[0]
+        next_4_levels = levels[0:4]
+        
+        # محاسبه دقیق درصد پسرفت:
+        # مثلاً هدف سود سطح اول ۱۶ دلار است؛ اگر کاربر مثلاً ۸ دلار در ضرر باشد، یعنی ۵۰٪ از گام نخست عقب افتاده است.
+        first_stage_target = float(levels[0]['cumulative_profit']) # معمولاً ۱۶ دلار
+        
+        # محاسبه درصد افت (می‌توانید مخرج را بسته به ریسک خودتان تنظیم کنید)
+        calculated_drawdown = (abs(total_net_profit) / first_stage_target) * 100
+        completion_percentage = min(100, max(0, int(calculated_drawdown)))
+        
+        trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}$): نیازمند جبران ⚠️"
+        trend_color = "text-rose-400"
+        is_in_loss = True
+        display_progress = completion_percentage
+    else:
+        is_in_loss = False
+        # پیدا کردن مرحله فعال کاربر بر اساس سود خالص مثبت
+        active_level_idx = 0
+        for i, lvl in enumerate(levels):
+            if total_net_profit <= lvl['cumulative_profit']:
+                active_level_idx = i
+                break
+        else:
+            active_level_idx = len(levels) - 1
+            
+        current_level = levels[active_level_idx]
+        start_show_idx = max(0, active_level_idx)
+        next_4_levels = levels[start_show_idx : start_show_idx + 4]
+        
+        prev_cumulative = levels[active_level_idx - 1]['cumulative_profit'] if active_level_idx > 0 else 0
+        progress_in_level = total_net_profit - prev_cumulative
+        level_span = current_level['stage_profit']
+        
+        completion_percentage = min(100, max(0, int((progress_in_level / float(level_span)) * 100))) if level_span > 0 else 0
+        display_progress = completion_percentage
+        
+        if total_net_profit >= current_level['cumulative_profit']:
+            trend_status = "روند رو به رشد و عالی 🚀"
+            trend_color = "text-emerald-400"
+        elif progress_in_level > 0:
+            trend_status = "در حال پیشروی در مرحله 📈"
+            trend_color = "text-sky-400"
+        else:
+            trend_status = "نزدیک به لبه مرحله 📊"
+            trend_color = "text-amber-400"
+
+    return {
+        'total_net_profit': total_net_profit,
+        'current_level_num': current_level['level_num'],
+        'current_risk': current_level['risk_per_trade'],
+        'completion_percentage': display_progress,
+        'is_in_loss': is_in_loss,
+        'next_4_levels': next_4_levels,
+        'trend_status': trend_status,
+        'trend_color': trend_color,
+    }
+
 def journal_dashboard(request):
     """
     Dashboard view for trade journal analytics, filtering, and pagination.
@@ -336,6 +434,10 @@ def journal_dashboard(request):
     
     cal_data = get_monthly_calendar_data(req_year, req_month,initial_balance)
     context.update(cal_data)
+
+    # دریافت پلن پیشرفت کاربر
+    user_progression_plan = get_user_progression_plan()
+    context.update(user_progression_plan)
 
     return render(request, 'dashboard.html', context)
 
