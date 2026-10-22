@@ -297,17 +297,31 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
-                        <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right">
-                            <span class="text-[9px] text-slate-500 block font-mono">ریسک پیشنهاد بعدی:</span>
-                            <span class="text-sm font-black font-mono text-emerald-400">${{ current_risk }}</span>
+                    <!-- بخش هدر: ریسک پیشنهادی + وضعیت قلب‌ها در هدر + نوار پیشرفت + دکمه جزئیات -->
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+                        
+                        <!-- ❤️ نمایش قلب‌ها مستقیماً در هدر -->
+                        <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
+                            <span class="text-[9px] text-slate-500 block">وضعیت قلب‌ها:</span>
+                            {% if is_in_loss %}
+                            <span class="text-sm font-black text-rose-400">❤️ {{ required_recovery_hearts }} قلب برای جبران</span>
+                            {% else %}
+                            <span class="text-sm font-black text-sky-400">❤️ {{ earned_hearts_in_level }} / {{ target_hearts }} قلب</span>
+                            {% endif %}
                         </div>
 
-                        <!-- نوار پیشرفت یا پسرفت -->
-                        <div class="w-24 md:w-28 bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800 hidden sm:block">
+                        <!-- 🎯 ریسک پیشنهادی معامله بعدی -->
+                        <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
+                            <span class="text-[9px] text-slate-500 block">ریسک پیشنهاد بعدی:</span>
+                            <span class="text-sm font-black text-emerald-400">${{ current_risk }}</span>
+                        </div>
+
+                        <!-- نوار پیشرفت کوچک -->
+                        <div class="w-20 md:w-24 bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800 hidden sm:block">
                             <div class="h-full rounded-full {% if is_in_loss %}bg-rose-500{% else %}bg-gradient-to-r from-sky-500 to-emerald-400{% endif %}" style="width: {{ completion_percentage }}%;"></div>
                         </div>
 
+                        <!-- دکمه باز کردن جزئیات -->
                         <div class="flex items-center gap-1 text-xs font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-800 group-open:text-sky-400 transition-colors">
                             <span class="text-[11px]">جزئیات</span>
                             <svg class="w-4 h-4 transition-transform duration-300 group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -317,10 +331,11 @@
                     </div>
                 </summary>
 
+                <!-- محتوای داخل کشو (فقط شامل نوار پیشرفت تفصیلی و ۴ مرحله پیشِ رو) -->
                 <div class="mt-5 pt-4 border-t border-slate-800 space-y-4">
                     <div>
                         <div class="flex justify-between text-xs font-mono text-slate-400 mb-1.5">
-                            <span>{% if is_in_loss %}درصد پسرفت / افت از تعادل{% else %}پیشرفت در سطح فعلی{% endif %}</span>
+                            <span>{% if is_in_loss %}درصد پسرفت از تعادل{% else %}پیشرفت در سطح فعلی{% endif %}</span>
                             <span class="{% if is_in_loss %}text-rose-400{% else %}text-white{% endif %} font-bold">
                                 {% if is_in_loss %}-{{ completion_percentage }}% (در ضرر){% else %}{{ completion_percentage }}%{% endif %}
                             </span>
@@ -378,7 +393,6 @@
                 </div>
             </details>
         </div>
-
       
         <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) - چیدمان ۴ کارته فوق‌العاده تمیز -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8 font-sans">
