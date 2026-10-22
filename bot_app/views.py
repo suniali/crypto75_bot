@@ -5,7 +5,7 @@ import math
 import shutil
 
 from pathlib import Path
-from decimal import Decimal,ROUND_CEILING
+from decimal import Decimal,ROUND_CEILING,ROUND_HALF_UP
 from collections import defaultdict
 from datetime import timedelta,datetime
 from django.utils import timezone
@@ -96,6 +96,8 @@ def get_user_progression_plan(user):
     earned_hearts_in_level = 0
     required_recovery_hearts = 0
     is_in_loss = False
+    trend_status = ""
+    trend_color = "text-slate-400"
 
     # 🛑 سناریوی اول: حساب در مجموع در ضرر است (منفی)
     if total_net_profit < 0:
@@ -121,6 +123,7 @@ def get_user_progression_plan(user):
         
     # 📈 سناریوی دوم: حساب در سود است (پیدا کردن سطح فعال بر اساس سود واقعی)
     else:
+        is_in_loss = False
         active_level_idx = 0
         for i, lvl in enumerate(levels):
             if total_net_profit < lvl['cumulative_profit']:
@@ -139,7 +142,7 @@ def get_user_progression_plan(user):
         
         if level_span > 0:
             pct_calc = (progress_in_level / level_span) * Decimal('100')
-            completion_percentage = min(100, max(0, int(pct_calc)))
+            completion_percentage = min(100, max(0, int(pct_calc.quantize(Decimal('1'), rounding=ROUND_HALF_UP))))
         else:
             completion_percentage = 0
             
