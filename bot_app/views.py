@@ -5,7 +5,7 @@ import math
 import shutil
 
 from pathlib import Path
-from decimal import Decimal
+from decimal import Decimal,ROUND_CEILING
 from collections import defaultdict
 from datetime import timedelta,datetime
 from django.utils import timezone
@@ -20,34 +20,73 @@ from .utils.month_calender_data import get_monthly_calendar_data,calculate_strea
 
 logger = logging.getLogger(__name__)
 
-def get_user_progression_plan():
-    all_trades = TradeJournal.active_objects.all()
-    base_risk = 1.0 
+MIN_RESERVE_HEARTS = 4   # حداقل قلب ذخیره در شروع مرحله
+
+def risk_from_reserve(reserve, base_risk,max_reserve_hearts):
+    """
+    ریسک مرحله از روی ذخیره‌ی سود در شروع مرحله:
+    کوچک‌ترین مضرب ریسک پایه که قلب ذخیره از 10 بیشتر نشه،
+    و اگر کمتر از ۴ قلب موند، یک پله پایین‌تر.
+    """
+    if reserve <= 0:
+        return base_risk
+    k = int(reserve / (base_risk * Decimal(str(max_reserve_hearts + 1)))) + 1
+    if k > 1 and int(reserve / (base_risk * k)) < MIN_RESERVE_HEARTS:
+        k -= 1
+    return base_risk * k
+
+def get_user_progression_plan(user):
+    all_trades = TradeJournal.active_objects.exclude(result='PENDING')
+
+    # ۱. محاسبه وین‌ریت معامله‌گر برای تعیین پویا ی MAX_RESERVE_HEARTS
+    total_trades = len(all_trades)
+    if total_trades > 0:
+        winning_trades = sum(1 for t in all_trades if Decimal(str(t.net_profit)) > 0)
+        win_rate = (Decimal(str(winning_trades)) / Decimal(str(total_trades))) * Decimal('100')
+    else:
+        win_rate = Decimal('50.0') # مقدار پیش‌فرض برای حساب‌های تازه بدون معامله
+        
+    # ۲. تعیین پویا ی MAX_RESERVE_HEARTS بر اساس وین‌ریت (تریدر قوی‌تر = عدد کمتر، حداقل ۵)
+    if win_rate >= Decimal('70.0'):
+        max_reserve_hearts = 5    # تریدر بسیار قوی (حداقل مجاز)
+    elif win_rate >= Decimal('60.0'):
+        max_reserve_hearts = 6
+    elif win_rate >= Decimal('50.0'):
+        max_reserve_hearts = 8
+    elif win_rate >= Decimal('40.0'):
+        max_reserve_hearts = 10
+    else:
+        max_reserve_hearts = 12   # تریدر ضعیف‌تر (نیاز به احتیاط و ذخیره بیشتر)
     
-    total_net_profit = sum(float(t.net_profit) for t in all_trades)
+    # تبدیل امن بالانس اولیه و ریسک پایه به Decimal
+    base_risk = user.initial_balance / Decimal("100") if getattr(user, 'initial_balance', None) else Decimal("1.0")
+    
+    # جمع زدن سود کل معاملات
+    total_net_profit = sum((Decimal(str(t.net_profit)) for t in all_trades), Decimal('0.0'))
     
     levels = []
-    current_cumulative_profit = 0.0
-    
+    current_cumulative_profit = Decimal('0.0')
+    reserve = Decimal('0.0')
+
+    # ساخت جدول پویای مراحل (تا ۱۰۰ مرحله)
     for lvl in range(1, 101):
-        if lvl <= 2:
-            risk_per_trade = base_risk
-        elif lvl <= 4:
-            risk_per_trade = base_risk * 2
-        else:
-            risk_per_trade = base_risk * (3 + (lvl - 5) // 2)
-            
+        risk_per_trade = risk_from_reserve(reserve, base_risk, max_reserve_hearts)
+        reserve_hearts = int(reserve / risk_per_trade) if risk_per_trade > 0 else 0
+
         target_hearts = 4
-        stage_profit = risk_per_trade * 4 * target_hearts
+        stage_profit = risk_per_trade * Decimal(str(target_hearts))
         current_cumulative_profit += stage_profit
-        
+        reserve += stage_profit
+
         has_payout = (lvl % 4 == 0)
-        payout_amount = current_cumulative_profit * 0.10 if has_payout else 0.0
-        
+        payout_amount = reserve * Decimal('0.10') if has_payout else Decimal('0.0')
+        reserve -= payout_amount
+
         levels.append({
             'level_num': lvl,
             'risk_per_trade': risk_per_trade,
             'target_hearts': target_hearts,
+            'reserve_hearts': reserve_hearts,
             'stage_profit': stage_profit,
             'cumulative_profit': current_cumulative_profit,
             'has_payout': has_payout,
@@ -56,28 +95,35 @@ def get_user_progression_plan():
 
     earned_hearts_in_level = 0
     required_recovery_hearts = 0
+    is_in_loss = False
 
+    # 🛑 سناریوی اول: حساب در مجموع در ضرر است (منفی)
     if total_net_profit < 0:
+        is_in_loss = True
         active_level_idx = 0
         current_level = levels[0]
         next_4_levels = levels[0:4]
         
-        first_stage_target = float(levels[0]['cumulative_profit'])
-        calculated_drawdown = (abs(total_net_profit) / first_stage_target) * 100
+        first_stage_target = levels[0]['cumulative_profit']
+        calculated_drawdown = (abs(total_net_profit) / first_stage_target) * Decimal('100')
         completion_percentage = min(100, max(1, int(calculated_drawdown)))
         
-        # محاسبه دقیق قلب‌های جبران بر اساس سود هر قلب در سطح جاری (ریسک * 4)
-        profit_per_heart = current_level['risk_per_trade'] * 4
-        required_recovery_hearts = int(abs(total_net_profit) / base_risk) + (1 if abs(total_net_profit) % profit_per_heart > 0 else 0)
-        
+        # قلب‌های لازم برای جبران بر اساس ریسک سطح فعلی
+        profit_per_heart = current_level['risk_per_trade']
+        if profit_per_heart > 0:
+            div_result = abs(total_net_profit) / profit_per_heart
+            required_recovery_hearts = int(div_result.to_integral_value(rounding=ROUND_CEILING))
+        else:
+            required_recovery_hearts = 1
+            
         trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}$): نیازمند جبران ⚠️"
         trend_color = "text-rose-400"
-        is_in_loss = True
+        
+    # 📈 سناریوی دوم: حساب در سود است (پیدا کردن سطح فعال بر اساس سود واقعی)
     else:
-        is_in_loss = False
         active_level_idx = 0
         for i, lvl in enumerate(levels):
-            if total_net_profit <= lvl['cumulative_profit']:
+            if total_net_profit < lvl['cumulative_profit']:
                 active_level_idx = i
                 break
         else:
@@ -87,23 +133,31 @@ def get_user_progression_plan():
         start_show_idx = max(0, active_level_idx)
         next_4_levels = levels[start_show_idx : start_show_idx + 4]
         
-        prev_cumulative = levels[active_level_idx - 1]['cumulative_profit'] if active_level_idx > 0 else 0
+        prev_cumulative = levels[active_level_idx - 1]['cumulative_profit'] if active_level_idx > 0 else Decimal('0.0')
         progress_in_level = total_net_profit - prev_cumulative
-        level_span = float(current_level['stage_profit'])
+        level_span = current_level['stage_profit']
         
-        completion_percentage = min(100, max(0, int((progress_in_level / level_span) * 100))) if level_span > 0 else 0
-        
-        profit_per_heart = current_level['risk_per_trade'] * 4
-        earned_hearts_in_level = int(progress_in_level / profit_per_heart) if profit_per_heart > 0 else 0
-        
-        if total_net_profit >= current_level['cumulative_profit']:
-            trend_status = "روند رو به رشد و عالی 🚀"
+        if level_span > 0:
+            pct_calc = (progress_in_level / level_span) * Decimal('100')
+            completion_percentage = min(100, max(0, int(pct_calc)))
+        else:
+            completion_percentage = 0
+            
+        profit_per_heart = current_level['risk_per_trade']
+        if profit_per_heart > 0:
+            earned_hearts_in_level = int(progress_in_level / profit_per_heart)
+        else:
+            earned_hearts_in_level = 0
+            
+        # تشخیص وضعیت روند برای نمایش پیام‌های جذاب
+        if completion_percentage >= 75:
+            trend_status = "نزدیک به پایان مرحله (عالی) 🚀"
             trend_color = "text-emerald-400"
-        elif progress_in_level > 0:
+        elif completion_percentage > 0:
             trend_status = "در حال پیشروی در مرحله 📈"
             trend_color = "text-sky-400"
         else:
-            trend_status = "نزدیک به لبه مرحله 📊"
+            trend_status = "در آستانه شروع مرحله جدید 📊"
             trend_color = "text-amber-400"
 
     return {
@@ -319,8 +373,7 @@ def journal_dashboard(request):
     radar_data = [entry_score, risk_score, exit_score, stability_score, tempo_score]
 
     # بالانس اولیه پیش‌فرض جهت درصدها
-    chat_id = request.session.get('chat_id')
-    account = TelegramUser.objects.filter(chat_id=chat_id, is_blocked=False).first()
+    account = TelegramUser.objects.filter(is_blocked=False).first()
     if account:
         initial_balance = account.initial_balance
     else:
@@ -438,7 +491,7 @@ def journal_dashboard(request):
     context.update(cal_data)
 
     # دریافت پلن پیشرفت کاربر
-    user_progression_plan = get_user_progression_plan()
+    user_progression_plan = get_user_progression_plan(account) if account else {}
     context.update(user_progression_plan)
 
     return render(request, 'dashboard.html', context)

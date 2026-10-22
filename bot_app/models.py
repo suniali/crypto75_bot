@@ -1,6 +1,5 @@
 from django.db import models
 from decimal import Decimal
-from django.core.validators import MinValueValidator,MaxValueValidator
 
 class MarketType(models.TextChoices):
     CRYPTO = 'CRYPTO', 'کریپتوکارنسی'
@@ -27,29 +26,6 @@ class TelegramUser(models.Model):
     def __str__(self):
         username_display =f'{self.username}' if self.username else str(self.chat_id)
         return f"@{username_display} - ${self.initial_balance}" 
-
-
-# ==========================================
-# 2. تنظیمات اختصاصی کاربر (UserSetting)
-# ==========================================
-class UserSetting(models.Model):
-    user = models.OneToOneField(TelegramUser, on_delete=models.CASCADE, related_name='setting', verbose_name="کاربر")
-    initial_balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('1000.00'),
-                                          verbose_name="بالانس اولیه حساب ($)")
-    default_risk_percent = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('1.00'),
-                                               verbose_name="درصد ریسک در هر معامله (%)")
-    default_leverage = models.IntegerField(default=10, validators=[MinValueValidator(1), MaxValueValidator(125)],
-                                           verbose_name="اهرم/لوریج پیش‌فرض")
-    receive_daily_reports = models.BooleanField(default=True, verbose_name="دریافت گزارش‌های روزانه")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="آخرین بروزرسانی")
-
-    class Meta:
-        verbose_name = "تنظیمات کاربر"
-        verbose_name_plural = "تنظیمات کاربران"
-
-    def __str__(self):
-        return f"تنظیمات {self.user}"
-
 
 # ==========================================
 # 3. مدل هشدارهای قیمت (UserAlert)
