@@ -1,20 +1,19 @@
-import os
 import json
 import logging
 import math
-import shutil
 
-from pathlib import Path
+
 from decimal import Decimal,ROUND_CEILING,ROUND_HALF_UP
 from collections import defaultdict
 from datetime import timedelta,datetime
 from django.utils import timezone
 from django.shortcuts import render
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.http import JsonResponse
 
 from .models import TradeJournal,TelegramUser
+from .services.bakup_restore_service import backup_database,get_backups,restore_backup
 from .utils.month_calender_data import get_monthly_calendar_data,calculate_streaks
 
 
@@ -534,79 +533,23 @@ def update_trade_note_api(request):
 
 @require_POST
 def py_backup_view(request):
-    BASE_DIR = Path(__file__).resolve().parent.parent # با توجه به ساختار پروژه شما
-    DB_FILE = BASE_DIR / "db.sqlite3"
-    BACKUP_DIR = BASE_DIR / "backups"
-
-    if not DB_FILE.exists():
-        return JsonResponse({"status": "error", "message": "فایل دیتابیس پیدا نشد!"}, status=404)
-
-    try:
-        BACKUP_DIR.mkdir(exist_ok=True)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        backup_filename = f"db_backup_{timestamp}.sqlite3"
-        backup_path = BACKUP_DIR / backup_filename
-
-        shutil.copy2(DB_FILE, backup_path)
-
-        # نگهداری فقط ۱۰ بک‌آپ آخر برای جلوگیری از پر شدن حافظه
-        backups = sorted(BACKUP_DIR.glob("db_backup_*.sqlite3"), key=os.path.getmtime)
-        if len(backups) > 10:
-            for old_backup in backups[:-10]:
-                old_backup.unlink()
-
-        return JsonResponse({"status": "success", "message": f"بک‌آپ با موفقیت ذخیره شد: {backup_filename}"})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    return backup_database()
 
 
 def list_backups_view(request):
-    """لیست تمام فایل‌های بک‌آپ موجود را برمی‌گرداند"""
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    BACKUP_DIR = BASE_DIR / "backups"
-
-    if not BACKUP_DIR.exists():
-        return JsonResponse({"status": "success", "backups": []})
-
-    # پیدا کردن و مرتب‌سازی فایل‌ها بر اساس تاریخ (جدیدترین اول)
-    backups = sorted(BACKUP_DIR.glob("db_backup_*.sqlite3"), key=os.path.getmtime, reverse=True)
-    backup_list = [b.name for b in backups]
-
-    return JsonResponse({"status": "success", "backups": backup_list})
-
+   return get_backups()
 
 @require_POST
 def restore_backup_view(request):
-    """فایل بک‌آپ انتخابی را جایگزین دیتابیس اصلی می‌کند"""
     if request.method != "POST":
         return JsonResponse({"status": "error", "message": "متد غیرمجاز"}, status=400)
 
-    import json
-    try:
-        data = json.loads(request.body)
-        filename = data.get("filename")
-        if not filename:
-            return JsonResponse({"status": "error", "message": "نام فایل مشخص نشده است"}, status=400)
+    data = json.loads(request.body)
+    filename = data.get("filename")
+    if not filename:
+        return JsonResponse({"status": "error", "message": "نام فایل مشخص نشده است"}, status=400)
 
-        BASE_DIR = Path(__file__).resolve().parent.parent
-        DB_FILE = BASE_DIR / "db.sqlite3"
-        BACKUP_DIR = BASE_DIR / "backups"
-        target_backup = BACKUP_DIR / filename
-
-        if not target_backup.exists():
-            return JsonResponse({"status": "error", "message": "فایل بک‌آپ مورد نظر پیدا نشد"}, status=404)
-
-        # قبل از جایگزینی، یک ایمنی موقت از وضعیت فعلی می‌گیریم
-        emergency_backup = BACKUP_DIR / "emergency_before_restore.sqlite3"
-        if DB_FILE.exists():
-            shutil.copy2(DB_FILE, emergency_backup)
-
-        # جایگزینی فایل بک‌آپ با دیتابیس اصلی
-        shutil.copy2(target_backup, DB_FILE)
-
-        return JsonResponse({"status": "success", "message": f"دیتابیس با موفقیت از روی فایل {filename} بازیابی شد!"})
-    except Exception as e:
-        return JsonResponse({"status": "error", "message": str(e)}, status=500)
+    return restore_backup(filename)
 
 
 def day_trades_api_view(request):
