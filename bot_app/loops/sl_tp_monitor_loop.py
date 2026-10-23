@@ -17,6 +17,8 @@ from bot_app.services.chart_service import (
     calculate_today_stats,
 )
 from bot_app.services.api_service import fetch_recent_klines
+from bot_app.services.bakup_restore_service import backup_database
+
 from bot_app.utils.text_helpers import fmt_price
 
 logger = logging.getLogger(__name__)
@@ -151,6 +153,8 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
 
                 # ارسال گزارش روزانه در صورت وجود معامله جدید
                 if new_deals_notified_count > 0:
+                    backup_database()  # ایجاد بک‌آپ قبل از ارسال  گزارش
+
                     stats = calculate_today_stats(closed_deals)
                     if stats:
                         total_trades, wins, losses, win_rate, day_net_profit, avg_win, avg_loss, profits_history = stats

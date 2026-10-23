@@ -1,10 +1,13 @@
 import os
 import shutil
+import logging
 
 from pathlib import Path
 from django.conf import settings
 from django.http import JsonResponse
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 def get_backups():
     BACKUP_DIR = Path(settings.BASE_DIR) / "backups"
@@ -24,6 +27,7 @@ def backup_database():
     BACKUP_DIR = Path(settings.BASE_DIR) / "backups"
 
     if not DB_FILE.exists():
+        logger.error("Database file not found for backup.")
         return JsonResponse({"status": "error", "message": "فایل دیتابیس پیدا نشد!"}, status=404)
 
     try:
@@ -40,8 +44,10 @@ def backup_database():
             for old_backup in backups[:-10]:
                 old_backup.unlink()
 
+        logger.info(f"Database backup created: {backup_filename}")
         return JsonResponse({"status": "success", "message": f"بک‌آپ با موفقیت ذخیره شد: {backup_filename}"})
     except Exception as e:
+        logger.error(f"Error occurred while creating database backup: {e}")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 def restore_backup(backup_filename):
@@ -51,16 +57,20 @@ def restore_backup(backup_filename):
         target_backup = BACKUP_DIR / backup_filename
 
         if not target_backup.exists():
+            logger.error(f"Backup file not found: {backup_filename}")
             return JsonResponse({"status": "error", "message": "فایل بک‌آپ مورد نظر پیدا نشد"}, status=404)
 
         # قبل از جایگزینی، یک ایمنی موقت از وضعیت فعلی می‌گیریم
         emergency_backup = BACKUP_DIR / "emergency_before_restore.sqlite3"
         if DB_FILE.exists():
             shutil.copy2(DB_FILE, emergency_backup)
+            logger.info("Emergency backup created.")
 
         # جایگزینی فایل بک‌آپ با دیتابیس اصلی
         shutil.copy2(target_backup, DB_FILE)
 
+        logger.info(f"Database restored from backup: {backup_filename}")
         return JsonResponse({"status": "success", "message": f"دیتابیس با موفقیت از روی فایل {backup_filename} بازیابی شد!"})
     except Exception as e:
+        logger.error(f"Error occurred while restoring database from backup: {e}")
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
