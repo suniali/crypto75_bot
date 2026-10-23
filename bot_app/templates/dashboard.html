@@ -14,17 +14,57 @@
             font-family: 'Vazirmatn', sans-serif;
             background-color: #0b0f19;
             color: #f3f4f6;
+            overflow-x: hidden;
         }
+
+        /* افکت شیشه‌ای مدرن با حاشیه نورانی گرادینتی */
         .glass-card {
-            background: rgba(17, 24, 39, 0.7);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: linear-gradient(135deg, rgba(17, 24, 39, 0.75) 0%, rgba(11, 15, 25, 0.85) 100%);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 1rem;
+            border-radius: 1.25rem;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
+
+        /* هاور زنده و سه‌بعدی کارت‌ها */
+        .glass-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(56, 189, 248, 0.3);
+            box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7), 0 0 20px 1px rgba(56, 189, 248, 0.1);
+        }
+
+        /* انیمیشن پالس زنده برای قلب‌ها و نشانگرها */
+        @keyframes live-pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.08); opacity: 0.85; }
+        }
+        .animate-live-pulse {
+            animation: live-pulse 2.5s infinite ease-in-out;
+        }
+
+        /* انیمیشن چرخش ملایم نور پس‌زمینه */
+        @keyframes ambient-glow {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(20px, -20px) scale(1.1); }
+        }
+        .ambient-blob {
+            animation: ambient-glow 8s infinite alternate ease-in-out;
+        }
+
+        /* اسکرول بار مدرن و باریک */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #0b0f19; }
-        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+
+        /* افکت درخشش متن‌های مهم */
+        .neon-text-sky {
+            text-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+        }
+        .neon-text-emerald {
+            text-shadow: 0 0 15px rgba(52, 211, 153, 0.4);
+        }
     </style>
 </head>
 <!-- ================= Modal 2027 Glassmorphism ================= -->
@@ -231,13 +271,13 @@
 
             <div class="flex items-center gap-3">
                 <div class="flex flex-wrap items-center gap-2 bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 text-xs w-full lg:w-auto">
-                    <a href="?period=daily" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'daily' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">روزانه</a>
-                    <a href="?period=weekly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'weekly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">هفتگی</a>
-                    <a href="?period=monthly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'monthly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">ماهانه</a>
-                    <a href="?period=3months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '3months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۳ ماهه</a>
-                    <a href="?period=6months" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == '6months' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">۶ ماهه</a>
-                    <a href="?period=yearly" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'yearly' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">سالانه</a>
-                    <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-lg font-semibold transition-all {% if current_period == 'all' %}bg-emerald-600 text-white shadow-lg shadow-emerald-600/30{% else %}text-gray-400 hover:text-white hover:bg-gray-800/60{% endif %}">کل</a>
+                    <a href="?period=daily" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'daily' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %} ">روزانه</a>
+                    <a href="?period=weekly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'weekly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">هفتگی</a>
+                    <a href="?period=monthly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'monthly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">ماهانه</a>
+                    <a href="?period=3months" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == '3months' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">۳ ماهه</a>
+                    <a href="?period=6months" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == '6months' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">۶ ماهه</a>
+                    <a href="?period=yearly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'yearly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">سالانه</a>
+                    <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-full px-3 py-1.5 font-semibold transition-all  {% if current_period == 'all' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">کل</a>
                 </div>
 
                 <!-- مدیریت بکآپ -->
@@ -1668,6 +1708,42 @@
             }
         });
         
+        // انیمیشن ورود کارت‌ها با Intersection Observer
+        document.addEventListener("DOMContentLoaded", function() {
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: "0px 0px -50px 0px"
+        };
+
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = "1";
+                    entry.target.style.transform = "translateY(0)";
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        // اعمال حالت اولیه به کارت‌ها برای انیمیشن ورود
+        document.querySelectorAll('.glass-card').forEach(card => {
+            card.style.opacity = "0";
+            card.style.transform = "translateY(20px)";
+            card.style.transition = "opacity 0.6s ease-out, transform 0.6s ease-out";
+            observer.observe(card);
+        });
+    });
+
+    // ایجاد افکت زنده (Live Ticker / Pulse) روی دکمه‌ها و وضعیت سیستم قلب‌ها
+    setInterval(() => {
+        const heartBadge = document.querySelector('.animate-live-pulse');
+        if(heartBadge) {
+            heartBadge.style.filter = 'brightness(1.2)';
+            setTimeout(() => {
+                heartBadge.style.filter = 'brightness(1)';
+            }, 1000);
+        }
+    }, 3000);
     </script>
 </body>
 </html>
