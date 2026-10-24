@@ -1,13 +1,14 @@
 import os
 import asyncio
 
+from asgiref.sync import sync_to_async
+
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
 
-from bot_app.services.mt5_service import get_trades_history
-from bot_app.services.analysis_service import analyze_trades_with_gemini
+from bot_app.services.analysis_service import analyze_trades_with_gemini,calculate_trading_metrics
 from bot_app.services.report_service import generate_pdf_report
 
 SELECT_REPORT_PERIOD = range(104, 105)
@@ -40,33 +41,27 @@ async def process_report_generation(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
 
     days_map = {
-        "rep_1": (1, "روزانه"),
-        "rep_7": (7, "هفتگی"),
-        "rep_30": (30, "ماهانه"),
-        "rep_180": (180, "شش ماهه")
+        "rep_1": (1, "daily"),
+        "rep_7": (7, "weekly"),
+        "rep_30": (30, "monthly"),
+        "rep_180": (180, "6months")
     }
 
-    days, period_name = days_map.get(query.data, (7, "هفتگی"))
+    days, period_name = days_map.get(query.data, (7, "weekly"))
 
     await query.edit_message_text(
         f"⏳ **در حال استخراج معاملات و تحلیل هوش مصنوعی برای بازه {period_name}...**\nلطفاً چند لحظه شکیبا باشید.")
 
 
-    # ۱. استخراج دیتای MT5
-    trades, error = await asyncio.to_thread(get_trades_history, days)
+   # استفاده از sync_to_async روی تابع واسطه همگام
+    metrics = await sync_to_async(calculate_trading_metrics, thread_sensitive=True)(period_name)
 
-    if error or not trades:
-        await query.edit_message_text(f"⚠️ {error or 'هیچ معامله‌ای یافت نشد.'}")
-        await update.effective_chat.send_message("🏠 **به منوی اصلی بازگشتید.**", reply_markup=MAIN_KEYBOARD,
-                                                 parse_mode="Markdown")
-        return ConversationHandler.END
-
-    # ۲. تحلیل Gemini
-    ai_analysis = await analyze_trades_with_gemini(trades, period_name)
+    # بقیه مراحل بدون مشکل و ارور اجرا می‌شوند:
+    ai_analysis = await asyncio.to_thread(analyze_trades_with_gemini, metrics, period_name)
 
     # ۳. تولید فایل PDF
     pdf_filename = f"Trade_Report_{update.effective_user.id}_{days}d.pdf"
-    await asyncio.to_thread(generate_pdf_report, pdf_filename, period_name, trades, ai_analysis)
+    await asyncio.to_thread(generate_pdf_report, pdf_filename, period_name, metrics, ai_analysis)
 
     # ۴. ارسال فایل برای کاربر
     await query.edit_message_text("✅ **گزارش با موفقیت آماده شد. در حال ارسال فایل...**")
