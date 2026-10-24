@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700;800&display=swap');
         body {
@@ -64,6 +65,71 @@
         }
         .neon-text-emerald {
             text-shadow: 0 0 15px rgba(52, 211, 153, 0.4);
+        }
+
+        /* انیمیشن نرم برای باز و بسته شدن کشوی جزئیات */
+        details.group > summary::marker,
+        details.group > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details.group[open] summary ~ * {
+            animation: sweepOpen 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes sweepOpen {
+            0% {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* استایل‌دهی به خروجی مارک‌داون هوش مصنوعی در داشبورد سایبرپانک */
+        #ai-response-box h1, 
+        #ai-response-box h2, 
+        #ai-response-box h3 {
+            color: #f0abfc; /* رنگ بنفش نئونی روشن */
+            font-weight: 800;
+            margin-top: 1.2rem;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.025em;
+            text-shadow: 0 0 8px rgba(217, 70, 239, 0.4);
+        }
+
+        #ai-response-box h3 {
+            font-size: 1.05rem; /* بزرگ و خوانا شدن تیترها */
+            border-right: 3px solid #d946ef;
+            padding-right: 8px;
+        }
+
+        #ai-response-box p {
+            margin-bottom: 0.75rem;
+            line-height: 1.7;
+            color: #cbd5e1; /* رنگ متن خوانا و ملایم (Slate-300) */
+        }
+
+        #ai-response-box ul, #ai-response-box ol {
+            padding-right: 1.2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        #ai-response-box li {
+            margin-bottom: 0.4rem;
+            position: relative;
+        }
+
+        #ai-response-box strong {
+            color: #f5d0fe;
+            font-weight: 700;
+        }
+
+        #ai-response-box hr {
+            border-color: rgba(217, 70, 239, 0.2);
+            margin: 1.2rem 0;
         }
     </style>
 </head>
@@ -255,843 +321,1045 @@
 </div>
 
 <body class="p-4 md:p-8 min-h-screen">
+    
+    <div class="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
+        <header class="glass-card p-4 sm:p-5 flex flex-col xl:flex-row items-center justify-between gap-5 border-b border-cyan-500/30 relative backdrop-blur-2xl z-40 overflow-visible">
+            
+            <!-- جلوه نوری زیرین (Backlight Flare) -->
+            <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-96 h-20 bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-emerald-500/20 blur-3xl pointer-events-none"></div>
 
-    <div class="max-w-7xl mx-auto space-y-8">
-        <!-- ۱. هدر داشبورد و فیلترهای زمانی -->
-        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div class="flex items-center gap-3">
-                <span class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl border border-indigo-500/20">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
-                </span>
-                <div>
-                    <h1 class="text-2xl font-black text-white tracking-tight">داشبورد تحلیل ژورنال</h1>
-                    <p class="text-slate-400 text-xs mt-0.5">تحلیل عمیق عملکرد و الگوی معاملات</p>
+            <!-- بخش برندینگ با لوگوی گرافیکی خفن -->
+            <div class="flex items-center justify-between w-full xl:w-auto gap-4">
+                <div class="flex items-center gap-3.5">
+                    <!-- لوگوی گرافیکی برند (لوگوی نئونی کوانتومی) -->
+                    <div class="relative group">
+                        <div class="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 rounded-2xl blur-md opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse"></div>
+                        <div class="relative w-12 h-12 rounded-2xl bg-slate-950 border border-cyan-400/60 flex items-center justify-center shadow-2xl">
+                            <svg class="w-6 h-6 text-cyan-400 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-xl font-black tracking-tight bg-gradient-to-r from-cyan-400 via-teal-200 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">
+                                JARVIS JOURNAL
+                            </h1>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm">
+                                v2027.4
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 font-medium mt-0.5">سیستم مدیریت ریسک و تحلیل عصبی ژورنال</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================= سوئیچ اسلایدی سوپر های‌تک (CYBER SWITCH) ================= -->
+            <div class="w-full xl:w-auto flex justify-center">
+                <div class="relative flex items-center bg-slate-950/90 p-1.5 rounded-2xl border border-cyan-500/30 shadow-[0_0_25px_rgba(0,240,255,0.1)] w-full max-w-md xl:w-[420px]">
+                    <!-- اسلایدر هوشمند نئونی متحرک -->
+                    <div id="slider-indicator" class="absolute top-1.5 bottom-1.5 right-1.5 w-[calc(50%-6px)] rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 shadow-[0_0_15px_rgba(0,240,255,0.5)] transition-all duration-300 ease-out"></div>
+                    
+                    <!-- دکمه داشبورد معاملاتی -->
+                    <button type="button" onclick="switchDashboardTab('standard')" id="btn-standard" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <i class="fa-solid fa-chart-line text-sm"></i>
+                        <span>داشبورد معاملاتی</span>
+                    </button>
+                    
+                    <!-- دکمه هوش مصنوعی و روانشناسی -->
+                    <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <i class="fa-solid fa-brain text-sm text-purple-400 animate-pulse"></i>
+                        <span>هوش مصنوعی AI</span>
+                    </button>
                 </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <div class="flex flex-wrap items-center gap-2 bg-gray-900/80 p-1.5 rounded-xl border border-gray-800 text-xs w-full lg:w-auto">
-                    <a href="?period=daily" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'daily' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %} ">روزانه</a>
-                    <a href="?period=weekly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'weekly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">هفتگی</a>
-                    <a href="?period=monthly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'monthly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">ماهانه</a>
-                    <a href="?period=3months" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == '3months' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">۳ ماهه</a>
-                    <a href="?period=6months" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == '6months' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">۶ ماهه</a>
-                    <a href="?period=yearly" class="flex-1 lg:flex-none text-center rounded-full px-3 py-1.5 font-semibold transition-all {% if current_period == 'yearly' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">سالانه</a>
-                    <a href="?period=all" class="flex-1 lg:flex-none text-center px-3 py-1.5 rounded-full px-3 py-1.5 font-semibold transition-all  {% if current_period == 'all' %}bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30 font-bold{% else %}text-slate-400 hover:text-white hover:bg-slate-900/60{% endif %}">کل</a>
+            <!-- ================= فیلترهای زمانی و دکمه دیتابیس ================= -->
+            <div class="flex flex-wrap items-center justify-between xl:justify-end gap-3 w-full xl:w-auto">
+                <!-- فیلترهای زمانی (Pills) -->
+                <div class="flex flex-wrap items-center gap-1 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs shadow-inner">
+                    <a href="?period=daily" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'daily' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1D</a>
+                    <a href="?period=weekly" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'weekly' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1W</a>
+                    <a href="?period=monthly" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'monthly' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1M</a>
+                    <a href="?period=3months" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == '3months' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">3M</a>
+                    <a href="?period=6months" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == '6months' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">6M</a>
+                    <a href="?period=yearly" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'yearly' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1Y</a>
+                    <a href="?period=all" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'all' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">ALL</a>
                 </div>
 
-                <!-- مدیریت بکآپ -->
-                <div class="relative inline-block right" id="dbDropdownContainer">
-                    <!-- آیکون دکمه اصلی -->
-                    <button onclick="toggleDbMenu(event)"
-                        class="p-2.5 rounded-xl bg-slate-800/60 text-slate-300 hover:text-white hover:bg-slate-700/80
-                               border border-slate-700/50 shadow-sm backdrop-blur-md transition-all duration-200 active:scale-95"
-                        title="مدیریت دیتابیس">
+                <!-- دکمه دیتابیس هوشمند با منوی مطلق جهت جلوگیری از قفل شدن در هدر -->
+                <div class="relative inline-block z-[100]" id="dbDropdownContainer">
+                    <button type="button" onclick="toggleDbMenu(event)" class="p-2.5 rounded-2xl bg-slate-950 text-slate-300 hover:text-cyan-400 border border-slate-800 hover:border-cyan-500/50 shadow-lg hover:shadow-[0_0_15px_rgba(0,240,255,0.2)] transition-all cursor-pointer group" title="مدیریت دیتابیس">
                         <svg class="w-5 h-5 text-slate-400 hover:text-emerald-400 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
                         </svg>
                     </button>
-
-                    <!-- منوی کشویی (Dropdown Menu) -->
-                    <div id="dbDropdownMenu" class="absolute left-0 mt-2 w-48 rounded-xl bg-slate-900 border border-slate-800 shadow-2xl py-1.5 hidden z-50 backdrop-blur-xl">
-                        <!-- گزینه پشتیبان‌گیری -->
-                        <button id="backupBtn" onclick="triggerBackup(); closeDbMenu();"
-                            class="w-full text-right px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors">
-                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8-4m0 5c0 2.21-3.58 4-8 4s-8-1.79-8-4"></path>
-                            </svg>
-                            <span>پشتیبان‌گیری دیتابیس</span>
+                    
+                    <!-- منوی کشویی کاملاً شناور با آیکون‌های تصویری گرافیکی -->
+                    <div id="dbDropdownMenu" class="absolute left-0 mt-3 w-60 rounded-2xl bg-slate-950 border border-cyan-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.9)] py-2.5 hidden z-[999] backdrop-blur-2xl">
+                        
+                        <!-- گزینه پشتیبان‌گیری با آیکون گرافیکی ابری (SVG) -->
+                        <button type="button" onclick="triggerBackup(); closeDbMenu();" class="w-full text-right px-4 py-3 text-xs font-medium text-slate-200 hover:text-white hover:bg-cyan-500/20 flex items-center gap-3 transition-colors group cursor-pointer">
+                            <div class="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="font-bold text-slate-200">پشتیبان‌گیری دیتابیس</span>
+                                <span class="text-[10px] text-slate-400">ذخیره فایل Backup امن</span>
+                            </div>
+                        </button>
+                        
+                        <div class="h-px bg-slate-800/80 my-1.5 mx-3"></div>
+                        
+                        <!-- گزینه بازگردانی با آیکون گرافیکی ساعت/بازیابی (SVG) -->
+                        <button type="button" onclick="openRestoreModal(); closeDbMenu();" class="w-full text-right px-4 py-3 text-xs font-medium text-slate-200 hover:text-white hover:bg-amber-500/20 flex items-center gap-3 transition-colors group cursor-pointer">
+                            <div class="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform shadow-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="font-bold text-slate-200">بازگردانی دیتابیس</span>
+                                <span class="text-[10px] text-slate-400">بازیابی از نسخه قبلی</span>
+                            </div>
                         </button>
 
-                        <!-- خط جداکننده -->
-                        <div class="h-px bg-slate-800 my-1"></div>
-
-                        <!-- گزینه بازگردانی -->
-                        <button onclick="openRestoreModal(); closeDbMenu();"
-                            class="w-full text-right px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors">
-                            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
-                            </svg>
-                            <span>بازگردانی دیتابیس</span>
-                        </button>
                     </div>
                 </div>
             </div>
-        </div>
+        </header>
 
-        <!-- ۱.۵. کارت نقشه راه رشد اکانت (سیستم قلب‌ها) -->
-        <div class="glass-card p-5 bg-[#0f172a]/95 border border-slate-800/80 rounded-2xl shadow-xl">
-            <details class="group">
-                <summary class="flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer list-none gap-4">
-                    <div class="flex items-center justify-between w-full md:w-auto gap-4">
+    
+        <div id="standard-panel" class="max-w-7xl mx-auto space-y-8">
+             <!-- کارت ضریب انضباط ذهنی (کاملاً هماهنگ با استایل کارت‌های پایین صفحه) -->
+            <div class="glass-card p-5 bg-[#0f172a]/90 border border-cyan-500/30 rounded-2xl flex items-center justify-between relative overflow-hidden group shadow-lg">
+                <!-- افکت نوری پس‌زمینه سایبرپانک -->
+                <div class="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
+
+                <div class="flex items-center gap-4 relative z-10">
+                    <!-- دایره درخشان درصد (مشابه المان‌های گرد کارت‌های پایین) -->
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
+                        <span class="text-lg font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
+                    </div>
+                    
+                    <div class="space-y-1 font-mono text-right">
+                        <span class="text-[10px] text-slate-400 block uppercase tracking-wider">ضریب انضباط ذهنی پویا</span>
+                        <strong class="text-xs {{ discipline_color }} block font-bold">{{ discipline_label }}</strong>
+                        <span class="text-[9px] text-slate-500 block">ارزیابی هوشمند از ژورنال</span>
+                    </div>
+                </div>
+
+                <div class="text-left font-mono relative z-10 border-r border-slate-800/80 pr-4">
+                    <span class="text-[9px] text-cyan-400/70 block">AI SYSTEM</span>
+                    <span class="text-xs font-bold text-cyan-400">ACTIVE</span>
+                </div>
+            </div>
+
+            <!-- ۱.۵. کارت نقشه راه رشد اکانت (سیستم قلب‌ها) -->
+            <div class="glass-card p-5 bg-[#0f172a]/95 border border-slate-800/80 rounded-2xl shadow-xl">
+                <details class="group">
+                    <summary class="flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer list-none gap-4">
+                        <div class="flex items-center justify-between w-full md:w-auto gap-4">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-0.5 rounded-lg bg-sky-500/10 text-sky-400 text-xs font-mono font-bold border border-sky-500/20">
+                                        سطح {{ current_level_num }}
+                                    </span>
+                                    <span class="text-xs font-mono {{ trend_color }} font-bold">
+                                        {{ trend_status }}
+                                    </span>
+                                </div>
+                                <h2 class="text-base font-bold text-white mt-1 tracking-tight">نقشه راه رشد اکانت (سیستم قلب‌ها)</h2>
+                            </div>
+                        </div>
+
+                        <!-- بخش هدر: ریسک پیشنهادی + وضعیت قلب‌ها در هدر + نوار پیشرفت + دکمه جزئیات -->
+                        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+                            
+                            <!-- ❤️ نمایش قلب‌ها مستقیماً در هدر -->
+                            <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
+                                <span class="text-[9px] text-slate-500 block">وضعیت قلب‌ها:</span>
+                                {% if is_in_loss %}
+                                <span class="text-sm font-black text-rose-400">❤️ {{ required_recovery_hearts }} قلب برای جبران</span>
+                                {% else %}
+                                <span class="text-sm font-black text-sky-400">❤️ {{ earned_hearts_in_level }} / {{ target_hearts }} قلب</span>
+                                {% endif %}
+                            </div>
+
+                            <!-- 🎯 ریسک پیشنهادی معامله بعدی -->
+                            <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
+                                <span class="text-[9px] text-slate-500 block">ریسک پیشنهاد بعدی:</span>
+                                <span class="text-sm font-black text-emerald-400">${{ current_risk }}</span>
+                            </div>
+
+                            <!-- نوار پیشرفت کوچک -->
+                            <div class="w-20 md:w-24 bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800 hidden sm:block">
+                                <div class="h-full rounded-full {% if is_in_loss %}bg-rose-500{% else %}bg-gradient-to-r from-sky-500 to-emerald-400{% endif %}" style="width: {{ completion_percentage }}%;"></div>
+                            </div>
+
+                            <!-- دکمه باز کردن جزئیات -->
+                            <div class="flex items-center gap-1 text-xs font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-800 group-open:text-sky-400 transition-colors">
+                                <span class="text-[11px]">جزئیات</span>
+                                <svg class="w-4 h-4 transition-transform duration-300 group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                    </summary>
+
+                    <!-- محتوای داخل کشو (فقط شامل نوار پیشرفت تفصیلی و ۴ مرحله پیشِ رو) -->
+                    <div class="mt-5 pt-4 border-t border-slate-800 space-y-4">
                         <div>
-                            <div class="flex items-center gap-2">
-                                <span class="px-2.5 py-0.5 rounded-lg bg-sky-500/10 text-sky-400 text-xs font-mono font-bold border border-sky-500/20">
-                                    سطح {{ current_level_num }}
-                                </span>
-                                <span class="text-xs font-mono {{ trend_color }} font-bold">
-                                    {{ trend_status }}
+                            <div class="flex justify-between text-xs font-mono text-slate-400 mb-1.5">
+                                <span>{% if is_in_loss %}درصد پسرفت از تعادل{% else %}پیشرفت در سطح فعلی{% endif %}</span>
+                                <span class="{% if is_in_loss %}text-rose-400{% else %}text-white{% endif %} font-bold">
+                                    {% if is_in_loss %}-{{ completion_percentage }}% (در ضرر){% else %}{{ completion_percentage }}%{% endif %}
                                 </span>
                             </div>
-                            <h2 class="text-base font-bold text-white mt-1 tracking-tight">نقشه راه رشد اکانت (سیستم قلب‌ها)</h2>
-                        </div>
-                    </div>
-
-                    <!-- بخش هدر: ریسک پیشنهادی + وضعیت قلب‌ها در هدر + نوار پیشرفت + دکمه جزئیات -->
-                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
-                        
-                        <!-- ❤️ نمایش قلب‌ها مستقیماً در هدر -->
-                        <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
-                            <span class="text-[9px] text-slate-500 block">وضعیت قلب‌ها:</span>
-                            {% if is_in_loss %}
-                            <span class="text-sm font-black text-rose-400">❤️ {{ required_recovery_hearts }} قلب برای جبران</span>
-                            {% else %}
-                            <span class="text-sm font-black text-sky-400">❤️ {{ earned_hearts_in_level }} / {{ target_hearts }} قلب</span>
-                            {% endif %}
+                            <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-800">
+                                <div class="h-full rounded-full transition-all duration-500 {% if is_in_loss %}bg-rose-500 shadow-lg shadow-rose-500/20{% else %}bg-gradient-to-r from-sky-500 to-emerald-400{% endif %}" style="width: {{ completion_percentage }}%;"></div>
+                            </div>
                         </div>
 
-                        <!-- 🎯 ریسک پیشنهادی معامله بعدی -->
-                        <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
-                            <span class="text-[9px] text-slate-500 block">ریسک پیشنهاد بعدی:</span>
-                            <span class="text-sm font-black text-emerald-400">${{ current_risk }}</span>
-                        </div>
+                        <!-- نمایش ۴ مرحله پیشِ رو -->
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-3">۴ مرحله پیشِ رو (ماموریت‌های بعدی):</span>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                {% for lvl in next_4_levels %}
+                                <div class="bg-slate-900/60 border {% if forloop.first and not is_in_loss %}border-sky-500/50 shadow-lg shadow-sky-500/5{% elif forloop.first and is_in_loss %}border-rose-500/50 shadow-lg shadow-rose-500/5{% else %}border-slate-800/80{% endif %} rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+                                    {% if forloop.first %}
+                                    <div class="absolute top-0 right-0 {% if is_in_loss %}bg-rose-500 text-white{% else %}bg-sky-500 text-slate-950{% endif %} text-[9px] font-bold px-2 py-0.5 rounded-bl font-mono">
+                                        {% if is_in_loss %}نیاز به جبران{% else %}فعلی{% endif %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <div>
+                                        <div class="flex justify-between items-center mb-2">
+                                            <span class="text-xs font-mono font-bold text-slate-300">سطح {{ lvl.level_num }}</span>
+                                            <span class="text-[10px] font-mono text-slate-500">ریسک: <strong class="text-white">${{ lvl.risk_per_trade }}</strong></span>
+                                        </div>
+                                        
+                                        <div class="space-y-1 my-2 text-[11px] font-mono text-slate-400">
+                                            <div class="flex justify-between">
+                                                <span>هدف قلب:</span>
+                                                <span class="text-sky-400 font-bold">{{ lvl.target_hearts }} قلب</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>قلب ذخیره:</span>
+                                                <span class="text-sky-400 font-bold">{{ lvl.reserve_hearts }}</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span>سود سطح:</span>
+                                                <span class="text-emerald-400 font-bold">+${{ lvl.stage_profit|floatformat:1 }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                        <!-- نوار پیشرفت کوچک -->
-                        <div class="w-20 md:w-24 bg-slate-900 h-2 rounded-full overflow-hidden p-0.5 border border-slate-800 hidden sm:block">
-                            <div class="h-full rounded-full {% if is_in_loss %}bg-rose-500{% else %}bg-gradient-to-r from-sky-500 to-emerald-400{% endif %}" style="width: {{ completion_percentage }}%;"></div>
-                        </div>
-
-                        <!-- دکمه باز کردن جزئیات -->
-                        <div class="flex items-center gap-1 text-xs font-mono text-slate-400 bg-slate-900/80 px-2.5 py-1.5 rounded-xl border border-slate-800 group-open:text-sky-400 transition-colors">
-                            <span class="text-[11px]">جزئیات</span>
-                            <svg class="w-4 h-4 transition-transform duration-300 group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                            </svg>
-                        </div>
-                    </div>
-                </summary>
-
-                <!-- محتوای داخل کشو (فقط شامل نوار پیشرفت تفصیلی و ۴ مرحله پیشِ رو) -->
-                <div class="mt-5 pt-4 border-t border-slate-800 space-y-4">
-                    <div>
-                        <div class="flex justify-between text-xs font-mono text-slate-400 mb-1.5">
-                            <span>{% if is_in_loss %}درصد پسرفت از تعادل{% else %}پیشرفت در سطح فعلی{% endif %}</span>
-                            <span class="{% if is_in_loss %}text-rose-400{% else %}text-white{% endif %} font-bold">
-                                {% if is_in_loss %}-{{ completion_percentage }}% (در ضرر){% else %}{{ completion_percentage }}%{% endif %}
-                            </span>
-                        </div>
-                        <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-800">
-                            <div class="h-full rounded-full transition-all duration-500 {% if is_in_loss %}bg-rose-500 shadow-lg shadow-rose-500/20{% else %}bg-gradient-to-r from-sky-500 to-emerald-400{% endif %}" style="width: {{ completion_percentage }}%;"></div>
-                        </div>
-                    </div>
-
-                    <!-- نمایش ۴ مرحله پیشِ رو -->
-                    <div>
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-3">۴ مرحله پیشِ رو (ماموریت‌های بعدی):</span>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                            {% for lvl in next_4_levels %}
-                            <div class="bg-slate-900/60 border {% if forloop.first and not is_in_loss %}border-sky-500/50 shadow-lg shadow-sky-500/5{% elif forloop.first and is_in_loss %}border-rose-500/50 shadow-lg shadow-rose-500/5{% else %}border-slate-800/80{% endif %} rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
-                                {% if forloop.first %}
-                                <div class="absolute top-0 right-0 {% if is_in_loss %}bg-rose-500 text-white{% else %}bg-sky-500 text-slate-950{% endif %} text-[9px] font-bold px-2 py-0.5 rounded-bl font-mono">
-                                    {% if is_in_loss %}نیاز به جبران{% else %}فعلی{% endif %}
-                                </div>
-                                {% endif %}
-                                
-                                <div>
-                                    <div class="flex justify-between items-center mb-2">
-                                        <span class="text-xs font-mono font-bold text-slate-300">سطح {{ lvl.level_num }}</span>
-                                        <span class="text-[10px] font-mono text-slate-500">ریسک: <strong class="text-white">${{ lvl.risk_per_trade }}</strong></span>
+                                    <div class="pt-2 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-mono">
+                                        <span class="text-slate-500">تجمعی:</span>
+                                        <span class="text-white font-bold">${{ lvl.cumulative_profit|floatformat:1 }}</span>
                                     </div>
                                     
-                                    <div class="space-y-1 my-2 text-[11px] font-mono text-slate-400">
-                                        <div class="flex justify-between">
-                                            <span>هدف قلب:</span>
-                                            <span class="text-sky-400 font-bold">{{ lvl.target_hearts }} قلب</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span>قلب ذخیره:</span>
-                                            <span class="text-sky-400 font-bold">{{ lvl.reserve_hearts }}</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span>سود سطح:</span>
-                                            <span class="text-emerald-400 font-bold">+${{ lvl.stage_profit|floatformat:1 }}</span>
-                                        </div>
+                                    {% if lvl.has_payout %}
+                                    <div class="mt-2 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 text-[9px] text-amber-400 text-center font-mono font-bold">
+                                        🎁 ۱۰٪ خروج (${{ lvl.payout_amount|floatformat:1 }})
                                     </div>
+                                    {% endif %}
                                 </div>
-
-                                <div class="pt-2 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-mono">
-                                    <span class="text-slate-500">تجمعی:</span>
-                                    <span class="text-white font-bold">${{ lvl.cumulative_profit|floatformat:1 }}</span>
-                                </div>
-                                
-                                {% if lvl.has_payout %}
-                                <div class="mt-2 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 text-[9px] text-amber-400 text-center font-mono font-bold">
-                                    🎁 ۱۰٪ خروج (${{ lvl.payout_amount|floatformat:1 }})
-                                </div>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </details>
-        </div>
-      
-        <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) - چیدمان ۴ کارته فوق‌العاده تمیز -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8 font-sans">
-
-            <!-- کارت ۲: سود / زیان خالص نهایی و هزینه‌ها -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">سود / زیان خالص نهایی</span>
-                        <h3 class="text-2xl font-black font-mono tracking-tight dir-ltr text-right {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                            {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
-                        </h3>
-                        <span class="text-[10px] text-slate-500 font-mono mt-1 block">برآیند حساب</span>
-                    </div>
-
-                    <!-- 🎯 حلقه دایره‌ای واقعی و پویا -->
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg"
-                        style="background: conic-gradient({% if total_net_profit >= 0 %}#34d399{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
-                        
-                        <!-- هسته داخلی دایره -->
-                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                            <span class="text-[10px] font-mono font-bold {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} dir-ltr">
-                                {% if total_net_profit >= 0 %}+{% else %}-{% endif %}{{ abs_gain_percent|floatformat:1 }}%
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-[11px] text-slate-400 font-mono dir-ltr">
-                    <span>کمیسیون: <strong class="text-slate-300">-${{ total_commission|floatformat:2 }}</strong></span>
-                    <span>سوآپ: <strong class="text-slate-300">${{ total_swap|floatformat:2 }}</strong></span>
-                </div>
-            </div>
-
-            <!-- کارت ۱: نرخ پیروزی (PnL Rate) با نمودار حلقه‌ای شیشه‌ای -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">نرخ پیروزی (PnL Rate)</span>
-                        <h3 class="text-2xl font-black font-mono text-sky-400">%{{ win_rate }}</h3>
-                        <span class="text-[10px] text-slate-500 font-mono mt-1 block">از {{ total_trades }} معامله</span>
-                    </div>
-                    
-                    <!-- 🎯 نمودار حلقه‌ای پویا بر اساس وین‌ریت واقعی -->
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-sky-500/10"
-                        style="background: conic-gradient(#38bdf8 {{ win_rate_angle }}deg, #1e293b 0deg);">
-                        
-                        <!-- هسته داخلی توخالی (Doughnut) -->
-                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                            <span class="text-xs font-mono font-bold text-slate-200 dir-ltr">%{{ win_rate }}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- تفکیک آمار به همراه درصد ارزهای سودده روی کارت -->
-                <div class="mt-4 pt-3 border-t border-slate-800/80">
-                    <div class="flex justify-between text-[11px] text-slate-400 font-mono mb-2">
-                        <span class="text-sky-400 font-bold">برد: {{ wins }}</span>
-                        <span class="text-rose-400 font-bold">باخت: {{ losses }}</span>
-                        <span class="text-slate-500">یربه‌یر: {{ be_count }}</span>
-                    </div>
-                    <div class="flex flex-wrap gap-1 justify-end dir-ltr">
-                        {% for item in symbol_shares %}
-                            {% if item.is_profit %}
-                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                                <strong class="text-sky-400">{{ item.symbol }}</strong> (+{{ item.share }}%)
-                            </span>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-
-            <!-- کارت ۳: فاکتور سودآوری & Payoff Ratio (با حلقه گرافیکی Profit Factor) -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">فاکتور سودآوری (Profit Factor)</span>
-                        <h3 class="text-2xl font-black font-mono {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %}">
-                            {{ profit_factor }}
-                        </h3>
-                        <span class="text-[10px] text-slate-500 font-mono mt-1 block">بازده نسبت به ریسک</span>
-                    </div>
-                    
-                    <!-- 🎯 حلقه دایره‌ای پویای Profit Factor -->
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if profit_factor >= 1.2 %}shadow-sky-500/10{% else %}shadow-amber-500/10{% endif %}"
-                        style="background: conic-gradient({% if profit_factor >= 1.2 %}#38bdf8{% else %}#fbbf24{% endif %} {{ pf_angle }}deg, #1e293b 0deg);">
-                        
-                        <!-- هسته داخلی توخالی (Doughnut) -->
-                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                            <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %} dir-ltr">
-                                PF
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-3 border-t border-slate-800/80">
-                    <!-- نوار Visual Payoff Ratio -->
-                    <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
-                        <span>نسبت Payoff:</span>
-                        <span class="text-xs font-mono text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                            1:<strong>{{ payoff_ratio }}</strong>
-                        </span>
-                    </div>
-                    <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                        <span>میانگین برد: <strong class="text-sky-400">+${{ avg_win }}</strong></span>
-                        <span>میانگین باخت: <strong class="text-rose-400">-${{ avg_loss }}</strong></span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- کارت ۴: مدیریت ریسک و افت حساب (Max Drawdown & Sharpe) -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">حداکثر افت حساب (Max DD)</span>
-                        <h3 class="text-2xl font-black font-mono text-rose-400 dir-ltr text-right">
-                            {{ max_drawdown }}%
-                        </h3>
-                        <span class="text-[10px] text-slate-500 font-mono mt-1 block">افت از قله (Peak)</span>
-                    </div>
-                    
-                    <!-- 🎯 حلقه دایره‌ای پویای Drawdown -->
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-rose-500/10"
-                        style="background: conic-gradient(#f43f5e {{ dd_angle }}deg, #1e293b 0deg);">
-                        
-                        <!-- هسته داخلی توخالی (Doughnut) -->
-                        <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                            <span class="text-xs font-mono font-bold text-rose-400 dir-ltr">
-                                DD
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mt-4 pt-3 border-t border-slate-800/80">
-                    <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
-                        <span>امید ریاضی (Expectancy):</span>
-                        <strong class="font-mono {% if expectancy >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                            ${{ expectancy }}
-                        </strong>
-                    </div>
-                    <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                        <span>نسبت شارپ: <strong class="text-white">{{ sharpe_ratio }}</strong></span>
-                        <span>سطح ریسک: <strong class="{{ risk_level_color }} font-bold">{{ risk_level_label }}</strong></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    
-        <!-- بخش میانی ۳ گانه‌ی هوشمند (زنجیره برد و باخت | رادار ارزیابی | عملکرد کل) -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-5 my-6 font-sans">
-            
-            <!-- ۱. کارت Winstreak (زنجیره عملکرد) -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">زنجیره برد و باخت (Streaks)</h3>
-                        <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">STREAK 🔥</span>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-4 text-center">
-                        <!-- روزهای متوالی -->
-                        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex flex-col items-center justify-between">
-                            <span class="text-[10px] text-slate-400 font-mono mb-2">روزهای متوالی (Days)</span>
-                            <div class="flex items-center gap-2 dir-ltr my-1">
-                                <span class="text-xl font-black text-white font-mono">{{ streaks.max_win_streak_days }}</span>
-                                <span class="text-amber-500 text-sm">🔥</span>
-                            </div>
-                            <div class="flex gap-2 mt-2 dir-ltr text-[10px] font-mono">
-                                <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold" title="بیشترین روز برد">W: {{ streaks.max_win_streak_days }}</span>
-                                <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold" title="بیشترین روز باخت">L: {{ streaks.max_loss_streak_days }}</span>
-                            </div>
-                        </div>
-
-                        <!-- معاملات متوالی -->
-                        <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex flex-col items-center justify-between">
-                            <span class="text-[10px] text-slate-400 font-mono mb-2">معاملات متوالی (Trades)</span>
-                            <div class="flex items-center gap-2 dir-ltr my-1">
-                                <span class="text-xl font-black text-white font-mono">{{ streaks.max_win_streak_trades }}</span>
-                                <span class="text-amber-500 text-sm">⚡</span>
-                            </div>
-                            <div class="flex gap-2 mt-2 dir-ltr text-[10px] font-mono">
-                                <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold" title="بیشترین معامله برد">W: {{ streaks.max_win_streak_trades }}</span>
-                                <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold" title="بیشترین معامله باخت">L: {{ streaks.max_loss_streak_trades }}</span>
+                                {% endfor %}
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex justify-between items-center dir-rtl">
-                    <span class="text-slate-500">وضعیت پایداری سیستم:</span>
-                    <span class="{{ stability_color }} font-bold font-mono">{{ stability_label }}</span>
-                </div>
+                </details>
             </div>
-
-            <!-- کارت ۲: WaveScore Radar (رادار ارزیابی) - نسخه ارتقایافته و هماهنگ -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between items-center relative">
-                
-                <!-- هدر کارت -->
-                <div class="w-full flex justify-between items-center mb-2">
-                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">رادار ارزیابی حساب (WaveScore)</h3>
-                    
-                    <!-- بج وضعیت رنگی خودکار -->
-                    <span class="text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold
-                        {% if radar_score_overall >= 75 %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
-                        {% elif radar_score_overall >= 50 %}bg-sky-500/10 text-sky-400 border border-sky-500/20
-                        {% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
-                        {% if radar_score_overall >= 75 %}وضعیت عالی{% elif radar_score_overall >= 50 %}وضعیت نرمال{% else %}نیازمند بازنگری{% endif %}
-                    </span>
-                </div>
-
-                <!-- بوم نمودار رادار با امتیاز مرکزی -->
-                <div class="w-full h-44 relative flex items-center justify-center my-1">
-                    <canvas id="radarChart"></canvas>
-                    <div class="absolute inset-0 flex items-center justify-center pointer-events-none dir-ltr">
-                        <span class="text-2xl font-black text-white font-mono tracking-tight drop-shadow-md">{{ radar_score_overall }}</span>
-                    </div>
-                </div>
-
-                <!-- فوتر کارت برای هماهنگی با استایل سایر بخش‌ها -->
-                <div class="w-full mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] text-slate-400 font-mono dir-ltr">
-                    <span>5-Axis Score</span>
-                    <span class="text-slate-300">Scale: <strong class="text-sky-400">0 - 100</strong></span>
-                </div>
-
-            </div>
-
-            <!-- کارت عملکرد کل (Overall Performance) - نسخه ارتقایافته و گیمیفاید -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
-                <div>
-                    <!-- هدر کارت به همراه حلقه دایره‌ای پویای درصد رشد -->
-                    <div class="flex items-center justify-between mb-3">
+        
+            <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) - چیدمان ۴ کارته فوق‌العاده تمیز -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8 font-sans">
+                <!-- کارت ۲: سود / زیان خالص نهایی و هزینه‌ها -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
                         <div>
-                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">عملکرد کل (Performance)</span>
-                            <h3 class="text-2xl font-black font-mono {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr text-right">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">سود / زیان خالص نهایی</span>
+                            <h3 class="text-2xl font-black font-mono tracking-tight dir-ltr text-right {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
                                 {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
                             </h3>
-                            <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">سود خالص کل (NET P&L)</span>
+                            <span class="text-[10px] text-slate-500 font-mono mt-1 block">برآیند حساب</span>
+                        </div>
+
+                        <!-- 🎯 حلقه دایره‌ای واقعی و پویا -->
+                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg"
+                            style="background: conic-gradient({% if total_net_profit >= 0 %}#34d399{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                            
+                            <!-- هسته داخلی دایره -->
+                            <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                                <span class="text-[10px] font-mono font-bold {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                    {% if total_net_profit >= 0 %}+{% else %}-{% endif %}{{ abs_gain_percent|floatformat:1 }}%
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-[11px] text-slate-400 font-mono dir-ltr">
+                        <span>کمیسیون: <strong class="text-slate-300">-${{ total_commission|floatformat:2 }}</strong></span>
+                        <span>سوآپ: <strong class="text-slate-300">${{ total_swap|floatformat:2 }}</strong></span>
+                    </div>
+                </div>
+
+                <!-- کارت ۱: نرخ پیروزی (PnL Rate) با نمودار حلقه‌ای شیشه‌ای -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">نرخ پیروزی (PnL Rate)</span>
+                            <h3 class="text-2xl font-black font-mono text-sky-400">%{{ win_rate }}</h3>
+                            <span class="text-[10px] text-slate-500 font-mono mt-1 block">از {{ total_trades }} معامله</span>
                         </div>
                         
-                        <!-- 🎯 حلقه دایره‌ای پویای درصد رشد (Gain) -->
-                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if gain_percent >= 0 %}shadow-sky-500/10{% else %}shadow-rose-500/10{% endif %}"
-                            style="background: conic-gradient({% if gain_percent >= 0 %}#38bdf8{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                        <!-- 🎯 نمودار حلقه‌ای پویا بر اساس وین‌ریت واقعی -->
+                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-sky-500/10"
+                            style="background: conic-gradient(#38bdf8 {{ win_rate_angle }}deg, #1e293b 0deg);">
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                                <span class="text-[10px] font-mono font-bold {% if gain_percent >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr">
-                                    {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
-                                </span>
+                                <span class="text-xs font-mono font-bold text-slate-200 dir-ltr">%{{ win_rate }}</span>
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- تفکیک آمار به همراه درصد ارزهای سودده روی کارت -->
+                    <div class="mt-4 pt-3 border-t border-slate-800/80">
+                        <div class="flex justify-between text-[11px] text-slate-400 font-mono mb-2">
+                            <span class="text-sky-400 font-bold">برد: {{ wins }}</span>
+                            <span class="text-rose-400 font-bold">باخت: {{ losses }}</span>
+                            <span class="text-slate-500">یربه‌یر: {{ be_count }}</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1 justify-end dir-ltr">
+                            {% for item in symbol_shares %}
+                                {% if item.is_profit %}
+                                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">
+                                    <strong class="text-sky-400">{{ item.symbol }}</strong> (+{{ item.share }}%)
+                                </span>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
 
-                    <!-- بازدهی بازه‌های زمانی -->
-                    <div class="pt-3 border-t border-slate-800/80">
-                        <div class="flex justify-between items-center mb-2 dir-rtl">
-                            <span class="text-[10px] text-slate-400 font-mono">بازدهی بر اساس بازه:</span>
-                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">بازده درصد (%)</span>
+                <!-- کارت ۳: فاکتور سودآوری & Payoff Ratio (با حلقه گرافیکی Profit Factor) -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">فاکتور سودآوری (Profit Factor)</span>
+                            <h3 class="text-2xl font-black font-mono {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %}">
+                                {{ profit_factor }}
+                            </h3>
+                            <span class="text-[10px] text-slate-500 font-mono mt-1 block">بازده نسبت به ریسک</span>
                         </div>
                         
-                        <div class="grid grid-cols-4 gap-1.5 text-center font-mono text-xs dir-ltr">
-                            <!-- روزانه -->
-                            <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                                <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">روزانه</span>
-                                <span class="font-bold text-[11px] {% if period_returns.daily >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                    {% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%
-                                </span>
-                            </div>
-                            <!-- هفتگی -->
-                            <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                                <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">هفتگی</span>
-                                <span class="font-bold text-[11px] {% if period_returns.weekly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                    {% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%
-                                </span>
-                            </div>
-                            <!-- ماهانه -->
-                            <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                                <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">ماهانه</span>
-                                <span class="font-bold text-[11px] {% if period_returns.monthly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                    {% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%
-                                </span>
-                            </div>
-                            <!-- سالانه -->
-                            <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
-                                <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">سالانه</span>
-                                <span class="font-bold text-[11px] {% if period_returns.annualized >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                    {% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%
+                        <!-- 🎯 حلقه دایره‌ای پویای Profit Factor -->
+                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if profit_factor >= 1.2 %}shadow-sky-500/10{% else %}shadow-amber-500/10{% endif %}"
+                            style="background: conic-gradient({% if profit_factor >= 1.2 %}#38bdf8{% else %}#fbbf24{% endif %} {{ pf_angle }}deg, #1e293b 0deg);">
+                            
+                            <!-- هسته داخلی توخالی (Doughnut) -->
+                            <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                                <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %} dir-ltr">
+                                    PF
                                 </span>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- فوتر برای نمایش Drawdown -->
-                <div class="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] font-mono text-slate-400 dir-rtl">
-                    <span class="text-slate-500">حداکثر افت حساب (Drawdown):</span>
-                    <span class="text-rose-400 font-bold dir-ltr">{{ max_drawdown }}%</span>
-                </div>
-            </div>
-        </div>  
-
-        <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- نمودار منحنی رشد حساب -->
-            <div class="glass-card p-6 lg:col-span-2  bg-[#0f172a]/90">
-                <h2 class="text-lg font-bold text-white mb-4">📈 منحنی رشد حساب (Equity Curve)</h2>
-                <div class="h-72">
-                    <canvas id="pnlChart"></canvas>
-                </div>
-            </div>
-
-            <!-- نمودار دایره‌ای توزیع معاملات -->
-            <div class="glass-card p-6 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
-                <!-- افکت نور پس‌زمینه (Glow Effect) -->
-                <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-sky-500/20 transition-all duration-500"></div>
-                <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none transition-all duration-500"></div>
-
-                <div class="flex justify-between items-center mb-2 relative z-10">
-                    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">🎯 توزیع نتایج معاملات (Win/Loss)</h2>
-                    <span class="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold shadow-sm">GAMIFIED</span>
-                </div>
-                
-                <div class="h-60 flex items-center justify-center relative my-auto z-10">
-                    <canvas id="winLossChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- ۴. بخش نمودارهای تحلیلی مکمل -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6  bg-[#0f172a]/90">
-            <div class="glass-card p-6">
-                <h2 class="text-lg font-bold text-white mb-4">📉 نمودار افت حساب (Drawdown)</h2>
-                <div class="h-60"><canvas id="ddChart"></canvas></div>
-            </div>
-
-            <div class="glass-card p-6">
-                <h2 class="text-lg font-bold text-white mb-4">📅 عملکرد بر اساس روزهای هفته</h2>
-                <div class="h-60"><canvas id="dayPnlChart"></canvas></div>
-            </div>
-
-            <div class="glass-card p-6">
-                <h2 class="text-lg font-bold text-white mb-4">🔀 عملکرد بر اساس نماد (Symbol)</h2>
-                <div class="h-60"><canvas id="symbolPnlChart"></canvas></div>
-            </div>
-        </div>
-
-        <!-- ۵. مقایسه Risk to Reward -->
-        <div class="glass-card p-6  bg-[#0f172a]/90">
-            <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
-            <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
-        </div>
-
-        <!-- تقویم معاملاتی ماهانه (Trader Heatmap Calendar) -->
-        <div class="glass-card p-5 rounded-2xl  bg-[#0f172a]/90 border border-slate-800/80 shadow-2xl">
-            
-            <!-- هدر تقویم: کنترل ماه + خلاصه آمار -->
-            <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 border-b border-slate-800/80 pb-4">
-                
-                <!-- انوگیشن ماه (قبلی / بعدی) -->
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
-                        <a href="?year={% if current_month == 1 %}{{ current_year|add:-1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 1 %}12{% else %}{{ current_month|add:-1 }}{% endif %}" 
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                        </a>
-                        <span class="text-sm font-bold text-white px-3 font-mono">{{ month_name }}</span>
-                        <a href="?year={% if current_month == 12 %}{{ current_year|add:1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 12 %}1{% else %}{{ current_month|add:1 }}{% endif %}" 
-                        class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        </a>
+                    <div class="mt-4 pt-3 border-t border-slate-800/80">
+                        <!-- نوار Visual Payoff Ratio -->
+                        <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
+                            <span>نسبت Payoff:</span>
+                            <span class="text-xs font-mono text-white bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                                1:<strong>{{ payoff_ratio }}</strong>
+                            </span>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+                            <span>میانگین برد: <strong class="text-sky-400">+${{ avg_win }}</strong></span>
+                            <span>میانگین باخت: <strong class="text-rose-400">-${{ avg_loss }}</strong></span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- آمار خلاصه ماه -->
-                <div class="flex items-center gap-6 text-xs font-mono">
-                    <div class="text-center">
-                        <span class="text-slate-500 block text-[10px] uppercase">Trades</span>
-                        <span class="text-sky-400 font-bold text-sm">{{ month_trades_count }}</span>
-                    </div>
-                    <div class="text-center">
-                        <span class="text-slate-500 block text-[10px] uppercase">Wins</span>
-                        <span class="text-emerald-400 font-bold text-sm">{{ month_wins_count }}</span>
-                    </div>
-                    <div class="text-center">
-                        <span class="text-slate-500 block text-[10px] uppercase">Profits</span>
-                        <span class="font-bold text-sm {% if month_total_pnl >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                            {% if month_total_pnl >= 0 %}+${{ month_total_pnl|floatformat:2 }}{% else %}-${{ month_total_pnl|floatformat:2|slice:"1:" }}{% endif %}
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- جدول شبکه تقویم -->
-            <div class="w-full overflow-x-auto">
-                <div class="min-w-[700px]">
-                    
-                    <!-- عناوین روزهای هفته + Total -->
-                    <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold text-slate-400 mb-3 font-mono">
-                        <div>Sun</div>
-                        <div>Mon</div>
-                        <div>Tue</div>
-                        <div>Wed</div>
-                        <div>Thu</div>
-                        <div>Fri</div>
-                        <div>Sat</div>
-                        <div class="text-slate-200 border-l border-slate-800 pl-2">Total</div>
-                    </div>
-
-                    <!-- هفته‌ها -->
-                    <div class="space-y-2">
-                        {% for week in calendar_weeks %}
-                        <div class="grid grid-cols-8 gap-2">
+                <!-- کارت ۴: مدیریت ریسک و افت حساب (Max Drawdown & Sharpe) -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">حداکثر افت حساب (Max DD)</span>
+                            <h3 class="text-2xl font-black font-mono text-rose-400 dir-ltr text-right">
+                                {{ max_drawdown }}%
+                            </h3>
+                            <span class="text-[10px] text-slate-500 font-mono mt-1 block">افت از قله (Peak)</span>
+                        </div>
+                        
+                        <!-- 🎯 حلقه دایره‌ای پویای Drawdown -->
+                        <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-rose-500/10"
+                            style="background: conic-gradient(#f43f5e {{ dd_angle }}deg, #1e293b 0deg);">
                             
-                            <!-- روزهای هفته -->
-                            {% for day in week.days %}
-                            <div {% if day.is_current_month %}onclick="openDayTradesModal('{{ day.date_str }}', event)"{% endif %}
-                                class="relative h-20 p-2 rounded-xl border flex flex-col justify-between transition-all duration-200 dir-ltr text-left
-                                {% if day.status == 'profit' %}
-                                    bg-sky-950/30 border-sky-500/40 hover:border-sky-400 shadow-sm shadow-sky-950/50
-                                {% elif day.status == 'loss' %}
-                                    bg-rose-950/30 border-rose-500/40 hover:border-rose-400 shadow-sm shadow-rose-950/50
-                                {% elif day.status == 'other_month' %}
-                                    bg-slate-900/20 border-slate-900 text-slate-600 opacity-40
-                                {% else %}
-                                    bg-slate-900/60 border-slate-800/80 hover:border-slate-700 text-slate-400
-                                {% endif %}">
-                                
-                                <!-- شماره روز -->
-                                <span class="text-[11px] font-mono font-bold {% if not day.is_current_month %}text-slate-600{% else %}text-slate-400{% endif %}">
-                                    {{ day.day_num }}
+                            <!-- هسته داخلی توخالی (Doughnut) -->
+                            <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                                <span class="text-xs font-mono font-bold text-rose-400 dir-ltr">
+                                    DD
                                 </span>
+                            </div>
+                        </div>
+                    </div>
 
-                                <!-- مقدار سود / زیان -->
-                                {% if day.is_current_month and day.count > 0 %}
-                                <div class="text-center my-auto">
-                                    <span class="block text-xs font-mono font-black tracking-tight
-                                        {% if day.pnl > 0 %}text-sky-400{% elif day.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
-                                        {% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
-                                    </span>
-                                    <span class="block text-[10px] font-mono text-slate-500">
-                                        {% if day.pnl_percent >= 0 %}+{% endif %}{{ day.pnl_percent }}%
+                    <div class="mt-4 pt-3 border-t border-slate-800/80">
+                        <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
+                            <span>امید ریاضی (Expectancy):</span>
+                            <strong class="font-mono {% if expectancy >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                ${{ expectancy }}
+                            </strong>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-slate-400 font-mono">
+                            <span>نسبت شارپ: <strong class="text-white">{{ sharpe_ratio }}</strong></span>
+                            <span>سطح ریسک: <strong class="{{ risk_level_color }} font-bold">{{ risk_level_label }}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        
+            <!-- بخش میانی ۳ گانه‌ی هوشمند (زنجیره برد و باخت | رادار ارزیابی | عملکرد کل) -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 my-6 font-sans">
+               
+                 <!-- کارت عملکرد کل (Overall Performance) - نسخه ارتقایافته و گیمیفاید -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div>
+                        <!-- هدر کارت به همراه حلقه دایره‌ای پویای درصد رشد -->
+                        <div class="flex items-center justify-between mb-3">
+                            <div>
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">عملکرد کل (Performance)</span>
+                                <h3 class="text-2xl font-black font-mono {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr text-right">
+                                    {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
+                                </h3>
+                                <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">سود خالص کل (NET P&L)</span>
+                            </div>
+                            
+                            <!-- 🎯 حلقه دایره‌ای پویای درصد رشد (Gain) -->
+                            <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if gain_percent >= 0 %}shadow-sky-500/10{% else %}shadow-rose-500/10{% endif %}"
+                                style="background: conic-gradient({% if gain_percent >= 0 %}#38bdf8{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                                
+                                <!-- هسته داخلی توخالی (Doughnut) -->
+                                <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
+                                    <span class="text-[10px] font-mono font-bold {% if gain_percent >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                        {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
                                     </span>
                                 </div>
-                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- بازدهی بازه‌های زمانی -->
+                        <div class="pt-3 border-t border-slate-800/80">
+                            <div class="flex justify-between items-center mb-2 dir-rtl">
+                                <span class="text-[10px] text-slate-400 font-mono">بازدهی بر اساس بازه:</span>
+                                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">بازده درصد (%)</span>
+                            </div>
+                            
+                            <div class="grid grid-cols-4 gap-1.5 text-center font-mono text-xs dir-ltr">
+                                <!-- روزانه -->
+                                <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                                    <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">روزانه</span>
+                                    <span class="font-bold text-[11px] {% if period_returns.daily >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                        {% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%
+                                    </span>
+                                </div>
+                                <!-- هفتگی -->
+                                <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                                    <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">هفتگی</span>
+                                    <span class="font-bold text-[11px] {% if period_returns.weekly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                        {% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%
+                                    </span>
+                                </div>
+                                <!-- ماهانه -->
+                                <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                                    <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">ماهانه</span>
+                                    <span class="font-bold text-[11px] {% if period_returns.monthly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                        {% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%
+                                    </span>
+                                </div>
+                                <!-- سالانه -->
+                                <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
+                                    <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">سالانه</span>
+                                    <span class="font-bold text-[11px] {% if period_returns.annualized >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                        {% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- فوتر برای نمایش Drawdown -->
+                    <div class="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] font-mono text-slate-400 dir-rtl">
+                        <span class="text-slate-500">حداکثر افت حساب (Drawdown):</span>
+                        <span class="text-rose-400 font-bold dir-ltr">{{ max_drawdown }}%</span>
+                    </div>
+                </div>
+
+                <!-- کارت ۲: WaveScore Radar (رادار ارزیابی) - نسخه ارتقایافته و هماهنگ -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between items-center relative">
+                    
+                    <!-- هدر کارت -->
+                    <div class="w-full flex justify-between items-center mb-2">
+                        <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">رادار ارزیابی حساب (WaveScore)</h3>
+                        
+                        <!-- بج وضعیت رنگی خودکار -->
+                        <span class="text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold
+                            {% if radar_score_overall >= 75 %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
+                            {% elif radar_score_overall >= 50 %}bg-sky-500/10 text-sky-400 border border-sky-500/20
+                            {% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
+                            {% if radar_score_overall >= 75 %}وضعیت عالی{% elif radar_score_overall >= 50 %}وضعیت نرمال{% else %}نیازمند بازنگری{% endif %}
+                        </span>
+                    </div>
+
+                    <!-- بوم نمودار رادار با امتیاز مرکزی -->
+                    <div class="w-full h-44 relative flex items-center justify-center my-1">
+                        <canvas id="radarChart"></canvas>
+                        <div class="absolute inset-0 flex items-center justify-center pointer-events-none dir-ltr">
+                            <span class="text-2xl font-black text-white font-mono tracking-tight drop-shadow-md">{{ radar_score_overall }}</span>
+                        </div>
+                    </div>
+
+                    <!-- فوتر کارت برای هماهنگی با استایل سایر بخش‌ها -->
+                    <div class="w-full mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] text-slate-400 font-mono dir-ltr">
+                        <span>5-Axis Score</span>
+                        <span class="text-slate-300">Scale: <strong class="text-sky-400">0 - 100</strong></span>
+                    </div>
+
+                </div>
+
+                 <!-- ۱. کارت Winstreak (زنجیره عملکرد) -->
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">زنجیره برد و باخت (Streaks)</h3>
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 font-bold">STREAK 🔥</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <!-- روزهای متوالی -->
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex flex-col items-center justify-between">
+                                <span class="text-[10px] text-slate-400 font-mono mb-2">روزهای متوالی (Days)</span>
+                                <div class="flex items-center gap-2 dir-ltr my-1">
+                                    <span class="text-xl font-black text-white font-mono">{{ streaks.max_win_streak_days }}</span>
+                                    <span class="text-amber-500 text-sm">🔥</span>
+                                </div>
+                                <div class="flex gap-2 mt-2 dir-ltr text-[10px] font-mono">
+                                    <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold" title="بیشترین روز برد">W: {{ streaks.max_win_streak_days }}</span>
+                                    <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold" title="بیشترین روز باخت">L: {{ streaks.max_loss_streak_days }}</span>
+                                </div>
+                            </div>
+
+                            <!-- معاملات متوالی -->
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 flex flex-col items-center justify-between">
+                                <span class="text-[10px] text-slate-400 font-mono mb-2">معاملات متوالی (Trades)</span>
+                                <div class="flex items-center gap-2 dir-ltr my-1">
+                                    <span class="text-xl font-black text-white font-mono">{{ streaks.max_win_streak_trades }}</span>
+                                    <span class="text-amber-500 text-sm">⚡</span>
+                                </div>
+                                <div class="flex gap-2 mt-2 dir-ltr text-[10px] font-mono">
+                                    <span class="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-bold" title="بیشترین معامله برد">W: {{ streaks.max_win_streak_trades }}</span>
+                                    <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold" title="بیشترین معامله باخت">L: {{ streaks.max_loss_streak_trades }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex justify-between items-center dir-rtl">
+                        <span class="text-slate-500">وضعیت پایداری سیستم:</span>
+                        <span class="{{ stability_color }} font-bold font-mono">{{ stability_label }}</span>
+                    </div>
+                </div>
+
+               
+            </div>  
+
+            <!-- ۳. بخش نمودارهای اصلی (Equity Curve + Win/Loss Doughnut) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                <!-- نمودار منحنی رشد حساب -->
+                <div class="glass-card p-6 lg:col-span-2  bg-[#0f172a]/90">
+                    <h2 class="text-lg font-bold text-white mb-4">📈 منحنی رشد حساب (Equity Curve)</h2>
+                    <div class="h-72">
+                        <canvas id="pnlChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- نمودار دایره‌ای توزیع معاملات -->
+                <div class="glass-card p-6 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between relative overflow-hidden group">
+                    <!-- افکت نور پس‌زمینه (Glow Effect) -->
+                    <div class="absolute -top-12 -right-12 w-32 h-32 bg-sky-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-sky-500/20 transition-all duration-500"></div>
+                    <div class="absolute -bottom-12 -left-12 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none transition-all duration-500"></div>
+
+                    <div class="flex justify-between items-center mb-2 relative z-10">
+                        <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wider">🎯 توزیع نتایج معاملات (Win/Loss)</h2>
+                        <span class="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-bold shadow-sm">GAMIFIED</span>
+                    </div>
+                    
+                    <div class="h-60 flex items-center justify-center relative my-auto z-10">
+                        <canvas id="winLossChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ۴. بخش نمودارهای تحلیلی مکمل -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6  bg-[#0f172a]/90">
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-bold text-white mb-4">📉 نمودار افت حساب (Drawdown)</h2>
+                    <div class="h-60"><canvas id="ddChart"></canvas></div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-bold text-white mb-4">📅 عملکرد بر اساس روزهای هفته</h2>
+                    <div class="h-60"><canvas id="dayPnlChart"></canvas></div>
+                </div>
+
+                <div class="glass-card p-6">
+                    <h2 class="text-lg font-bold text-white mb-4">🔀 عملکرد بر اساس نماد (Symbol)</h2>
+                    <div class="h-60"><canvas id="symbolPnlChart"></canvas></div>
+                </div>
+            </div>
+
+            <!-- ۵. مقایسه Risk to Reward -->
+            <div class="glass-card p-6  bg-[#0f172a]/90">
+                <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
+                <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
+            </div>
+
+            <!-- تقویم معاملاتی ماهانه (Trader Heatmap Calendar) -->
+            <div class="glass-card p-5 rounded-2xl  bg-[#0f172a]/90 border border-slate-800/80 shadow-2xl">
+                
+                <!-- هدر تقویم: کنترل ماه + خلاصه آمار -->
+                <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-6 border-b border-slate-800/80 pb-4">
+                    
+                    <!-- انوگیشن ماه (قبلی / بعدی) -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
+                            <a href="?year={% if current_month == 1 %}{{ current_year|add:-1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 1 %}12{% else %}{{ current_month|add:-1 }}{% endif %}" 
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            </a>
+                            <span class="text-sm font-bold text-white px-3 font-mono">{{ month_name }}</span>
+                            <a href="?year={% if current_month == 12 %}{{ current_year|add:1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 12 %}1{% else %}{{ current_month|add:1 }}{% endif %}" 
+                            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- آمار خلاصه ماه -->
+                    <div class="flex items-center gap-6 text-xs font-mono">
+                        <div class="text-center">
+                            <span class="text-slate-500 block text-[10px] uppercase">Trades</span>
+                            <span class="text-sky-400 font-bold text-sm">{{ month_trades_count }}</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="text-slate-500 block text-[10px] uppercase">Wins</span>
+                            <span class="text-emerald-400 font-bold text-sm">{{ month_wins_count }}</span>
+                        </div>
+                        <div class="text-center">
+                            <span class="text-slate-500 block text-[10px] uppercase">Profits</span>
+                            <span class="font-bold text-sm {% if month_total_pnl >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                {% if month_total_pnl >= 0 %}+${{ month_total_pnl|floatformat:2 }}{% else %}-${{ month_total_pnl|floatformat:2|slice:"1:" }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- جدول شبکه تقویم -->
+                <div class="w-full overflow-x-auto">
+                    <div class="min-w-[700px]">
+                        
+                        <!-- عناوین روزهای هفته + Total -->
+                        <div class="grid grid-cols-8 gap-2 text-center text-xs font-bold text-slate-400 mb-3 font-mono">
+                            <div>Sun</div>
+                            <div>Mon</div>
+                            <div>Tue</div>
+                            <div>Wed</div>
+                            <div>Thu</div>
+                            <div>Fri</div>
+                            <div>Sat</div>
+                            <div class="text-slate-200 border-l border-slate-800 pl-2">Total</div>
+                        </div>
+
+                        <!-- هفته‌ها -->
+                        <div class="space-y-2">
+                            {% for week in calendar_weeks %}
+                            <div class="grid grid-cols-8 gap-2">
+                                
+                                <!-- روزهای هفته -->
+                                {% for day in week.days %}
+                                <div {% if day.is_current_month %}onclick="openDayTradesModal('{{ day.date_str }}', event)"{% endif %}
+                                    class="relative h-20 p-2 rounded-xl border flex flex-col justify-between transition-all duration-200 dir-ltr text-left
+                                    {% if day.status == 'profit' %}
+                                        bg-sky-950/30 border-sky-500/40 hover:border-sky-400 shadow-sm shadow-sky-950/50
+                                    {% elif day.status == 'loss' %}
+                                        bg-rose-950/30 border-rose-500/40 hover:border-rose-400 shadow-sm shadow-rose-950/50
+                                    {% elif day.status == 'other_month' %}
+                                        bg-slate-900/20 border-slate-900 text-slate-600 opacity-40
+                                    {% else %}
+                                        bg-slate-900/60 border-slate-800/80 hover:border-slate-700 text-slate-400
+                                    {% endif %}">
+                                    
+                                    <!-- شماره روز -->
+                                    <span class="text-[11px] font-mono font-bold {% if not day.is_current_month %}text-slate-600{% else %}text-slate-400{% endif %}">
+                                        {{ day.day_num }}
+                                    </span>
+
+                                    <!-- مقدار سود / زیان -->
+                                    {% if day.is_current_month and day.count > 0 %}
+                                    <div class="text-center my-auto">
+                                        <span class="block text-xs font-mono font-black tracking-tight
+                                            {% if day.pnl > 0 %}text-sky-400{% elif day.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
+                                            {% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
+                                        </span>
+                                        <span class="block text-[10px] font-mono text-slate-500">
+                                            {% if day.pnl_percent >= 0 %}+{% endif %}{{ day.pnl_percent }}%
+                                        </span>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+
+                                <!-- کارت جمع هفتگی (Total) -->
+                                <div class="relative h-20 p-2 rounded-xl border border-slate-800 bg-slate-900/90 flex flex-col justify-center items-center dir-ltr">
+                                    <span class="text-[10px] text-slate-500 font-mono block mb-1">WEEK</span>
+                                    <span class="text-xs font-mono font-black tracking-tight
+                                        {% if week.week_total_pnl > 0 %}text-sky-400{% elif week.week_total_pnl < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
+                                        {% if week.week_total_pnl > 0 %}+${{ week.week_total_pnl|floatformat:2 }}{% elif week.week_total_pnl < 0 %}-${{ week.week_total_pnl|floatformat:2|slice:"1:" }}{% else %}$0.00{% endif %}
+                                    </span>
+                                </div>
+
                             </div>
                             {% endfor %}
-
-                            <!-- کارت جمع هفتگی (Total) -->
-                            <div class="relative h-20 p-2 rounded-xl border border-slate-800 bg-slate-900/90 flex flex-col justify-center items-center dir-ltr">
-                                <span class="text-[10px] text-slate-500 font-mono block mb-1">WEEK</span>
-                                <span class="text-xs font-mono font-black tracking-tight
-                                    {% if week.week_total_pnl > 0 %}text-sky-400{% elif week.week_total_pnl < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
-                                    {% if week.week_total_pnl > 0 %}+${{ week.week_total_pnl|floatformat:2 }}{% elif week.week_total_pnl < 0 %}-${{ week.week_total_pnl|floatformat:2|slice:"1:" }}{% else %}$0.00{% endif %}
-                                </span>
-                            </div>
-
                         </div>
-                        {% endfor %}
-                    </div>
 
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- ۶. جدول کامل ژورنال معاملات -->
-        <div class="glass-card p-6 overflow-hidden  bg-[#0f172a]/90">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold text-white">📋 ریز معاملات (Journal Entries)</h2>
-            </div>
+            <!-- ۶. جدول کامل ژورنال معاملات -->
+            <div class="glass-card p-6 overflow-hidden  bg-[#0f172a]/90">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold text-white">📋 ریز معاملات (Journal Entries)</h2>
+                </div>
 
-            <div class="overflow-x-auto">
-                <table class="w-full text-right text-sm text-gray-300">
-                    <thead class="bg-gray-800/50 text-gray-400 uppercase text-xs border-b border-gray-800">
-                        <tr>
-                            <th class="p-3">نماد / پوزیشن</th>
-                            <th class="p-3">حجم</th>
-                            <th class="p-3">قیمت ورود / خروج</th>
-                            <th class="p-3">(سود ناخالص، کمیسیون، سوآپ)</th>
-                            <th class="p-3">SL / TP</th>
-                            <th class="p-3">R:R برنامه/واقعی</th>
-                            <th class="p-3">سود خالص ($)</th>
-                            <th class="p-3">نتیجه</th>
-                            <th class="p-3">زمان ورود</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-800">
-                        {% for trade in trades %}
-                        <tr class="trade-row cursor-pointer hover:bg-slate-800/50 transition"
-                            onclick="openTradeModal(this)"
-                            data-id="{{ trade.position_id|default:trade.id }}"
-                            data-symbol="{{ trade.symbol }}"
-                            data-type="{{ trade.trade_type }}"
-                            data-result="{{ trade.result }}"
-                            data-entry="{{ trade.fmt_entry|default:'-' }}"
-                            data-exit="{{ trade.fmt_exit|default:'-' }}"
-                            data-sl="{{ trade.fmt_sl|default:'-' }}"
-                            data-tp="{{ trade.fmt_tp|default:'-' }}"
-                            data-profit="${{ trade.profit|floatformat:2 }}"
-                            data-commission="${{ trade.fmt_comm|floatformat:2 }}"
-                            data-swap="${{ trade.swap|floatformat:2 }}"
-                            data-netprofit="${{ trade.net_profit|floatformat:2 }}"
-                            data-is-positive="{% if trade.net_profit >= 0 %}true{% else %}false{% endif %}"
-                            data-planned-rr="{{ trade.calc_planned_rr }}"
-                            data-realized-rr="{{ trade.calc_realized_rr }}"
-                            data-time="{{ trade.entry_time|date:'Y-m-d H:i' }}"
-                            data-note="{{ trade.notes }}"
-                            data-image="{% if trade.image %}{{ trade.image.url }}{% endif %}">
-                            <!-- ستون نماد و آیدی پوزیشن -->
-                            <td class="p-3">
-                                <div class="flex flex-col">
-                                    <span class="font-bold text-slate-100">{{ trade.symbol }}</span>
-                                    <span class="text-xs text-slate-400 font-mono">
-                                        #{{ trade.position_id|default:trade.id }}
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm text-gray-300">
+                        <thead class="bg-gray-800/50 text-gray-400 uppercase text-xs border-b border-gray-800">
+                            <tr>
+                                <th class="p-3">نماد / پوزیشن</th>
+                                <th class="p-3">حجم</th>
+                                <th class="p-3">قیمت ورود / خروج</th>
+                                <th class="p-3">(سود ناخالص، کمیسیون، سوآپ)</th>
+                                <th class="p-3">SL / TP</th>
+                                <th class="p-3">R:R برنامه/واقعی</th>
+                                <th class="p-3">سود خالص ($)</th>
+                                <th class="p-3">نتیجه</th>
+                                <th class="p-3">زمان ورود</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-800">
+                            {% for trade in trades %}
+                            <tr class="trade-row cursor-pointer hover:bg-slate-800/50 transition"
+                                onclick="openTradeModal(this)"
+                                data-id="{{ trade.position_id|default:trade.id }}"
+                                data-symbol="{{ trade.symbol }}"
+                                data-type="{{ trade.trade_type }}"
+                                data-result="{{ trade.result }}"
+                                data-entry="{{ trade.fmt_entry|default:'-' }}"
+                                data-exit="{{ trade.fmt_exit|default:'-' }}"
+                                data-sl="{{ trade.fmt_sl|default:'-' }}"
+                                data-tp="{{ trade.fmt_tp|default:'-' }}"
+                                data-profit="${{ trade.profit|floatformat:2 }}"
+                                data-commission="${{ trade.fmt_comm|floatformat:2 }}"
+                                data-swap="${{ trade.swap|floatformat:2 }}"
+                                data-netprofit="${{ trade.net_profit|floatformat:2 }}"
+                                data-is-positive="{% if trade.net_profit >= 0 %}true{% else %}false{% endif %}"
+                                data-planned-rr="{{ trade.calc_planned_rr }}"
+                                data-realized-rr="{{ trade.calc_realized_rr }}"
+                                data-time="{{ trade.entry_time|date:'Y-m-d H:i' }}"
+                                data-note="{{ trade.notes }}"
+                                data-image="{% if trade.image %}{{ trade.image.url }}{% endif %}">
+                                <!-- ستون نماد و آیدی پوزیشن -->
+                                <td class="p-3">
+                                    <div class="flex flex-col">
+                                        <span class="font-bold text-slate-100">{{ trade.symbol }}</span>
+                                        <span class="text-xs text-slate-400 font-mono">
+                                            #{{ trade.position_id|default:trade.id }}
+                                        </span>
+                                    </div>
+                                </td>
+
+                                <!-- حجم -->
+                                <td class="p-3 font-mono dir-ltr text-right">{{ trade.volume|floatformat:2 }}</td>
+
+                                <!-- قیمت‌ها -->
+                                <td class="p-3 font-mono dir-ltr text-right">
+                                    <div>{{ trade.fmt_entry|default:"-"|floatformat:5 }}</div>
+                                    <div class="text-xs text-gray-500">{{ trade.fmt_exit|default:"-"|floatformat:5 }}</div>
+                                </td>
+
+                                <!-- ستون جزییات مالی (سود ناخالص، کمیسیون، سوآپ) -->
+                                <td class="p-3 text-xs font-mono dir-ltr text-right">
+                                    <div class="flex flex-col gap-0.5">
+                                        <!-- سود ناخالص -->
+                                        <div class="flex justify-between gap-2">
+                                            <span class="text-slate-500">Profit:</span>
+                                            <span class="{% if trade.profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                                ${{ trade.profit|floatformat:2 }}
+                                            </span>
+                                        </div>
+
+                                        <!-- کمیسیون -->
+                                        <div class="flex justify-between gap-2">
+                                            <span class="text-slate-500">Comm:</span>
+                                            <span class="text-amber-400/90">
+                                                ${{ trade.fmt_comm|floatformat:2 }}
+                                            </span>
+                                        </div>
+
+                                        <!-- سوآپ (اگر وجود داشت) -->
+                                        {% if trade.swap %}
+                                        <div class="flex justify-between gap-2 text-slate-400">
+                                            <span class="text-slate-500">Swap:</span>
+                                            <span>${{ trade.swap|floatformat:2 }}</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </td>
+
+                                <!-- SL/TP -->
+                                <td class="p-3 text-xs font-mono dir-ltr text-right">
+                                    <span class="text-rose-400">{{ trade.fmt_sl|default:"-" }}</span> /
+                                    <span class="text-emerald-400">{{ trade.fmt_tp|default:"-" }}</span>
+                                </td>
+
+                                <!-- Risk/Reward -->
+                                <td class="p-3 font-mono dir-ltr text-right">
+                                    <span class="text-gray-400">{{ trade.calc_planned_rr|default:"-" }}</span> /
+                                    <span class="text-indigo-400 font-bold">
+                                        {% if trade.result == 'WIN' %}
+                                            {{ trade.calc_realized_rr }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
                                     </span>
-                                </div>
-                            </td>
+                                </td>
 
-                            <!-- حجم -->
-                            <td class="p-3 font-mono dir-ltr text-right">{{ trade.volume|floatformat:2 }}</td>
+                                <!-- سود خالص -->
+                                <td class="p-3 font-bold dir-ltr text-right {% if trade.net_profit >= 0 %}text-emerald-400{% else %}text-rose-500{% endif %}">
+                                    ${{ trade.net_profit|floatformat:2 }}
+                                </td>
 
-                            <!-- قیمت‌ها -->
-                            <td class="p-3 font-mono dir-ltr text-right">
-                                <div>{{ trade.fmt_entry|default:"-"|floatformat:5 }}</div>
-                                <div class="text-xs text-gray-500">{{ trade.fmt_exit|default:"-"|floatformat:5 }}</div>
-                            </td>
-
-                            <!-- ستون جزییات مالی (سود ناخالص، کمیسیون، سوآپ) -->
-                            <td class="p-3 text-xs font-mono dir-ltr text-right">
-                                <div class="flex flex-col gap-0.5">
-                                    <!-- سود ناخالص -->
-                                    <div class="flex justify-between gap-2">
-                                        <span class="text-slate-500">Profit:</span>
-                                        <span class="{% if trade.profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
-                                            ${{ trade.profit|floatformat:2 }}
-                                        </span>
-                                    </div>
-
-                                    <!-- کمیسیون -->
-                                    <div class="flex justify-between gap-2">
-                                        <span class="text-slate-500">Comm:</span>
-                                        <span class="text-amber-400/90">
-                                            ${{ trade.fmt_comm|floatformat:2 }}
-                                        </span>
-                                    </div>
-
-                                    <!-- سوآپ (اگر وجود داشت) -->
-                                    {% if trade.swap %}
-                                    <div class="flex justify-between gap-2 text-slate-400">
-                                        <span class="text-slate-500">Swap:</span>
-                                        <span>${{ trade.swap|floatformat:2 }}</span>
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </td>
-
-                            <!-- SL/TP -->
-                            <td class="p-3 text-xs font-mono dir-ltr text-right">
-                                <span class="text-rose-400">{{ trade.fmt_sl|default:"-" }}</span> /
-                                <span class="text-emerald-400">{{ trade.fmt_tp|default:"-" }}</span>
-                            </td>
-
-                            <!-- Risk/Reward -->
-                            <td class="p-3 font-mono dir-ltr text-right">
-                                <span class="text-gray-400">{{ trade.calc_planned_rr|default:"-" }}</span> /
-                                <span class="text-indigo-400 font-bold">
+                                <!-- نتیجه -->
+                                <td class="p-3">
                                     {% if trade.result == 'WIN' %}
-                                        {{ trade.calc_realized_rr }}
+                                        <span class="px-2 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">WIN</span>
+                                    {% elif trade.result == 'LOSS' %}
+                                        <span class="px-2 py-1 text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded">LOSS</span>
+                                    {% elif trade.result == 'BE' %}
+                                        <span class="px-2 py-1 text-xs font-bold bg-gray-500/10 text-gray-400 border border-gray-500/30 rounded">BE</span>
                                     {% else %}
-                                        -
+                                        <span class="px-2 py-1 text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded">PENDING</span>
                                     {% endif %}
-                                </span>
-                            </td>
+                                </td>
 
-                            <!-- سود خالص -->
-                            <td class="p-3 font-bold dir-ltr text-right {% if trade.net_profit >= 0 %}text-emerald-400{% else %}text-rose-500{% endif %}">
-                                ${{ trade.net_profit|floatformat:2 }}
-                            </td>
-
-                            <!-- نتیجه -->
-                            <td class="p-3">
-                                {% if trade.result == 'WIN' %}
-                                    <span class="px-2 py-1 text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">WIN</span>
-                                {% elif trade.result == 'LOSS' %}
-                                    <span class="px-2 py-1 text-xs font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 rounded">LOSS</span>
-                                {% elif trade.result == 'BE' %}
-                                    <span class="px-2 py-1 text-xs font-bold bg-gray-500/10 text-gray-400 border border-gray-500/30 rounded">BE</span>
-                                {% else %}
-                                    <span class="px-2 py-1 text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 rounded">PENDING</span>
-                                {% endif %}
-                            </td>
-
-                            <!-- زمان -->
-                            <td class="p-3 text-xs text-gray-400 dir-ltr text-right">
-                                {{ trade.entry_time|default:trade.created_at|date:"Y-m-d H:i"|default:"-" }}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="8" class="text-center p-6 text-gray-500">هیچ معامله‌ای ثبت نشده است.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <!-- بخش کنترل صفحه‌بندی (Pagination Controls) -->
-        {% if trades.has_other_pages %}
-            <div class="flex items-center justify-between pt-4 mt-4 border-t border-gray-800 text-xs font-mono">
-                <div class="text-gray-400">
-                    نمایش {{ trades.start_index }} تا {{ trades.end_index }} از {{ trades.paginator.count }} معامله
+                                <!-- زمان -->
+                                <td class="p-3 text-xs text-gray-400 dir-ltr text-right">
+                                    {{ trade.entry_time|default:trade.created_at|date:"Y-m-d H:i"|default:"-" }}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center p-6 text-gray-500">هیچ معامله‌ای ثبت نشده است.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
-
-                <div class="flex items-center gap-1">
-                    <!-- دکمه قبلی -->
-                    {% if trades.has_previous %}
-                        <a href="?page={{ trades.previous_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
-                            قبلی
-                        </a>
-                    {% else %}
-                        <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
-                            قبلی
-                        </span>
-                    {% endif %}
-
-                    <!-- شماره صفحات -->
-                    <div class="flex gap-1">
-                        {% for num in trades.paginator.page_range %}
-                            {% if trades.number == num %}
-                                <span class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold">
-                                    {{ num }}
-                                </span>
-                            {% elif num > trades.number|add:'-3' and num < trades.number|add:'3' %}
-                                <a href="?page={{ num }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
-                                    {{ num }}
-                                </a>
-                            {% endif %}
-                        {% endfor %}
+            </div>
+            <!-- بخش کنترل صفحه‌بندی (Pagination Controls) -->
+            {% if trades.has_other_pages %}
+                <div class="flex items-center justify-between pt-4 mt-4 border-t border-gray-800 text-xs font-mono">
+                    <div class="text-gray-400">
+                        نمایش {{ trades.start_index }} تا {{ trades.end_index }} از {{ trades.paginator.count }} معامله
                     </div>
 
-                    <!-- دکمه بعدی -->
-                    {% if trades.has_next %}
-                        <a href="?page={{ trades.next_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
-                            بعدی
-                        </a>
-                    {% else %}
-                        <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
-                            بعدی
+                    <div class="flex items-center gap-1">
+                        <!-- دکمه قبلی -->
+                        {% if trades.has_previous %}
+                            <a href="?page={{ trades.previous_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                                قبلی
+                            </a>
+                        {% else %}
+                            <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
+                                قبلی
+                            </span>
+                        {% endif %}
+
+                        <!-- شماره صفحات -->
+                        <div class="flex gap-1">
+                            {% for num in trades.paginator.page_range %}
+                                {% if trades.number == num %}
+                                    <span class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-bold">
+                                        {{ num }}
+                                    </span>
+                                {% elif num > trades.number|add:'-3' and num < trades.number|add:'3' %}
+                                    <a href="?page={{ num }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                                        {{ num }}
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+
+                        <!-- دکمه بعدی -->
+                        {% if trades.has_next %}
+                            <a href="?page={{ trades.next_page_number }}&period={{ current_period }}" class="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition">
+                                بعدی
+                            </a>
+                        {% else %}
+                            <span class="px-3 py-1.5 rounded-lg bg-slate-900 text-slate-600 cursor-not-allowed">
+                                بعدی
+                            </span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+
+        <!-- ================= پنل هوش مصنوعی و روانشناسی (AI Core 2027) ================= -->
+        <div id="ai-panel" class="space-y-6 hidden transition-all duration-500">
+        
+            <!-- تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes) - اشغال ۲ ستون -->
+            <div class="glass-card p-6 space-y-4">
+                <h3 class="text-xs font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
+                    <i class="fa-solid fa-comments text-purple-400"></i> تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes)
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    <!-- یادداشت‌های بازنده -->
+                    <div class="p-3.5 rounded-2xl bg-slate-900/60 border border-rose-500/20 space-y-2">
+                        <span class="text-[11px] font-bold text-rose-400 font-mono flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> خطاهای تکرارشده (LOSS):
                         </span>
-                    {% endif %}
+                        <ul class="space-y-1.5 text-xs text-slate-300 font-sans">
+                            {% for note in ai_analysis_data.losing_notes %}
+                            <li class="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-2">
+                                <i class="fa-solid fa-xmark text-rose-400 mt-0.5 shrink-0 text-[10px]"></i>
+                                <span>{{ note }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="text-slate-500 text-xs italic py-2">نوت خطایی ثبت نشده است.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <!-- یادداشت‌های برنده -->
+                    <div class="p-3.5 rounded-2xl bg-slate-900/60 border border-emerald-500/20 space-y-2">
+                        <span class="text-[11px] font-bold text-emerald-400 font-mono flex items-center gap-2">
+                            <i class="fa-solid fa-circle-check"></i> سناریوهای موفق (WIN):
+                        </span>
+                        <ul class="space-y-1.5 text-xs text-slate-300 font-sans">
+                            {% for note in ai_analysis_data.winning_notes %}
+                            <li class="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-2">
+                                <i class="fa-solid fa-check text-emerald-400 mt-0.5 shrink-0 text-[10px]"></i>
+                                <span>{{ note }}</span>
+                            </li>
+                            {% empty %}
+                            <li class="text-slate-500 text-xs italic py-2">نوت ممتازی ثبت نشده است.</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
                 </div>
             </div>
-        {% endif %}
+
+            <!-- بخش هسته تحلیلی عصبی و روانشناسی هوشمند (هدر) -->
+            <div class="glass-card p-6 border-l-4 border-l-fuchsia-500 relative overflow-hidden shadow-[0_0_30px_rgba(217,70,239,0.15)]">
+                <!-- هاله نورانی پس‌زمینه با رنگ بنفش نئونی -->
+                <div class="absolute -left-10 -bottom-10 w-40 h-40 bg-fuchsia-500/15 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-4">
+                        <!-- کادر آیکون نئونی -->
+                        <div class="relative inline-flex items-center justify-center p-3 rounded-xl bg-slate-900/80 border border-fuchsia-500/40 backdrop-blur-md shadow-[0_0_20px_rgba(217,70,239,0.3)]">
+                            <!-- هاله پالس پشتی -->
+                            <div class="absolute inset-0 rounded-xl bg-fuchsia-500/15 animate-ping opacity-30"></div>
+                            
+                            <!-- آیکون اصلی میکروچیپ -->
+                            <svg class="animate-spin text-fuchsia-400 drop-shadow-[0_0_10px_rgba(217,70,239,0.9)]" 
+                                style="animation-duration: 10s;" 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                viewBox="0 0 640 512" 
+                                width="1.5em" 
+                                height="1.5em" 
+                                fill="currentColor">
+                            <path d="M64 96c0-35.3 28.7-64 64-64H512c35.3 0 64 28.7 64 64V416c0 35.3-28.7 64-64 64H128c-35.3 0-64-28.7-64-64V96zM224 160V352H416V160H224zM128 64c-17.7 0-32 14.3-32 32v64H64c-17.7 0-32 14.3-32 32v64c0 17.7 14.3 32 32 32h32v64c0 17.7 14.3 32 32 32h64v32c0 17.7 14.3 32 32 32h64c17.7 0 32-14.3 32-32V448h64c17.7 0 32-14.3 32-32V352h32c17.7 0 32-14.3 32-32V256c0-17.7-14.3-32-32-32H544V160c0-17.7-14.3-32-32-32H448V96c0-17.7-14.3-32-32-32H352V32c0-17.7-14.3-32-32-32H256c-17.7 0-32 14.3-32 32V64H160c0-17.7-14.3-32-32 32z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-base font-bold text-white tracking-tight">هسته تحلیلی عصبی و روانشناسی هوشمند (Gemini Core 2027)</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">تحلیل عمقی یادداشت‌ها، کشف تله‌های رفتاری و شناسایی الگوهای پنهان باخت و برد توسط هوش مصنوعی</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <!-- بج وضعیت نئونی متصل به ژورنال -->
+                        <span class="px-3 py-1.5 rounded-xl bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/30 text-xs font-mono font-bold flex items-center gap-2 shadow-[0_0_10px_rgba(217,70,239,0.15)]">
+                            <span class="w-2 h-2 rounded-full bg-fuchsia-400 animate-ping"></span> متصل به ژورنال زنده
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <!-- باکس متن تحلیلی تولید شده توسط هوش مصنوعی (Lazy Loading) -->
+            <div class="glass-card p-6 space-y-4 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.05)]">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-brain text-purple-400"></i> گزارش ارزیابی عصبی و رفتار معاملاتی
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-mono">بر اساس عملکرد بازه فعلی</span>
+                </div>
+                
+                <!-- باکس متن پاسخ هوش مصنوعی -->
+                <div class="text-xs md:text-sm text-slate-300 leading-relaxed font-sans space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 min-h-[220px] whitespace-pre-wrap" id="ai-response-box">
+                    <div class="flex items-center justify-center  text-purple-400 font-mono text-xs">
+                        <!-- افکت هاله نورانی متحرک در پس‌زمینه لودینگ -->
+                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-fuchsia-500/5 to-transparent animate-pulse pointer-events-none"></div>
+
+                        <!-- کادر آیکون نئونی در حال چرخش -->
+                        <div class="relative inline-flex items-center justify-center p-3.5 rounded-2xl bg-slate-900/90 border border-fuchsia-500/50 shadow-[0_0_20px_rgba(217,70,239,0.35)]">
+                            <div class="absolute inset-0 rounded-2xl bg-fuchsia-500/20 animate-ping opacity-40"></div>
+                            
+                            <svg class="animate-spin text-fuchsia-400 drop-shadow-[0_0_10px_rgba(217,70,239,0.9)]" 
+                                style="animation-duration: 8s;" 
+                                xmlns="http://www.w3.org/2000/svg" 
+                                viewBox="0 0 640 512" 
+                                width="5em" 
+                                height="5em" 
+                                fill="currentColor">
+                                <path d="M64 96c0-35.3 28.7-64 64-64H512c35.3 0 64 28.7 64 64V416c0 35.3-28.7 64-64 64H128c-35.3 0-64-28.7-64-64V96zM224 160V352H416V160H224zM128 64c-17.7 0-32 14.3-32 32v64H64c-17.7 0-32 14.3-32 32v64c0 17.7 14.3 32 32 32h32v64c0 17.7 14.3 32 32 32h64v32c0 17.7 14.3 32 32 32h64c17.7 0 32-14.3 32-32V448h64c17.7 0 32-14.3 32-32V352h32c17.7 0 32-14.3 32-32V256c0-17.7-14.3-32-32-32H544V160c0-17.7-14.3-32-32-32H448V96c0-17.7-14.3-32-32-32H352V32c0-17.7-14.3-32-32-32H256c-17.7 0-32 14.3-32 32V64H160c0-17.7-14.3-32-32 32z"/>
+                            </svg>
+                            <span class="text-fuchsia-300 font-mono text-xs font-semibold tracking-wider drop-shadow-[0_0_6px_rgba(217,70,239,0.5)]">
+                                در حال پردازش داده ها...
+                            </span>
+                            <span class="text-slate-400 text-[11px] font-sans">
+                                استخراج تله‌های روانشناسی و ارزیابی عمقی ژورنال معاملات
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
     </div>
+
 
     <!-- اسکریپت رندر نمودارها -->
     <script>
@@ -1744,6 +2012,85 @@
             }, 1000);
         }
     }, 3000);
+
+    // تابع سوئیچ بین تب‌های داشبورد استاندارد و هوش مصنوعی
+    function switchDashboardTab(tab) {
+        const standardPanel = document.getElementById('standard-panel');
+        const aiPanel = document.getElementById('ai-panel');
+        const btnStandard = document.getElementById('btn-standard');
+        const btnAi = document.getElementById('btn-ai');
+        const slider = document.getElementById('slider-indicator');
+
+        if (tab === 'ai') {
+            // حرکت انیمیشنی اسلایدر به سمت چپ (در حالت RTL)
+            slider.style.transform = 'translateX(-100%)';
+            
+            // تغییر رنگ و جلوه متون
+            btnAi.classList.remove('text-slate-400');
+            btnAi.classList.add('text-slate-950');
+            btnStandard.classList.remove('text-slate-950');
+            btnStandard.classList.add('text-slate-400');
+            
+            // سوییچ کامل پنل‌ها
+            if (standardPanel) standardPanel.classList.add('hidden');
+            if (aiPanel) aiPanel.classList.remove('hidden');
+        } else {
+            // بازگشت اسلایدر به جایگاه اولیه
+            slider.style.transform = 'translateX(0%)';
+            
+            // تغییر رنگ و جلوه متون
+            btnStandard.classList.remove('text-slate-400');
+            btnStandard.classList.add('text-slate-950');
+            btnAi.classList.remove('text-slate-950');
+            btnAi.classList.add('text-slate-400');
+            
+            // سوییچ کامل پنل‌ها
+            if (aiPanel) aiPanel.classList.add('hidden');
+            if (standardPanel) standardPanel.classList.remove('hidden');
+        }
+    }
+
+    // تابع لود تنبل تحلیل هوش مصنوعی پس از لود کامل صفحه
+    function loadAIAnalysis() {
+    const box = document.getElementById('ai-response-box');
+    if(box.dataset.loaded === "true") return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const period = urlParams.get('period') || 'weekly';
+
+    fetch(`{% url 'api_ai_analysis' %}?period=${period}`)
+        .then(async res => {
+            if (!res.ok) {
+                // اگر سرور ارور داد، متن ارور را از سرور بخوان و چاپ کن
+                const errorText = await res.text();
+                console.error("Server Error Details:", errorText);
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            if(data.status === 'success') {
+                box.innerHTML = marked.parse(data.analysis);
+                box.dataset.loaded = "true";
+            } else {
+                box.innerHTML = `<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[ERROR]: ${data.message || 'خطا در پردازش هوش مصنوعی'}</span></div>`;
+            }
+        })
+        .catch(err => {
+            console.error("Fetch Catch Error:", err);
+            box.innerHTML = '<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[CONNECTION_FAIL]: خطای ارتباط با سرور هوش مصنوعی (F12 را چک کنید).</span></div>';
+        });
+}
+
+    // اصلاح تابع switchDashboardTab برای اینکه به محض باز شدن تب هوش مصنوعی، دیتا فراخوانی شود
+    const originalSwitchTab = window.switchDashboardTab;
+    window.switchDashboardTab = function(tab) {
+        if(typeof originalSwitchTab === 'function') originalSwitchTab(tab);
+        if(tab === 'ai') {
+            loadAIAnalysis();
+        }
+    };
+
     </script>
 </body>
 </html>
