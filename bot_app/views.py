@@ -180,6 +180,7 @@ def day_trades_api_view(request):
 
         trades_data.append({
             'id': t.id,
+            'position_id': t.position_id,
             'symbol': t.symbol,
             'trade_type': t.trade_type,  # BUY یا SELL
             'result': t.result,          # WIN, LOSS, BE, PENDING
