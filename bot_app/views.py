@@ -1,6 +1,8 @@
+import os
 import json
 import logging
-import asyncio
+import hashlib
+from pathlib import Path
 
 from datetime import datetime
 from django.utils import timezone
@@ -14,14 +16,51 @@ from .services.bakup_restore_service import backup_database,get_backups,restore_
 from bot_app.services.analysis_service import calculate_trading_metrics, analyze_trades_with_gemini
 
 logger = logging.getLogger(__name__)
+CACHE_DIR = Path("ai_analysis_cache")
+CACHE_DIR.mkdir(exist_ok=True)
+
+def generate_trades_hash(processed_trades) -> str:
+    """تولید یک اثر انگشت (Hash) یکتا بر اساس شناسه، زمان و وضعیت تریدها"""
+    hasher = hashlib.sha256()
+    for t in processed_trades:
+        # ساخت رشتهتاثیرگذار از ویژگی‌های کلیدی ترید
+        unique_str = f"{getattr(t, 'id', '')}_{getattr(t, 'symbol', '')}_{getattr(t, 'net_profit', '')}_{getattr(t, 'close_time', '')}"
+        hasher.update(unique_str.encode('utf-8'))
+    return hasher.hexdigest()
 
 
 def api_get_ai_analysis(request):
     period = request.GET.get('period', 'weekly')
     metrics = calculate_trading_metrics(period=period)
-    
-    # فراخوانی مستقیم و بدون خطای async
-    ai_response = analyze_trades_with_gemini(metrics, period)
+
+    # ۱. محاسبه هشِ وضعیت فعلی تریدها
+    current_trades_hash = generate_trades_hash(metrics.get('trades',[]))
+    cache_file = CACHE_DIR / f"analysis_{period}.json"
+
+    # ۲. بررسی اینکه آیا فایل کش وجود دارد و آیا تریدها تغییر کرده‌اند یا خیر
+    if cache_file.exists():
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                cache_data = json.load(f)
+                if cache_data.get('hash') == current_trades_hash:
+                    # اگر تریدها عوض نشده بودند، تحلیل ذخیره‌شده را برمی‌گردانیم (بدون مصرف توکن جدید!)
+                    ai_response = cache_data.get('analysis')
+        except Exception as e:
+            logger.error("Error reading AI cache file: %s", e)
+    else:
+        # فراخوانی مستقیم و بدون خطای async
+        ai_response = analyze_trades_with_gemini(metrics, period)
+        if ai_response and ("`[SYSTEM_ALERT]:`" not in ai_response):
+            # ۳. ذخیره تحلیل جدید همراه با هش تریدها در فایل JSON
+                try:
+                    cache_data = {
+                        'hash': current_trades_hash,
+                        'analysis': ai_response
+                    }
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(cache_data, f, ensure_ascii=False, indent=4)
+                except Exception as cache_err:
+                    logger.error("Error saving AI cache file: %s", cache_err)
     
     return JsonResponse({'status': 'success', 'analysis': ai_response})
 
