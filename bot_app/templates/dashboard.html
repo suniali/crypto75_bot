@@ -333,9 +333,11 @@
                 <div class="flex items-center gap-3.5">
                     <!-- لوگوی گرافیکی برند (لوگوی نئونی کوانتومی) -->
                     <div class="relative group">
-                        <div class="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 rounded-2xl blur-md opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse"></div>
-                        <div class="relative w-12 h-12 rounded-2xl bg-slate-950 border border-cyan-400/60 flex items-center justify-center shadow-2xl">
-                            <svg class="w-6 h-6 text-cyan-400 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <div class="absolute -inset-1 bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 rounded-2xl blur-md opacity-75 group-hover:opacity-100 transition duration-500 animate-pulse"></div>
+                        <!-- کادر اصلی با حاشیه بنفش نئونی -->
+                        <div class="relative w-12 h-12 rounded-2xl bg-slate-950 border border-purple-500/60 flex items-center justify-center shadow-2xl">
+                            <!-- آیکون صاعقه با رنگ بنفش و افکت زوم هنگام هاور -->
+                            <svg class="w-6 h-6 text-purple-400 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                             </svg>
                         </div>
@@ -363,13 +365,17 @@
                     
                     <!-- دکمه داشبورد معاملاتی -->
                     <button type="button" onclick="switchDashboardTab('standard')" id="btn-standard" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <i class="fa-solid fa-chart-line text-sm"></i>
+                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M64 64c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V64zM192 192c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H224c-17.7 0-32-14.3-32-32V192zM320 128c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H352c-17.7 0-32-14.3-32-32V128zM32 448H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32z"/>
+                        </svg>
                         <span>داشبورد معاملاتی</span>
                     </button>
                     
                     <!-- دکمه هوش مصنوعی و روانشناسی -->
                     <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <i class="fa-solid fa-brain text-sm text-purple-400 animate-pulse"></i>
+                        <svg class="w-3.5 h-3.5 text-purple-400 animate-pulse shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M256 0c31.6 0 62.4 6.7 90.7 19.3c-1.8 7.3-2.7 15-2.7 22.7c0 44.2 35.8 80 80 80c7.7 0 15.3-1 22.7-2.7C452.3 177.6 459 208.4 459 240c0 10.9-.7 21.6-2 32c32.7 19.1 55 54.5 55 95c0 60.1-48.8 109-109 109c-23.7 0-45.6-7.8-63.4-21c-22.3 15.5-49.7 25-79.6 25c-30 0-57.4-9.5-79.6-25c-17.8 13.2-39.7 21-63.4 21C48.8 476 0 427.2 0 367c0-40.5 22.3-75.9 55-95c-1.3-10.4-2-21.1-2-32c0-31.6 6.7-62.4 19.3-90.7c7.3 1.8 15 2.7 22.7 2.7c44.2 0 80-35.8 80-80c0-7.7-1-15.3-2.7-22.7C193.6 6.7 224.4 0 256 0z"/>
+                        </svg>
                         <span>هوش مصنوعی AI</span>
                     </button>
                 </div>
@@ -1241,19 +1247,25 @@
             <!-- تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes) - اشغال ۲ ستون -->
             <div class="glass-card p-6 space-y-4">
                 <h3 class="text-xs font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-3">
-                    <i class="fa-solid fa-comments text-purple-400"></i> تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes)
+                    <svg class="w-4 h-4 text-purple-400 inline-block shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M512 240c0 114.9-114.6 208-256 208c-37.1 0-72.3-6.4-104.1-17.9c-43 28.1-92.7 45.9-146.7 49.8c-7.2 .5-13.7-3.7-16.1-10.5c-2.4-6.8-.2-14.4 5.3-18.9c35.8-29.3 59.8-63.3 69.3-95.2C24.1 321.9 0 283.3 0 240C0 125.1 114.6 32 256 32s256 93.1 256 208z"/>
+                    </svg> تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes)
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     
                     <!-- یادداشت‌های بازنده -->
                     <div class="p-3.5 rounded-2xl bg-slate-900/60 border border-rose-500/20 space-y-2">
                         <span class="text-[11px] font-bold text-rose-400 font-mono flex items-center gap-2">
-                            <i class="fa-solid fa-triangle-exclamation"></i> خطاهای تکرارشده (LOSS):
+                            <svg class="w-4 h-4 text-rose-400 shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.7 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"/>
+                            </svg> خطاهای تکرارشده (LOSS):
                         </span>
                         <ul class="space-y-1.5 text-xs text-slate-300 font-sans">
                             {% for note in ai_analysis_data.losing_notes %}
                             <li class="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-2">
-                                <i class="fa-solid fa-xmark text-rose-400 mt-0.5 shrink-0 text-[10px]"></i>
+                                <svg class="w-[10px] h-[10px] text-rose-400 mt-0.5 shrink-0 fill-current" viewBox="0 0 384 512" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/>
+                                </svg>
                                 <span>{{ note }}</span>
                             </li>
                             {% empty %}
@@ -1265,12 +1277,16 @@
                     <!-- یادداشت‌های برنده -->
                     <div class="p-3.5 rounded-2xl bg-slate-900/60 border border-emerald-500/20 space-y-2">
                         <span class="text-[11px] font-bold text-emerald-400 font-mono flex items-center gap-2">
-                            <i class="fa-solid fa-circle-check"></i> سناریوهای موفق (WIN):
+                            <svg class="w-4 h-4 text-emerald-400 shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zM369 209L241 337c-9.4 9.4-24.6 9.4-33.9 0l-64-64c-9.4-9.4-9.4-24.6 0-33.9s24.6-9.4 33.9 0l47 47L335 175c9.4-9.4 24.6-9.4 33.9 0s9.4 24.6 0 33.9z"/>
+                            </svg> سناریوهای موفق (WIN):
                         </span>
                         <ul class="space-y-1.5 text-xs text-slate-300 font-sans">
                             {% for note in ai_analysis_data.winning_notes %}
                             <li class="p-2 rounded-xl bg-slate-950 border border-slate-800/80 flex items-start gap-2">
-                                <i class="fa-solid fa-check text-emerald-400 mt-0.5 shrink-0 text-[10px]"></i>
+                                <svg class="w-[10px] h-[10px] text-emerald-400 mt-0.5 shrink-0 fill-current" viewBox="0 0 448 512" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"/>
+                                </svg>
                                 <span>{{ note }}</span>
                             </li>
                             {% empty %}
@@ -1322,7 +1338,9 @@
             <div class="glass-card p-6 space-y-4 border border-purple-500/20 shadow-[0_0_30px_rgba(168,85,247,0.05)]">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                     <h3 class="text-sm font-bold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-brain text-purple-400"></i> گزارش ارزیابی عصبی و رفتار معاملاتی
+                        <svg class="w-4 h-4 text-purple-400 shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M256 0c31.6 0 62.4 6.7 90.7 19.3c-1.8 7.3-2.7 15-2.7 22.7c0 44.2 35.8 80 80 80c7.7 0 15.3-1 22.7-2.7C452.3 177.6 459 208.4 459 240c0 10.9-.7 21.6-2 32c32.7 19.1 55 54.5 55 95c0 60.1-48.8 109-109 109c-23.7 0-45.6-7.8-63.4-21c-22.3 15.5-49.7 25-79.6 25c-30 0-57.4-9.5-79.6-25c-17.8 13.2-39.7 21-63.4 21C48.8 476 0 427.2 0 367c0-40.5 22.3-75.9 55-95c-1.3-10.4-2-21.1-2-32c0-31.6 6.7-62.4 19.3-90.7c7.3 1.8 15 2.7 22.7 2.7c44.2 0 80-35.8 80-80c0-7.7-1-15.3-2.7-22.7C193.6 6.7 224.4 0 256 0z"/>
+                        </svg> گزارش ارزیابی عصبی و رفتار معاملاتی
                     </h3>
                     <span class="text-[10px] text-slate-400 font-mono">بر اساس عملکرد بازه فعلی</span>
                 </div>
