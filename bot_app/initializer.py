@@ -10,10 +10,11 @@ from bot_app.workers import ACTIVE_WORKERS
 
 from bot_app.loops.alert_loop import check_alerts_loop
 from bot_app.loops.sl_tp_monitor_loop import sl_tp_monitor_loop
-from bot_app.loops.worker_loop import worker_loop
+from bot_app.loops.worker import start_ai_analysis_job,shutdown_ai_jobs
 
 logger = logging.getLogger(__name__)
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
+
 
 async def on_startup(app):
     logger.info("⚡ Initializing MetaTrader 5 Connection...")
@@ -43,33 +44,42 @@ async def on_startup(app):
         watchlist = await get_all_watchlist()
 
         for item in watchlist:
-            # استفاده از چت آیدی همان کاربر به جای ادمین
-            chat_id = item.user.chat_id
-            worker_key = f"{chat_id}_{item.symbol}_{item.time_frame}_{item.market_type}"
+            start_ai_analysis_job(item.symbol,item.time_frame)
 
-            if worker_key not in ACTIVE_WORKERS:
-                task = asyncio.create_task(
-                    worker_loop(item.symbol, item.time_frame, item.market_type, chat_id, app.bot)
-                )
-                ACTIVE_WORKERS[worker_key] = task
 
-        logger.info("Successfully started background monitors and %d RSI worker tasks.", len(watchlist))
     except Exception as e:
         logger.exception("Error during background tasks startup: %s", e)
 
 
-async def on_shutdown(app):
-    logger.info("🛑 Stopping background workers...")
+async def on_shutdown(app_instance=None):
+  logger.info('🛑 Stopping background workers and application...')
 
-    for worker_key, task in ACTIVE_WORKERS.items():
-        if not task.done():
-            task.cancel()
-            logger.info("Cancelling worker: %s", worker_key)
+  # ۱. متوقف کردن تسک‌های قدیمی (اگر هنوز وجود دارند)
+  for worker_key, task in ACTIVE_WORKERS.items():
+    if not task.done():
+      task.cancel()
+      logger.info('Cancelling worker: %s', worker_key)
 
+  if ACTIVE_WORKERS:
     await asyncio.gather(*ACTIVE_WORKERS.values(), return_exceptions=True)
     ACTIVE_WORKERS.clear()
-    logger.info("✅ All background workers stopped cleanly.")
 
-    # قطع اتصال متاتریدر ۵
-    await asyncio.to_thread(stop_mt5_connection)
-    logger.info("🛑 MetaTrader 5 connection closed cleanly.")
+  # ۲. متوقف کردن جاب‌ها و شجولر هوش مصنوعی
+  await shutdown_ai_jobs()  # یا تابع پاکسازی شجولر شما
+
+  logger.info('✅ All background workers stopped cleanly.')
+
+  # ۳. قطع اتصال متاتریدر ۵
+  await asyncio.to_thread(stop_mt5_connection)
+  logger.info('🛑 MetaTrader 5 connection closed cleanly.')
+
+  # ۴. خاموش کردن کامل ربات تلگرام (برای اینکه فرآیند پولینگ متوقف شود و ربات کاملاً خاموش شود)
+  try:
+    # اگر متغیر app تلگرام در دسترس است:
+    global app  # یا از طریق شیء اپلیکیشنی که دارید
+    if 'app' in globals() and app:
+      await app.stop()
+      await app.shutdown()
+      logger.info('🛑 Telegram Bot application stopped cleanly.')
+  except Exception as e:
+    logger.error(f'Error stopping Telegram application: {e}')

@@ -1,0 +1,146 @@
+import logging
+
+from decimal import Decimal
+import pandas as pd
+
+
+from bot_app.services.ml_features import create_ml_labels, extract_features_for_ml
+from bot_app.services.ml_engine import TradingAIEngine  
+
+from bot_app.models import TradeDecisionLog
+
+logger = logging.getLogger(__name__)
+
+def evaluate_market_and_execute(
+    symbol,time_frame, candles_qs, account_balance, risk_percentage=1.0
+):
+    """موتور اجرایی هوشمند:
+
+    ۱. دریافت کندل‌ها و تبدیل به دیتافریم
+    ۲. استخراج ویژگی‌های پرایس اکشن و اندیکاتورها
+    ۳. گرفتن تاییدیه هوش مصنوعی (XGBoost)
+    ۴. محاسبه حد ضرر پویا با ATR و سود هدف (با R:R استاندارد 1:2)
+    ۵. اعمال قانون دقیق ریسک ۲ درصدی برای تعیین حجم (Volume)
+    ۶. ثبت تصمیم در لاگ دیتابیس جنگو
+    """
+
+    # ۱. تبدیل کوئری‌ست کندل‌ها به دیتافریم پانداس
+    df = pd.DataFrame(
+        list(
+            candles_qs.values(
+                'open_price',
+                'high_price',
+                'low_price',
+                'close_price',
+                'volume',
+                'open_time',
+            )
+        )
+    )
+
+    if len(df) < 100:
+        return {
+            'status': 'skipped',
+            'reason': 'داده‌های تاریخی برای تحلیل کافی نیست.',
+        }
+
+    # ۲. استخراج ویژگی‌ها (فاز ۲)
+    processed_df = extract_features_for_ml(df)
+    if processed_df.empty:
+        return {
+            'status': 'skipped',
+            'reason': 'خطا در پردازش ویژگی‌های پرایس اکشن.',
+        }
+
+    latest_row = processed_df.iloc[-1].to_dict()
+
+    # 2. بررسی و آموزش خودکار مدل هوش مصنوعی (اگر مدل هنوز ساخته نشده باشد)
+    ai_engine = TradingAIEngine(symbol=symbol,timeframe=time_frame)
+    # بازآموزی مداوم مدل با آخرین داده‌های دریافت شده از بازار
+    if len(processed_df) >= 100:
+      logger.info(
+          f'🧠 Continuous Training: Updating XGBoost model for {symbol}'
+          f' [{time_frame}] ...'
+      )
+      train_base_df = processed_df.copy()
+      train_base_df['target_label'] = create_ml_labels(train_base_df)
+      training_df = train_base_df.iloc[:-5].copy()
+
+      if len(training_df) > 10:
+        ai_engine.train(training_df) 
+      else:
+        logger.warning('⚠️ Training dataframe is too small for retraining.')
+
+    # 3. ارزیابی توسط مدل هوش مصنوعی (فاز ۳)
+    action, confidence = ai_engine.predict_signal(latest_row)
+
+    # بررسی اینکه آیا سیگنال صادر شده است یا خیر (اگر HOLD باشد یعنی رد شده است)
+    is_approved = action in ['BUY', 'SELL']
+
+    formatted_features={
+            k: float(v) if isinstance(v, (int, float, Decimal)) else str(v)
+            for k, v in latest_row.items()
+        }
+
+    # ۴. ثبت نتیجه در دیتابیس (مدل TradeDecisionLog)
+    decision_log = TradeDecisionLog.objects.create(
+        symbol=symbol,
+        action=action,
+        ai_confidence=confidence,
+        features_snapshot=formatted_features,
+    )
+
+    # اگر هوش مصنوعی تایید نکرد، فرآیند متوقف می‌شود
+    if not is_approved:
+        return {
+            'status': 'rejected',
+            'confidence': confidence,
+            'reason': 'ضریب اطمینان هوش مصنوعی پایین‌تر از آستانه مجاز (۶۵٪) است.',
+        }
+
+    # ۵. محاسبه حد ضرر پویا (Stop Loss) بر اساس ATR و سود هدف (Take Profit) با R:R 1:2
+    current_price = float(latest_row['close_price'])
+    atr_value = float(latest_row['atr'])
+
+    # فاصله حد ضرر معادل ۱.۵ برابر ATR فعلی بازار است
+    sl_distance = atr_value * 1.5
+
+    if action == 'BUY':
+        stop_loss = current_price - sl_distance
+        take_profit = current_price + (
+            sl_distance * 2
+        )  # ریوارد به ریسک 1 به 2
+    else:  # SELL
+        stop_loss = current_price + sl_distance
+        take_profit = current_price - (sl_distance * 2)
+
+    # ۶. پیاده‌سازی قانون سخت‌گیرانه مدیریت ریسک (حداکثر ۲٪ ریسک سرمایه)
+    # فرمول: (مبلغ ریسک دلاری) تقسیم بر (فاصله قیمت ورود تا حد ضرر)
+    risk_amount_usd = Decimal(str(account_balance)) * Decimal(
+        str(risk_percentage / 100.0)
+    )
+    price_risk_per_unit = abs(
+        Decimal(str(current_price)) - Decimal(str(stop_loss))
+    )
+
+    if price_risk_per_unit == 0:
+        return {
+            'status': 'error',
+            'reason': 'محاسبه فاصله حد ضرر با خطا مواجه شد.',
+        }
+
+    calculated_volume = risk_amount_usd / price_risk_per_unit
+
+    return {
+        'status': 'approved_signal',
+        'log_id': decision_log.id,
+        'symbol': symbol,
+        'action': action,
+        'ai_confidence': round(confidence * 100, 2),
+        'entry_price': current_price,
+        'stop_loss': round(stop_loss, 5),
+        'take_profit': round(take_profit, 5),
+        'calculated_volume': round(float(calculated_volume), 2),
+        'risk_amount_usd': float(round(risk_amount_usd, 2)),
+        'features': formatted_features
+    }

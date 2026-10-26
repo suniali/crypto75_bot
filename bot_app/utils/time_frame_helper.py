@@ -7,3 +7,11 @@ TIMEFRAME_TO_SECONDS = {
     "4h": 14400,
     "1d": 86400,
 }
+TIMEFRAME_TO_SHEDULER = {
+    "5m":5,
+    "15m": 15,
+    "30m": 30,
+    "1h": 60,
+    "4h": 240,
+    "1d": 1140,
+}
