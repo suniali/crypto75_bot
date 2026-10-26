@@ -5,7 +5,8 @@ from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 from telegram.error import BadRequest
 
-from bot_app.workers import ACTIVE_WORKERS
+from bot_app.loops.worker import start_ai_analysis_job,stop_ai_analysis_job
+
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
 
 from bot_app.services.watchlist_service import (
@@ -15,8 +16,6 @@ from bot_app.services.watchlist_service import (
 )
 from bot_app.services.mt5_service import get_market_watch_symbols
 from bot_app.services.user_service import get_or_create_user
-
-from bot_app.loops.worker_loop import worker_loop
 
 logger = logging.getLogger(__name__)
 
@@ -143,11 +142,7 @@ async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes
     logger.info("Deleting item from watchlist: %s (%s, %s)", symbol, timeframe, market_type)
 
     # متوقف ساختن تسک پایش پس‌زمینه
-    worker_key = f"{chat_id}_{symbol}_{timeframe}_{market_type}"
-    if worker_key in ACTIVE_WORKERS:
-        ACTIVE_WORKERS[worker_key].cancel()
-        del ACTIVE_WORKERS[worker_key]
-        logger.info("Cancelled background worker task for key: %s", worker_key)
+    stop_ai_analysis_job(symbol,timeframe)
 
     # اجرای غیربلاک‌کننده حذف از دیتابیس
 
@@ -318,8 +313,7 @@ async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes
 
     # ۳. شروع تسک جدید (در صورت ثبت موفق)
     worker_key = f"{chat_id}_{symbol}_{timeframe}_{market_type}"  # بهتره chat_id هم کلید ورکر اضافه بشه تا مجزا باشه
-    task = asyncio.create_task(worker_loop(symbol, timeframe, market_type, chat_id, context.bot))
-    ACTIVE_WORKERS[worker_key] = task
+    start_ai_analysis_job(symbol=symbol,time_frame=timeframe)
     logger.info("Created new worker task for key: %s", worker_key)
 
     await query.edit_message_text(

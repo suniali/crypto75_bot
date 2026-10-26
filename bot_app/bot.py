@@ -1,6 +1,5 @@
 import os
 import sys
-import asyncio
 import logging
 import django
 import time
@@ -458,16 +457,17 @@ if __name__ == "__main__":
     # ------------------ 5️⃣ اجرا ------------------
 
     logger.info("🤖 Bot is polling for updates...")
-    while True:
-        try:
-            app.run_polling(
-                poll_interval=2.0,
-                timeout=30,
-            )
-        except (NetworkError, httpx.RemoteProtocolError) as e:
-            logger.warning(f"⚠️ Network connection lost: {e}. Reconnecting in 5 seconds...")
-            time.sleep(5)
+   
+    try:
+        app.run_polling(
+            poll_interval=2.0,
+            timeout=30,
+            close_loop=False,
+        )
+    except (NetworkError, httpx.RemoteProtocolError) as e:
+        logger.warning(f"⚠️ Network connection lost: {e}. Reconnecting in 5 seconds...")
+        time.sleep(5)
 
-        except Exception as e:
-            logger.error(f"❌ Unexpected critical error: {e}", exc_info=True)
-            time.sleep(10)
+    except Exception as e:
+        logger.error(f"❌ Unexpected critical error: {e}", exc_info=True)
+        time.sleep(10)

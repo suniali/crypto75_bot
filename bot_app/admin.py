@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from bot_app.models import UserAlert, Watchlist, TelegramUser, TradeJournal
+from bot_app.models import (
+    UserAlert,
+    Watchlist,
+    TelegramUser,
+    TradeJournal,
+    MarketCandle,
+    TradeDecisionLog,
+    )
 
 
 @admin.register(TelegramUser)
@@ -63,3 +70,30 @@ class TradeJournalAdmin(admin.ModelAdmin):
         val = obj.net_profit
         color = 'green' if val >= 0 else 'red'
         return f"${val:,.2f}"
+
+
+@admin.register(MarketCandle)
+class MarketCandleAdmin(admin.ModelAdmin):
+    list_display = (
+        'id',
+        'symbol',
+        'timeframe',
+        'open_time',
+        'open_price',
+        'high_price',
+        'low_price',
+        'close_price',
+        'volume',  
+    )
+
+@admin.register(TradeDecisionLog)
+class TradeDecisionLogAdmin(admin.ModelAdmin):
+    list_display=(
+        'symbol',
+        'timestamp',
+        'action',
+        'ai_confidence',
+        'features_snapshot',
+        'result_status',
+        'net_profit',
+    )
