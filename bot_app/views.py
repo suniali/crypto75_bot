@@ -31,6 +31,8 @@ def generate_trades_hash(processed_trades) -> str:
 
 def api_get_ai_analysis(request):
     period = request.GET.get('period', 'weekly')
+    ai_response = None
+
     metrics = calculate_trading_metrics(period=period)
 
     # ۱. محاسبه هشِ وضعیت فعلی تریدها
@@ -47,7 +49,8 @@ def api_get_ai_analysis(request):
                     ai_response = cache_data.get('analysis')
         except Exception as e:
             logger.error("Error reading AI cache file: %s", e)
-    else:
+
+    if not ai_response:
         # فراخوانی مستقیم و بدون خطای async
         ai_response = analyze_trades_with_gemini(metrics, period)
         if ai_response and ("`[SYSTEM_ALERT]:`" not in ai_response):
@@ -61,6 +64,9 @@ def api_get_ai_analysis(request):
                         json.dump(cache_data, f, ensure_ascii=False, indent=4)
                 except Exception as cache_err:
                     logger.error("Error saving AI cache file: %s", cache_err)
+
+    if not ai_response:
+        ai_response = 'تحلیلی برای این دوره یافت نشد یا خطا در پردازش رخ داد.'
     
     return JsonResponse({'status': 'success', 'analysis': ai_response})
 
