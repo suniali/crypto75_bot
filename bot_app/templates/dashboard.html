@@ -406,7 +406,7 @@
                     <div id="dbDropdownMenu" class="absolute left-0 mt-3 w-60 rounded-2xl bg-slate-950 border border-cyan-500/40 shadow-[0_20px_50px_rgba(0,0,0,0.9)] py-2.5 hidden z-[999] backdrop-blur-2xl">
                         
                         <!-- گزینه پشتیبان‌گیری با آیکون گرافیکی ابری (SVG) -->
-                        <button type="button" onclick="triggerBackup(); closeDbMenu();" class="w-full text-right px-4 py-3 text-xs font-medium text-slate-200 hover:text-white hover:bg-cyan-500/20 flex items-center gap-3 transition-colors group cursor-pointer">
+                        <button type="button" id="backupBtn" onclick="triggerBackup(); closeDbMenu();" class="w-full text-right px-4 py-3 text-xs font-medium text-slate-200 hover:text-white hover:bg-cyan-500/20 flex items-center gap-3 transition-colors group cursor-pointer">
                             <div class="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform shadow-sm">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
@@ -1715,7 +1715,7 @@
             const btn = document.getElementById('backupBtn');
             btn.disabled = true;
             btn.style.opacity = '0.7';
-
+            
             fetch("{% url 'take_backup' %}", {
                 method: 'POST',
                 headers: {
