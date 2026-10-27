@@ -681,3 +681,34 @@ def check_recent_closed_positions(hours_back=12):
                     })
 
         return closed_alerts
+
+def get_broker_contract_size(symbol: str) -> float:
+    """تابع برای دریافت اندازه قرارداد (Contract Size) یک نماد مستقیماً از MT5
+
+    :param symbol: نام نماد (مثلا 'EURUSD', 'BTCUSD', 'XAUUSD')
+    :return: مقدار contract size یا None در صورت بروز خطا
+    """
+    
+    with mt5_session() as ok:
+        if not ok:
+            return None
+        
+        # دریافت اطلاعات کامل نماد
+        symbol_info = mt5.symbol_info(symbol)
+
+        if symbol_info is None:
+            logger.error(
+                f'❌ نماد {symbol} در پلتفرم یافت نشد یا اطلاعات آن قابل دریافت نیست.'
+            )
+            return None
+
+        # اگر نماد در پلتفرم قابل معامله و قابل مشاهده باشد
+        if not symbol_info.visible:
+            if not mt5.symbol_select(symbol, True):
+                logger.warning(f'⚠️ نماد {symbol} در لیست مارکت واچ فعال نشد.')
+                return None
+
+        # استخراج اندازه قرارداد
+        contract_size = float(symbol_info.trade_contract_size)
+
+        return contract_size

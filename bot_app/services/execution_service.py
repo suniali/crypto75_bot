@@ -5,11 +5,44 @@ import pandas as pd
 
 
 from bot_app.services.ml_features import create_ml_labels, extract_features_for_ml
-from bot_app.services.ml_engine import TradingAIEngine  
+from bot_app.services.ml_engine import TradingAIEngine 
+from bot_app.services.mt5_service import get_broker_contract_size 
 
 from bot_app.models import TradeDecisionLog
 
 logger = logging.getLogger(__name__)
+
+def calculate_dynamic_lot_size(
+    symbol, account_balance, risk_percentage, current_price, stop_loss
+):
+    # ۱. دریافت پویا‌ی Contract Size از بروکر
+    contract_size_float = get_broker_contract_size(symbol)
+    if not contract_size_float:
+        # مقدار پیش‌فرض امن در صورت خطا (مثلا استاندارد فارکس)
+        contract_size_float = 100000.0
+
+    contract_size = Decimal(str(contract_size_float))
+
+    # ۲. محاسبه ریسک دلاری
+    risk_amount_usd = Decimal(str(account_balance)) * Decimal(
+        str(risk_percentage / 100.0)
+    )
+
+    # ۳. فاصله حد ضرر
+    price_risk_per_unit = abs(
+        Decimal(str(current_price)) - Decimal(str(stop_loss))
+    )
+
+    if price_risk_per_unit == 0:
+        return 0.0
+
+    # ۴. محاسبه حجم دقیق با احتساب سایز قرارداد واقعی بروکر
+    calculated_volume = risk_amount_usd / (price_risk_per_unit * contract_size)
+
+    # رند کردن به ۲ رقم اعشار و اعمال حداقل حجم مجاز (0.01)
+    final_volume = max(0.01, round(float(calculated_volume), 2))
+
+    return final_volume
 
 def evaluate_market_and_execute(
     symbol,time_frame, candles_qs, account_balance, risk_percentage=1.0
@@ -116,20 +149,44 @@ def evaluate_market_and_execute(
 
     # ۶. پیاده‌سازی قانون سخت‌گیرانه مدیریت ریسک (حداکثر ۲٪ ریسک سرمایه)
     # فرمول: (مبلغ ریسک دلاری) تقسیم بر (فاصله قیمت ورود تا حد ضرر)
+    # ۱. محاسبه مبلغ ریسک بر اساس درصد حساب (مثلا 2 درصد از بالانس)
     risk_amount_usd = Decimal(str(account_balance)) * Decimal(
         str(risk_percentage / 100.0)
     )
+
+    # ۲. فاصله قیمت ورود تا حد ضرر
     price_risk_per_unit = abs(
         Decimal(str(current_price)) - Decimal(str(stop_loss))
     )
-
+    
     if price_risk_per_unit == 0:
         return {
             'status': 'error',
             'reason': 'محاسبه فاصله حد ضرر با خطا مواجه شد.',
         }
 
-    calculated_volume = risk_amount_usd / price_risk_per_unit
+    calculated_volume=calculate_dynamic_lot_size(
+        symbol=symbol,
+        account_balance=account_balance,
+        risk_percentage=risk_percentage,
+        current_price=current_price,
+        stop_loss=stop_loss
+        )
+
+    formatted_features = {
+        **formatted_features,
+        'entry_price':current_price,
+        'stop_loss': round(stop_loss, 5),
+        'take_profit': round(take_profit, 5),
+        'calculated_volume': round(float(calculated_volume), 2),
+        'risk_amount_usd': float(round(risk_amount_usd, 2)),
+        'risk_percentage':risk_percentage,
+    }
+
+    decision_log.features_snapshot=formatted_features
+    decision_log.save(
+        update_fields=['features_snapshot']
+    )
 
     return {
         'status': 'approved_signal',
