@@ -4,6 +4,8 @@ import MetaTrader5 as mt5
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from bot_app.utils.time_frame_helper import TIMEFRAME_TO_MT5_TIMEFRAME
+
 from bot_app.models import TelegramUser, TradeJournal, MarketType
 
 logger = logging.getLogger(__name__)
@@ -16,16 +18,6 @@ ERROR_CANNOT_CONNECT_TO_METATRADER = (
     "❌ امکان برقراری ارتباط با نرم‌افزار متاتریدر وجود ندارد.\n"
     "لطفاً مطمئن شوید MT5 باز و به حساب متصل است."
 )
-
-TIMEFRAME_TO_MT5_TIMEFRAME = {
-    "1m": mt5.TIMEFRAME_M1,
-    "5m": mt5.TIMEFRAME_M5,
-    "15m": mt5.TIMEFRAME_M15,
-    "30m": mt5.TIMEFRAME_M30,
-    "1h": mt5.TIMEFRAME_H1,
-    "4h": mt5.TIMEFRAME_H4,
-    "1d": mt5.TIMEFRAME_D1,
-}
 
 # ------------------------------------------------------------------
 # Connection Management (مرکز مدیریت اتصال)

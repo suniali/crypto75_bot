@@ -255,8 +255,8 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
     logger.info("AddWatchlist step 2 - Symbol entered: %s", symbol)
 
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("5m", callback_data="5m"), InlineKeyboardButton("15m", callback_data="15m")],
-        [InlineKeyboardButton("30m", callback_data="30m"), InlineKeyboardButton("1h", callback_data="1h")],
+        [InlineKeyboardButton("1m", callback_data="1m"),InlineKeyboardButton("5m", callback_data="5m"),],
+        [InlineKeyboardButton("15m", callback_data="15m"),InlineKeyboardButton("30m", callback_data="30m"), InlineKeyboardButton("1h", callback_data="1h")],
         [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")],
         [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
     ])
