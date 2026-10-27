@@ -4,7 +4,7 @@ from decimal import Decimal
 import pandas as pd
 
 
-from bot_app.services.ml_features import create_ml_labels, extract_features_for_ml
+from bot_app.services.ml_features import extract_features_for_ml,SL_ATR_MULT, TP_ATR_MULT
 from bot_app.services.ml_engine import TradingAIEngine 
 from bot_app.services.mt5_service import get_broker_contract_size 
 
@@ -87,25 +87,14 @@ def evaluate_market_and_execute(
 
     latest_row = processed_df.iloc[-1].to_dict()
 
-    # 2. بررسی و آموزش خودکار مدل هوش مصنوعی (اگر مدل هنوز ساخته نشده باشد)
+    # 2. بررسی مدل هوش مصنوعی (اگر مدل هنوز ساخته نشده باشد)
     ai_engine = TradingAIEngine(symbol=symbol,timeframe=time_frame)
-    # بازآموزی مداوم مدل با آخرین داده‌های دریافت شده از بازار
-    if len(processed_df) >= 100:
-      logger.info(
-          f'🧠 Continuous Training: Updating XGBoost model for {symbol}'
-          f' [{time_frame}] ...'
-      )
-      train_base_df = processed_df.copy()
-      train_base_df['target_label'] = create_ml_labels(train_base_df)
-      training_df = train_base_df.iloc[:-5].copy()
-
-      if len(training_df) > 10:
-        ai_engine.train(training_df) 
-      else:
-        logger.warning('⚠️ Training dataframe is too small for retraining.')
-
-    # 3. ارزیابی توسط مدل هوش مصنوعی (فاز ۳)
+    
+    if ai_engine.model is None:
+        return {'status': 'skipped', 'reason': 'مدل معتبری برای این نماد/تایم‌فریم نیست (train_model).'}
+    
     action, confidence = ai_engine.predict_signal(latest_row)
+
 
     # بررسی اینکه آیا سیگنال صادر شده است یا خیر (اگر HOLD باشد یعنی رد شده است)
     is_approved = action in ['BUY', 'SELL']
@@ -136,16 +125,14 @@ def evaluate_market_and_execute(
     atr_value = float(latest_row['atr'])
 
     # فاصله حد ضرر معادل ۱.۵ برابر ATR فعلی بازار است
-    sl_distance = atr_value * 1.5
+    sl_distance = atr_value * SL_ATR_MULT
 
     if action == 'BUY':
         stop_loss = current_price - sl_distance
-        take_profit = current_price + (
-            sl_distance * 2
-        )  # ریوارد به ریسک 1 به 2
+        take_profit = current_price + sl_distance * (TP_ATR_MULT / SL_ATR_MULT)
     else:  # SELL
         stop_loss = current_price + sl_distance
-        take_profit = current_price - (sl_distance * 2)
+        take_profit = current_price - sl_distance * (TP_ATR_MULT / SL_ATR_MULT)
 
     # ۶. پیاده‌سازی قانون سخت‌گیرانه مدیریت ریسک (حداکثر ۲٪ ریسک سرمایه)
     # فرمول: (مبلغ ریسک دلاری) تقسیم بر (فاصله قیمت ورود تا حد ضرر)
