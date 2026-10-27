@@ -1,6 +1,13 @@
 import numpy as np
 import pandas as pd
 
+# ضریب‌های ATR برای محاسبه اتوماتیک حد ضرر و حد سود
+SL_ATR_MULT = (
+    1.5  # ضریب ATR برای تعیین فاصله حد ضرر (Stop Loss) مثلاً 1.5 برابر ATR
+)
+TP_ATR_MULT = (
+    2.5  # ضریب ATR برای تعیین فاصله حد سود (Take Profit) مثلاً 2.5 برابر ATR
+)
 
 def calculate_rsi(series, period=14):
     """محاسبه اندیکاتور RSI"""

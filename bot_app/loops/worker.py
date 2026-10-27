@@ -36,6 +36,8 @@ def start_ai_analysis_job(symbol:str,time_frame:str):
       args=[symbol,time_frame,FULL_LIMIT,SHORT_LIMIT,ACCOUNT_BALANCE,RISK],
       id=f'ai_trade_analysis_{symbol}_{time_frame}',
       replace_existing=True,
+      max_instances=1,
+      coalesce=True
   )
 
   logger.info(f"✅ AI Analysis Scheduler started successfully (Interval: {time_frame}).")
