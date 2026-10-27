@@ -1,5 +1,6 @@
+import html
+import time
 import asyncio
-from django.conf import settings
 from telegram import Bot
 from telegram.request import HTTPXRequest
 from decouple import config
@@ -15,32 +16,35 @@ def send_telegram_trade_alert(signal_data):
     action_emoji = '🟢 BUY SIGNAL' if signal_data['action'] == 'BUY' else '🔴 SELL SIGNAL'
 
     features = signal_data['features']
+
+    symbol_safe = html.escape(str(signal_data.get('symbol', '')))
     
     # قالب‌بندی پیام با استایل مناسب تلگرام (Markdown)
     message = f"""
-    {action_emoji} | <b>{signal_data['symbol']}</b>
+        {action_emoji} | <b>{symbol_safe}</b>
 
-    🤖 <b>هوش مصنوعی (XGBoost):</b> تایید شد ({signal_data['ai_confidence']}٪ اطمینان)
-    💰 <b>قیمت ورود:</b> <code>{signal_data['entry_price']}</code>
-    🎯 <b>حد سود (TP):</b> <code>{signal_data['take_profit']}</code>
-    🛡 <b>حد ضرر (SL):</b> <code>{signal_data['stop_loss']}</code>
-    📊 <b>حجم پیشنهادی (Risk 1%):</b> <code>{signal_data['calculated_volume']}</code> لوت
+        🤖 <b>هوش مصنوعی (XGBoost):</b> تایید شد ({signal_data.get('ai_confidence', 0)}٪ اطمینان)
+        💰 <b>قیمت ورود:</b> <code>{signal_data.get('entry_price', 0)}</code>
+        🎯 <b>حد سود (TP):</b> <code>{signal_data.get('take_profit', 0)}</code>
+        🛡 <b>حد ضرر (SL):</b> <code>{signal_data.get('stop_loss', 0)}</code>
+        📊 <b>حجم پیشنهادی (Risk 1%):</b> <code>{signal_data.get('calculated_volume', 0)}</code> لوت
 
-    📉 <b>شاخص‌ها و وضعیت بازار در لحظه تصمیم:</b>
-    • <b>RSI (14):</b> <code>{features.get('rsi', 0):.2f}</code>
-    • <b>ATR (14):</b> <code>{features.get('atr', 0):.5f}</code>
-    • <b>روند کلی (Trend):</b> <code>{'صعودی 📈' if features.get('trend_direction') == 1 else 'نزولی 📉'}</code>
-    • <b>تغییرات قیمت:</b> <code>{features.get('price_change', 0):.2f}%</code>
+        📉 <b>شاخص‌ها و وضعیت بازار در لحظه تصمیم:</b>
+        • <b>RSI (14):</b> <code>{features.get('rsi', 0):.2f}</code>
+        • <b>ATR (14):</b> <code>{features.get('atr', 0):.5f}</code>
+        • <b>روند کلی (Trend):</b> <code>{'صعودی 📈' if features.get('trend_direction') == 1 else 'نزولی 📉'}</code>
+        • <b>تغییرات قیمت:</b> <code>{features.get('price_change', 0):.2f}%</code>
 
-    🔖 <i>شناسه لاگ تصمیم‌گیری: #{signal_data.get('log_id', 'N/A')}</i>
+        🔖 <i>شناسه لاگ تصمیم‌گیری: #{signal_data.get('log_id', 'N/A')}</i>
     """
 
     async def _send():
         async with bot:
+            time.sleep(2)
             await bot.send_message(
-                chat_id=settings.TELEGRAM_CHAT_ID,
+                chat_id=config('ADMIN_CHAT_ID'),
                 text=message,
-                parse_mode='Markdown',
+                parse_mode='HTML',
                 reply_markup=MAIN_KEYBOARD,
             ) 
     try:
