@@ -273,7 +273,7 @@ if __name__ == "__main__":
             ],
             ADD_WATCHLIST_TIMEFRAME: [
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
-                CallbackQueryHandler(add_watchlist_get_timeframe_step, pattern="^(5m|15m|30m|1h|4h|1d)$"),
+                CallbackQueryHandler(add_watchlist_get_timeframe_step, pattern="^(1m|5m|15m|30m|1h|4h|1d)$"),
             ],
         },
         fallbacks=[
