@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes,ConversationHandler
 from telegram.error import BadRequest
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
+from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.services.mt5_service import (
     get_open_positions,
@@ -81,7 +82,7 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
                 f"🔹 <b>تیکت:</b> <code>{ticket}</code> | <b>{symbol}</b> ({pos_type})\n"
                 f"📊 <b>حجم:</b> <code>{volume}</code> | <b>ورود:</b> <code>{price_open}</code>\n"
                 f"📈 <b>قیمت فعلی:</b> <code>{price_current:.5f}</code>\n"
-                f"{profit_icon} <b>سود/ضرر:</b> <code>{profit:.2f}$</code>\n"
+                f"{profit_icon} <b>سود/ضرر:</b> <code>{profit:.2f}{CURENCY_UNIT}</code>\n"
                 f"➖➖➖➖➖➖➖➖➖➖\n"
             )
 
@@ -92,7 +93,7 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
                 )
             ])
 
-        text += f"\n💰 <b>مجموع سود/ضرر کل:</b> <code>{total_profit:.2f}$</code>"
+        text += f"\n💰 <b>مجموع سود/ضرر کل:</b> <code>{total_profit:.2f}{CURENCY_UNIT}</code>"
 
         # دکمه‌های کنترلی
         keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
@@ -173,7 +174,7 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
             f"📈 <b>قیمت لحظه‌ای:</b> <code>{pos['price_current']:.5f}</code>\n"
             f"🛑 <b>SL:</b> <code>{pos['sl']}</code> | 🎯 <b>TP:</b> <code>{pos['tp']}</code>\n"
             f"───────────────────\n"
-            f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>${pos['profit']:,.2f}</code></b>"
+            f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>{CURENCY_UNIT}{pos['profit']:,.2f}</code></b>"
         )
 
         keyboard = [
@@ -271,7 +272,7 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
             f"🔹 **تیکت:** `{pos['ticket']}` | **{pos['symbol']}** ({pos['type']})\n"
             f"📊 **حجم:** `{pos['volume']}` | **ورود:** `{pos['price_open']:.5f}`\n"
             f"📈 **قیمت فعلی:** `{pos['price_current']:.5f}`\n"
-            f"{profit_icon} **سود/ضرر:** `{profit}$`\n"
+            f"{profit_icon} **سود/ضرر:** `{profit}{CURENCY_UNIT}`\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
         )
 
@@ -279,7 +280,7 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
         keyboard.append(
             [InlineKeyboardButton(f"⚙️ مدیریت پوزیشن {pos['ticket']}", callback_data=f"pos_detail_{pos['ticket']}")])
 
-    text += f"\n💰 **مجموع سود/ضرر کل:** `{round(total_profit, 2)}$`"
+    text += f"\n💰 **مجموع سود/ضرر کل:** `{round(total_profit, 2)}{CURENCY_UNIT}`"
 
     # اضافه کردن دکمه‌های کنترلی اصلی
     keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
@@ -320,7 +321,7 @@ def build_positions_keyboard(data):
     keyboard = []
     for pos in data:
         p_emoji = "🟢" if pos['profit'] >= 0 else "🔴"
-        btn_text = f"{p_emoji} {pos['symbol']} | {pos['type']} {pos['volume']}L | ${pos['profit']:,.2f}"
+        btn_text = f"{p_emoji} {pos['symbol']} | {pos['type']} {pos['volume']}L | {CURENCY_UNIT}{pos['profit']:,.2f}"
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"pos_detail_{pos['ticket']}")])
 
     keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions$")])
@@ -360,7 +361,7 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
         f"📈 **قیمت لحظه‌ای:** `{pos['price_current']:.5f}`\n"
         f"🛑 **SL:** `{pos['sl']}` | 🎯 **TP:** `{pos['tp']}`\n"
         f"───────────────────\n"
-        f"📊 **سود/زیان لحظه‌ای:** {profit_emoji} **`${pos['profit']:,.2f}`**"
+        f"📊 **سود/زیان لحظه‌ای:** {profit_emoji} **`{CURENCY_UNIT}{pos['profit']:,.2f}`**"
     )
 
     # دکمه بروزرسانی دستی حذف شد چون لایو اضافه گردیده است

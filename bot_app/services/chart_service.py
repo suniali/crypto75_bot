@@ -10,6 +10,8 @@ import matplotlib.gridspec as gridspec
 
 from datetime import datetime, date
 
+from bot_app.utils.text_helpers import CURENCY_UNIT
+
 logger = logging.getLogger(__name__)
 
 
@@ -139,7 +141,7 @@ def generate_pro_daily_dashboard(wins: int, losses: int, net_profit: float, win_
 
     ax_equity.set_title("Equity Curve (Daily PnL Growth)", fontsize=11, pad=8, weight='bold', color='#F0F6FC')
     ax_equity.set_xlabel("Trades Count", fontsize=9, color='#8B949E')
-    ax_equity.set_ylabel("Profit / Loss ($)", fontsize=9, color='#8B949E')
+    ax_equity.set_ylabel(f"Profit / Loss ({CURENCY_UNIT})", fontsize=9, color='#8B949E')
     ax_equity.tick_params(colors='#8B949E', labelsize=8)
     ax_equity.spines['top'].set_visible(False)
     ax_equity.spines['right'].set_visible(False)
@@ -173,7 +175,7 @@ def generate_pro_daily_dashboard(wins: int, losses: int, net_profit: float, win_
 
     p_color = '#23D160' if net_profit >= 0 else '#FF3860'
     p_sign = "+" if net_profit > 0 else ""
-    ax_pie.text(0, 0.1, f"NET PnL\n{p_sign}${net_profit:,.2f}", ha='center', va='center',
+    ax_pie.text(0, 0.1, f"NET PnL\n{p_sign}{CURENCY_UNIT}{net_profit:,.2f}", ha='center', va='center',
                 fontsize=11, weight='bold', color=p_color)
     ax_pie.text(0, -0.28, f"WinRate: {win_rate:.1f}%", ha='center', va='center',
                 fontsize=8.5, weight='bold', color='#8B949E')
@@ -188,7 +190,7 @@ def generate_pro_daily_dashboard(wins: int, losses: int, net_profit: float, win_
 
     for bar in bars:
         height = bar.get_height()
-        ax_bar.annotate(f'${height:,.1f}',
+        ax_bar.annotate(f'{CURENCY_UNIT}{height:,.1f}',
                         xy=(bar.get_x() + bar.get_width() / 2, height),
                         xytext=(0, 3),
                         textcoords="offset points",

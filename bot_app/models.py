@@ -1,6 +1,8 @@
 from django.db import models
 from decimal import Decimal
 
+from bot_app.utils.text_helpers import CURENCY_UNIT
+
 class MarketType(models.TextChoices):
     CRYPTO = 'CRYPTO', 'کریپتوکارنسی'
     FOREX = 'FOREX', 'فارکس'
@@ -25,7 +27,7 @@ class TelegramUser(models.Model):
 
     def __str__(self):
         username_display =f'{self.username}' if self.username else str(self.chat_id)
-        return f"@{username_display} - ${self.initial_balance}" 
+        return f"@{username_display} - {CURENCY_UNIT}{self.initial_balance}" 
 
 # ==========================================
 # 3. مدل هشدارهای قیمت (UserAlert)
@@ -121,10 +123,10 @@ class TradeJournal(models.Model):
 
     # سود و هزینه‌ها
     profit = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'),
-                                 verbose_name="سود/زیان خام ($)")
+                                 verbose_name=f"سود/زیان خام ({CURENCY_UNIT})")
     commission = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'),
-                                     verbose_name="کمیسیون ($)")
-    swap = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name="سوآپ ($)")
+                                     verbose_name=f"کمیسیون ({CURENCY_UNIT})")
+    swap = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'), verbose_name=f"سوآپ ({CURENCY_UNIT})")
 
     result = models.CharField(max_length=10, choices=RESULT_CHOICES, default='PENDING', verbose_name="نتیجه")
     notes = models.TextField(null=True, blank=True, verbose_name="توضیحات/استراتژی")
@@ -210,7 +212,7 @@ class TradeJournal(models.Model):
         }
 
     def __str__(self):
-        return f"{self.user} | {self.symbol} ({self.trade_type}) | PnL: ${self.net_profit:,.2f}"
+        return f"{self.user} | {self.symbol} ({self.trade_type}) | PnL: {CURENCY_UNIT}{self.net_profit:,.2f}"
 
 class MarketCandle(models.Model):
     """مدل برای ذخیره کندل‌های بازار (جهت تحلیل و استخراج ویژگی‌ها)"""

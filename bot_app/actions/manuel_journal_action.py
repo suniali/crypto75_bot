@@ -3,6 +3,8 @@ from decimal import Decimal, InvalidOperation
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
+from bot_app.utils.text_helpers import CURENCY_UNIT
+
 from bot_app.services.journal_service import parse_trade_text
 
 (
@@ -85,10 +87,10 @@ async def process_manual_trade_input(update: Update, context: ContextTypes.DEFAU
         f"🏁 **قیمت ورود:** `{parsed_data.get('entry_price')}`\n"
         f"🏁 **قیمت خروج:** `{parsed_data.get('exit_price', 'هنوز باز/تعیین نشده')}`\n"
         f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
-        f"💵 **سود خام:** `${p:,.2f}`\n"
-        f"💸 **کمیسیون:** `${c:,.2f}`\n"
-        f"🔄 **سواپ:** `${s:,.2f}`\n"
-        f"📊 **سود خالص (Net PnL):** `${net_pnl:,.2f}`\n\n"
+        f"💵 **سود خام:** `{CURENCY_UNIT}{p:,.2f}`\n"
+        f"💸 **کمیسیون:** `{CURENCY_UNIT}{c:,.2f}`\n"
+        f"🔄 **سواپ:** `{CURENCY_UNIT}{s:,.2f}`\n"
+        f"📊 **سود خالص (Net PnL):** `{CURENCY_UNIT}{net_pnl:,.2f}`\n\n"
         f"🏷️ **وضعیت:** `{parsed_data.get('result', 'PENDING')}`\n"
         f"📝 **توضیحات:** `{parsed_data.get('notes', '-')}`\n"
         f"{image_status}\n\n"

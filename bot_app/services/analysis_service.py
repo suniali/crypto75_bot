@@ -27,6 +27,7 @@ from bot_app.services.mt5_service import get_rates_data
 from bot_app.utils.math_helpers import calculate_symbol_breakdown
 from bot_app.utils.month_calender_data import get_monthly_calendar_data,calculate_streaks
 from bot_app.utils.ai_modules import AI_MODULES
+from bot_app.utils.text_helpers import fmt_price,CURENCY_UNIT
 
 from bot_app.models import TradeJournal, TelegramUser
 
@@ -288,12 +289,12 @@ def generate_equity_chart(trades: list) -> io.BytesIO | None:
         line_color = '#00E676' if current_total >= 0 else '#FF5252'
         fill_color = '#00E676' if current_total >= 0 else '#FF5252'
 
-        ax.plot(cumulative_profit, color=line_color, linewidth=2, label="سود/زیان انباشته ($)")
+        ax.plot(cumulative_profit, color=line_color, linewidth=2, label=f"سود/زیان انباشته ({CURENCY_UNIT})")
         ax.fill_between(range(len(cumulative_profit)), cumulative_profit, color=fill_color, alpha=0.15)
 
         ax.set_title("Equity Curve (رشد انباشته حساب)", fontsize=11, color='white', pad=10)
         ax.set_xlabel("تعداد معاملات", fontsize=9, color='#CCCCCC')
-        ax.set_ylabel("سود/زیان ($)", fontsize=9, color='#CCCCCC')
+        ax.set_ylabel(f"سود/زیان ({CURENCY_UNIT})", fontsize=9, color='#CCCCCC')
         ax.grid(True, linestyle='--', alpha=0.3, color='#555555')
         ax.axhline(0, color='white', linewidth=0.8, linestyle=':')
 
@@ -354,7 +355,7 @@ def generate_report_charts(trades: list) -> dict:
         ax1.grid(True, linestyle='--', alpha=0.2)
 
         ax2.fill_between(range(len(drawdowns)), drawdowns, color='#FF5252', alpha=0.5)
-        ax2.set_ylabel("DD ($)", fontsize=7, color='#CCCCCC')
+        ax2.set_ylabel(f"DD ({CURENCY_UNIT})", fontsize=7, color='#CCCCCC')
         ax2.grid(True, linestyle='--', alpha=0.2)
 
         plt.tight_layout()
@@ -405,7 +406,7 @@ def generate_report_charts(trades: list) -> dict:
 
         ax.bar(range(len(profits)), profits, color=colors_list, alpha=0.8)
         ax.axhline(0, color='white', linewidth=0.8, linestyle='--')
-        ax.set_title("Trade-by-Trade PnL Distribution ($)", fontsize=10, color='white')
+        ax.set_title(f"Trade-by-Trade PnL Distribution ({CURENCY_UNIT})", fontsize=10, color='white')
         ax.grid(True, linestyle='--', alpha=0.2)
 
         plt.tight_layout()
@@ -522,7 +523,7 @@ def get_user_progression_plan(user):
         else:
             required_recovery_hearts = 1
             
-        trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}$): نیازمند جبران ⚠️"
+        trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}{CURENCY_UNIT}): نیازمند جبران ⚠️"
         trend_color = "text-rose-400"
         
     # 📈 سناریوی دوم: حساب در سود است (پیدا کردن سطح فعال بر اساس سود واقعی)
@@ -1069,13 +1070,13 @@ def analyze_trades_with_gemini(metrics: dict, period_name: str) -> str:
     📊 **آمار جامع و کمّی محاسبه‌شده:**
     - تعداد کل معاملات: {total_trades} (برد: {wins} | باخت: {losses} | سر به سر: {be_count})
     - نرخ پیروزی (Win Rate): {win_rate}%
-    - سود/زیان خالص کل: ${total_profit} (کمیسیون پرداختی: ${total_commission} | سواپ: ${total_swap})
+    - سود/زیان خالص کل: {CURENCY_UNIT}{total_profit} (کمیسیون پرداختی: {CURENCY_UNIT}{total_commission} | سواپ: {CURENCY_UNIT}{total_swap})
     - ضریب سودآوری (Profit Factor): {profit_factor}
-    - حداکثر افت حساب (Max Drawdown): ${max_drawdown}
+    - حداکثر افت حساب (Max Drawdown): %{max_drawdown}
     - نسبت Payoff (میانگین سود به زیان): {payoff_ratio}
-    - میانگین سود: ${avg_win} | میانگین زیان: ${avg_loss}
-    - امید ریاضی (Expectancy): ${expectancy}
-    - نسبت شارپ (Sharpe Ratio): {sharpe_ratio}
+    - میانگین سود: %{avg_win} | میانگین زیان: {CURENCY_UNIT}{avg_loss}
+    - امید ریاضی (Expectancy): %{expectancy}
+    - نسبت شارپ (Sharpe Ratio): %{sharpe_ratio}
     - زنجیره برد/باخت متوالی: بیشترین برد روزانه ({streaks.get('max_win_streak_days', 0)} روز) | بیشترین ترید موفق ({streaks.get('max_win_streak_trades', 0)} ترید)
 
     📌 **عملکرد نمادها:**

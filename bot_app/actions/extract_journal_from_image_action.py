@@ -7,6 +7,7 @@ from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
+from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.services.analysis_service import extract_trade_from_image
 from bot_app.services.journal_service import (
@@ -95,10 +96,10 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
             f"🏁 **قیمت ورود:** `{parsed_data.get('entry_price')}`\n"
             f"🏁 **قیمت خروج:** `{parsed_data.get('exit_price', 'هنوز باز/تعیین نشده')}`\n"
             f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
-            f"💵 **سود خام:** `${p:.2f}`\n"
-            f"💸 **کمیسیون:** `${c:.2f}`\n"
-            f"🔄 **سواپ:** `${s:.2f}`\n"
-            f"📊 **سود خالص (Net PnL):** `${net_pnl:.2f}`\n\n"
+            f"💵 **سود خام:** `{CURENCY_UNIT}{p:.2f}`\n"
+            f"💸 **کمیسیون:** `{CURENCY_UNIT}{c:.2f}`\n"
+            f"🔄 **سواپ:** `{CURENCY_UNIT}{s:.2f}`\n"
+            f"📊 **سود خالص (Net PnL):** `{CURENCY_UNIT}{net_pnl:.2f}`\n\n"
             f"🏷️ **وضعیت:** `{parsed_data.get('result', 'PENDING')}`\n"
             f"📝 **توضیحات:** `{parsed_data.get('notes', '-')}`\n\n"
             f"آیا اطلاعات فوق مورد تأیید است؟"
@@ -213,8 +214,8 @@ async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT
         f"📦 **حجم:** `{parsed_data.get('volume', '0.01')}` لات/واحد\n"
         f"🏁 **ورود:** `{parsed_data.get('entry_price')}` | **خروج:** `{parsed_data.get('exit_price', '-')}`\n"
         f"🛑 **SL:** `{parsed_data.get('stop_loss', '-')}` | 🎯 **TP:** `{parsed_data.get('take_profit', '-')}`\n\n"
-        f"💵 **سود خام:** `${p:,.2f}` | 💸 **کمیسیون:** `${c:,.2f}` | 🔄 **سواپ:** `${s:,.2f}`\n"
-        f"📊 **سود خالص:** `${net_pnl:,.2f}`\n"
+        f"💵 **سود خام:** `{CURENCY_UNIT}{p:,.2f}` | 💸 **کمیسیون:** `{CURENCY_UNIT}{c:,.2f}` | 🔄 **سواپ:** `{CURENCY_UNIT}{s:,.2f}`\n"
+        f"📊 **سود خالص:** `{CURENCY_UNIT}{net_pnl:,.2f}`\n"
         f"{image_status}\n\n"
         f"آیا اطلاعات جدید مورد تأیید است؟"
     )
@@ -256,7 +257,7 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
                 f"🎉 **معامله جدید در ژورنال ثبت شد:**\n\n"
                 f"🆔 **شناسه معامله:** `#{trade_obj.id}`\n"
                 f"📌 **نماد:** `{trade_obj.symbol}` ({trade_obj.trade_type})\n"
-                f"📊 **سود/زیان خالص:** `${trade_obj.net_profit:,.2f}`\n"
+                f"📊 **سود/زیان خالص:** `{CURENCY_UNIT}{trade_obj.net_profit:,.2f}`\n"
                 f"🏷️ **وضعیت:** `{trade_obj.result}`\n\n"
                 f"📌 {result_msg}"
             )
