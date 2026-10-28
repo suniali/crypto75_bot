@@ -456,18 +456,20 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(confirm_close_all_handler, pattern="^confirm_close_all$"))
     # ------------------ 5️⃣ اجرا ------------------
 
-    logger.info("🤖 Bot is polling for updates...")
-   
-    try:
-        app.run_polling(
-            poll_interval=2.0,
-            timeout=30,
-            close_loop=False,
-        )
-    except (NetworkError, httpx.RemoteProtocolError) as e:
-        logger.warning(f"⚠️ Network connection lost: {e}. Reconnecting in 5 seconds...")
-        time.sleep(5)
-
-    except Exception as e:
-        logger.error(f"❌ Unexpected critical error: {e}", exc_info=True)
-        time.sleep(10)
+    while True:
+        try:
+            logger.info("🚀 Starting Telegram bot polling...")
+            app.run_polling(
+                poll_interval=2.0,
+                timeout=30,
+                close_loop=False,
+            )
+        except (NetworkError, httpx.RemoteProtocolError) as e:
+            logger.warning(f"⚠️ Network connection lost: {e}. Restarting application in 5 seconds...")
+            time.sleep(5)
+        except KeyboardInterrupt:
+            logger.info("🛑 Bot stopped manually by user.")
+            break
+        except Exception as e:
+            logger.error(f"❌ Unexpected error occurred: {e}. Restarting in 5 seconds...")
+            time.sleep(5)
