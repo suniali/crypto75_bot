@@ -604,11 +604,11 @@
             <!-- ۲. کارت‌های شاخص‌های اصلی (KPIs) - چیدمان ۴ کارته فوق‌العاده تمیز -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8 font-sans">
                 <!-- کارت ۲: سود / زیان خالص نهایی و هزینه‌ها -->
-                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">
+                <div class="glass-card p-5 bg-[#0f172a]/90 border border-slate-800/80 rounded-2xl flex flex-col justify-between">   
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">سود / زیان خالص نهایی</span>
-                            <h3 class="text-2xl font-black font-mono tracking-tight dir-ltr text-right {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                            <h3 class="text-2xl font-black font-mono tracking-tight dir-ltr text-right {% if total_net_profit > 0 %}text-sky-400{% elif total_net_profit < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                 {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
                             </h3>
                             <span class="text-[10px] text-slate-500 font-mono mt-1 block">برآیند حساب</span>
@@ -620,7 +620,7 @@
                             
                             <!-- هسته داخلی دایره -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                                <span class="text-[10px] font-mono font-bold {% if total_net_profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                <span class="text-[10px] font-mono font-bold {% if total_net_profit > 0 %}text-emerald-400{% elif total_net_profit < 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr">
                                     {% if total_net_profit >= 0 %}+{% else %}-{% endif %}{{ abs_gain_percent|floatformat:1 }}%
                                 </span>
                             </div>
@@ -628,8 +628,8 @@
                     </div>
 
                     <div class="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-[11px] text-slate-400 font-mono dir-ltr">
-                        <span>کمیسیون: <strong class="text-slate-300">-${{ total_commission|floatformat:2 }}</strong></span>
-                        <span>سوآپ: <strong class="text-slate-300">${{ total_swap|floatformat:2 }}</strong></span>
+                        <span>کمیسیون: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">-${{ total_commission|floatformat:2 }}</strong></span>
+                        <span>سوآپ: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">${{ total_swap|floatformat:2 }}</strong></span>
                     </div>
                 </div>
 
@@ -638,7 +638,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">نرخ پیروزی (PnL Rate)</span>
-                            <h3 class="text-2xl font-black font-mono text-sky-400">%{{ win_rate }}</h3>
+                            <h3 class="text-2xl font-black font-mono {% if win_rate > 0 %}text-sky-400{% else %}text-slate-400{% endif %}">%{{ win_rate }}</h3>
                             <span class="text-[10px] text-slate-500 font-mono mt-1 block">از {{ total_trades }} معامله</span>
                         </div>
                         
@@ -677,7 +677,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">فاکتور سودآوری (Profit Factor)</span>
-                            <h3 class="text-2xl font-black font-mono {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %}">
+                            <h3 class="text-2xl font-black font-mono {% if profit_factor >= 1.2 %}text-sky-400{% elif profit_factor == 0 %}text-slate-400{% else %}text-amber-400{% endif %}">
                                 {{ profit_factor }}
                             </h3>
                             <span class="text-[10px] text-slate-500 font-mono mt-1 block">بازده نسبت به ریسک</span>
@@ -689,7 +689,7 @@
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                                <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% else %}text-amber-400{% endif %} dir-ltr">
+                                <span class="text-xs font-mono font-bold {% if profit_factor >= 1.2 %}text-sky-400{% elif profit_factor == 0 %}text-slate-400{% else %}text-amber-400{% endif %} dir-ltr">
                                     PF
                                 </span>
                             </div>
@@ -705,8 +705,8 @@
                             </span>
                         </div>
                         <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                            <span>میانگین برد: <strong class="text-sky-400">+${{ avg_win }}</strong></span>
-                            <span>میانگین باخت: <strong class="text-rose-400">-${{ avg_loss }}</strong></span>
+                            <span>میانگین برد: <strong class="{% if avg_win %}text-sky-400{% else %}text-slate-400{% endif %}">+${{ avg_win }}</strong></span>
+                            <span>میانگین باخت: <strong class="{% if avg_loss %}text-rose-400{% else %}text-slate-400{% endif %}">-${{ avg_loss }}</strong></span>
                         </div>
                     </div>
                 </div>
@@ -716,7 +716,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">حداکثر افت حساب (Max DD)</span>
-                            <h3 class="text-2xl font-black font-mono text-rose-400 dir-ltr text-right">
+                            <h3 class="text-2xl font-black font-mono {% if max_drawdown > 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr text-right">
                                 {{ max_drawdown }}%
                             </h3>
                             <span class="text-[10px] text-slate-500 font-mono mt-1 block">افت از قله (Peak)</span>
@@ -728,7 +728,7 @@
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                                <span class="text-xs font-mono font-bold text-rose-400 dir-ltr">
+                                <span class="text-xs font-mono font-bold {% if max_drawdown > 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr">
                                     DD
                                 </span>
                             </div>
@@ -738,13 +738,13 @@
                     <div class="mt-4 pt-3 border-t border-slate-800/80">
                         <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
                             <span>امید ریاضی (Expectancy):</span>
-                            <strong class="font-mono {% if expectancy >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                            <strong class="font-mono {% if expectancy > 0 %}text-sky-400{% elif expectancy < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                 ${{ expectancy }}
                             </strong>
                         </div>
                         <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                            <span>نسبت شارپ: <strong class="text-white">{{ sharpe_ratio }}</strong></span>
-                            <span>سطح ریسک: <strong class="{{ risk_level_color }} font-bold">{{ risk_level_label }}</strong></span>
+                            <span>نسبت شارپ: <strong class="{% if sharpe_ratio %}text-white{% else %}text-slate-400{% endif %}">{{ sharpe_ratio }}</strong></span>
+                            <span>سطح ریسک: <strong class="{{ risk_level_color|default:'text-slate-400' }} font-bold">{{ risk_level_label }}</strong></span>
                         </div>
                     </div>
                 </div>
@@ -760,7 +760,7 @@
                         <div class="flex items-center justify-between mb-3">
                             <div>
                                 <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">عملکرد کل (Performance)</span>
-                                <h3 class="text-2xl font-black font-mono {% if total_net_profit >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr text-right">
+                                <h3 class="text-2xl font-black font-mono {% if total_net_profit > 0 %}text-sky-400{% elif total_net_profit < 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr text-right">
                                     {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
                                 </h3>
                                 <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">سود خالص کل (NET P&L)</span>
@@ -772,7 +772,7 @@
                                 
                                 <!-- هسته داخلی توخالی (Doughnut) -->
                                 <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
-                                    <span class="text-[10px] font-mono font-bold {% if gain_percent >= 0 %}text-sky-400{% else %}text-rose-400{% endif %} dir-ltr">
+                                    <span class="text-[10px] font-mono font-bold {% if gain_percent > 0 %}text-sky-400{% elif gain_percent < 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr">
                                         {% if gain_percent >= 0 %}+{% endif %}{{ gain_percent }}%
                                     </span>
                                 </div>
@@ -790,28 +790,28 @@
                                 <!-- روزانه -->
                                 <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
                                     <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">روزانه</span>
-                                    <span class="font-bold text-[11px] {% if period_returns.daily >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    <span class="font-bold text-[11px] {% if period_returns.daily > 0 %}text-sky-400{% elif period_returns.daily < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                         {% if period_returns.daily >= 0 %}+{% endif %}{{ period_returns.daily }}%
                                     </span>
                                 </div>
                                 <!-- هفتگی -->
                                 <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
                                     <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">هفتگی</span>
-                                    <span class="font-bold text-[11px] {% if period_returns.weekly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    <span class="font-bold text-[11px] {% if period_returns.weekly > 0 %}text-sky-400{% elif period_returns.weekly < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                         {% if period_returns.weekly >= 0 %}+{% endif %}{{ period_returns.weekly }}%
                                     </span>
                                 </div>
                                 <!-- ماهانه -->
                                 <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
                                     <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">ماهانه</span>
-                                    <span class="font-bold text-[11px] {% if period_returns.monthly >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    <span class="font-bold text-[11px] {% if period_returns.monthly > 0 %}text-sky-400{% elif period_returns.monthly < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                         {% if period_returns.monthly >= 0 %}+{% endif %}{{ period_returns.monthly }}%
                                     </span>
                                 </div>
                                 <!-- سالانه -->
                                 <div class="bg-slate-900/60 p-2 rounded-xl border border-slate-800/80">
                                     <span class="text-[9px] text-slate-500 block mb-0.5 font-sans">سالانه</span>
-                                    <span class="font-bold text-[11px] {% if period_returns.annualized >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
+                                    <span class="font-bold text-[11px] {% if period_returns.annualized > 0 %}text-sky-400{% elif period_returns.annualized < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
                                         {% if period_returns.annualized >= 0 %}+{% endif %}{{ period_returns.annualized }}%
                                     </span>
                                 </div>
@@ -822,7 +822,7 @@
                     <!-- فوتر برای نمایش Drawdown -->
                     <div class="mt-3 pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] font-mono text-slate-400 dir-rtl">
                         <span class="text-slate-500">حداکثر افت حساب (Drawdown):</span>
-                        <span class="text-rose-400 font-bold dir-ltr">{{ max_drawdown }}%</span>
+                        <span class="{% if max_drawdown %}text-rose-400{% else %}text-slate-400{% endif %} font-bold dir-ltr">{{ max_drawdown }}%</span>
                     </div>
                 </div>
 
@@ -838,7 +838,7 @@
                             {% if radar_score_overall >= 75 %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20
                             {% elif radar_score_overall >= 50 %}bg-sky-500/10 text-sky-400 border border-sky-500/20
                             {% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
-                            {% if radar_score_overall >= 75 %}وضعیت عالی{% elif radar_score_overall >= 50 %}وضعیت نرمال{% else %}نیازمند بازنگری{% endif %}
+                            {% if radar_score_overall >= 75 %}وضعیت عالی{% elif radar_score_overall >= 50 %}وضعیت نرمال{% elif radar_score_overall > 0 %}نیازمند بازنگری{% endif %}
                         </span>
                     </div>
 
