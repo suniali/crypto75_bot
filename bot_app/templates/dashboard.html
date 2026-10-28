@@ -441,13 +441,13 @@
     
         <div id="standard-panel" class="max-w-7xl mx-auto space-y-8">
              <!-- کارت ضریب انضباط ذهنی (کاملاً هماهنگ با استایل کارت‌های پایین صفحه) -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 border border-cyan-500/30 rounded-2xl flex items-center justify-between relative overflow-hidden group shadow-lg">
+            <div class="glass-card p-5 bg-[#0f172a]/90  rounded-2xl flex items-center justify-between relative overflow-hidden group shadow-lg">
                 <!-- افکت نوری پس‌زمینه سایبرپانک -->
                 <div class="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
 
                 <!-- سمت راست: ضریب انضباط ذهنی -->
                 <div class="flex items-center gap-4 relative z-10">
-                    <div class="relative w-12 h-12 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
+                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
                         <span class="font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
                     </div>
                     
@@ -459,17 +459,50 @@
                 </div>
 
                 <!-- وسط: تاریخ و ساعت سایبرپانکی (مختص تریدرها) -->
-                <div class="hidden md:flex gap-3 items-center justify-center font-mono relative z-10 px-4 ml-10 border-x border-slate-800/80">
-                    <!-- تاریخ میلادی/شمسی متناسب با تریدر -->
-                    <div class="text-sm, text-slate-500 tracking-tight mt-0.5">
-                        {{ current_date|default:"2026.10.28" }}
+                <div class="hidden xl:flex flex-col items-center justify-center font-mono relative z-10 px-5 py-3 ml-16 bg-[#090d16]/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_25px_rgba(0,240,255,0.12)]">
+                    <!-- افکت نوری پس‌زمینه ملایم -->
+                    <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-emerald-500/5 to-purple-500/5 rounded-2xl pointer-events-none blur-md"></div>
+
+                    <!-- ردیف ساعت‌ها (کنار هم با تفکیک رنگی خفن و شیک) -->
+                    <div class="flex items-center justify-center gap-5 relative z-10 w-full pb-2 border-b border-slate-800/80">
+                        <!-- 1. لندن (Cyan / فیروزه‌ای سایبری) -->
+                        <div class="flex flex-col items-center px-3 border-r border-slate-800/80">
+                            <div class="flex items-center gap-1.5 text-[9px] text-cyan-400 tracking-widest uppercase mb-0.5 font-semibold">
+                                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
+                                <span>LDN</span>
+                            </div>
+                            <div class="text-sm font-black text-cyan-300 tracking-wider drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]" id="clock-london">
+                                00:00:00
+                            </div>
+                        </div>
+
+                        <!-- 2. نیویورک (Neon Magenta / سرخابی سایبرپانک) -->
+                        <div class="flex flex-col items-center px-3 border-r border-slate-800/80">
+                            <div class="flex items-center gap-1.5 text-[9px] text-fuchsia-400 tracking-widest uppercase mb-0.5 font-semibold">
+                                <span class="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-pulse"></span>
+                                <span>NYC</span>
+                            </div>
+                            <div class="text-sm font-black text-fuchsia-300 tracking-wider drop-shadow-[0_0_10px_rgba(232,121,249,0.5)]" id="clock-ny">
+                                00:00:00
+                            </div>
+                        </div>
+
+                        <!-- 3. تهران (Matrix Green / سبز ماتریسی) -->
+                        <div class="flex flex-col items-center px-2">
+                            <div class="flex items-center gap-1.5 text-[9px] text-emerald-400 tracking-widest uppercase mb-0.5 font-semibold">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span>THR</span>
+                            </div>
+                            <div class="text-sm font-black text-emerald-300 tracking-wider drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" id="clock-tehran">
+                                00:00:00
+                            </div>
+                        </div>
                     </div>
-                    <!-- ساعت زنده -->
-                    <div class="text-lg font-bold text-cyan-300 tracking-wider mt-0.5" id="cyber-clock">
-                        {{ current_time|default:"00:00:00" }}
-                    </div>
-                    <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5 tracking-widest uppercase">
-                        <span>MARKET TIME</span>
+
+                    <!-- ردیف تاریخ واحد در زیر ساعت‌ها -->
+                    <div class="text-[10px] text-slate-400 tracking-widest mt-2 relative z-10 flex items-center gap-2">
+                        <span class="text-cyan-400 font-bold">MARKET DATE //</span>
+                        <span id="shared-date" class="font-extrabold text-slate-200 tracking-wider">----.--.--</span>
                     </div>
                 </div>
 
@@ -2143,17 +2176,40 @@
         };
 
         <!-- اسکریپت آپدیت زنده ساعت (فرانت‌اند) -->
-        function updateCyberClock() {
+        function updateWorldClocks() {
             const now = new Date();
-            const hours = String(now.getUTCHours()).padStart(2, '0');
-            const minutes = String(now.getUTCMinutes()).padStart(2, '0');
-            const seconds = String(now.getUTCSeconds()).padStart(2, '0');
-            const clockElement = document.getElementById('cyber-clock');
-            if (clockElement) {
-                clockElement.innerText = `${hours}:${minutes}:${seconds}`;
+
+            // تابع کمکی برای گرفتن ساعت هر منطقه
+            function getTimeString(timeZone) {
+                return new Intl.DateTimeFormat('en-GB', {
+                    timeZone: timeZone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).format(now);
             }
+
+            // آپدیت ساعت‌ها
+            document.getElementById('clock-london').innerText = getTimeString('Europe/London');
+            document.getElementById('clock-ny').innerText = getTimeString('America/New_York');
+            document.getElementById('clock-tehran').innerText = getTimeString('Asia/Tehran');
+
+            // گرفتن تاریخ واحد بر اساس وقت لندن (استاندارد بازار)
+            const rawDate = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Europe/London',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(now);
+
+            const [day, month, year] = rawDate.split('/');
+            document.getElementById('shared-date').innerText = `${year}.${month}.${day}`;
         }
-        setInterval(updateCyberClock, 1000);
+
+        // اجرای اولیه و تنظیم تیک‌تاک هر یک ثانیه
+        updateWorldClocks();
+        setInterval(updateWorldClocks, 1000);
 
     </script>
 </body>
