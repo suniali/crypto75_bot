@@ -19,7 +19,7 @@ from reportlab.pdfgen import canvas
 
 from bot_app.services.analysis_service import generate_report_charts
 from bot_app.utils.math_helpers import calculate_symbol_breakdown
-from bot_app.utils.text_helpers import reshape_fa, reshape_multiline_fa
+from bot_app.utils.text_helpers import reshape_fa, reshape_multiline_fa,CURENCY_UNIT
 
 
 # ------------------------------------------------------------------
@@ -173,9 +173,9 @@ def generate_pdf_report(filename: str, period_name: str, metrics:dict, ai_analys
             [reshape_fa("شاخص عملکرد و حجم"), reshape_fa("مقدار"), reshape_fa("شاخص تحلیلی و مدیریت ریسک"), reshape_fa("مقدار")],
             [reshape_fa("تعداد کل معاملات (برد/باخت/BE)"), reshape_fa(f"{total_trades} ({wins}/{losses}/{be_count})"), reshape_fa("Sharpe Ratio (نسبت شارپ)"), reshape_fa(f"{sharpe:.2f}")],
             [reshape_fa("وین ریت (Win Rate)"), reshape_fa(f"{win_rate:.1f}%"), reshape_fa("Profit Factor (ضریب سودآوری)"), reshape_fa(f"{profit_factor:.2f}")],
-            [reshape_fa("سود/زیان خالص کل"), reshape_fa(f"${total_profit:.2f}"), reshape_fa("Payoff Ratio (نسبت سود/زیان)"), reshape_fa(f"{payoff:.2f}")],
-            [reshape_fa("بیشترین افت حساب (Max DD)"), reshape_fa(f"${max_dd:.2f}"), reshape_fa("Expectancy (امید ریاضی)"), reshape_fa(f"${expectancy:.2f}")],
-            [reshape_fa("میانگین سود / میانگین زیان"), reshape_fa(f"${avg_win:.2f} / ${avg_loss:.2f}"), reshape_fa("کمیسیون و سواپ کل"), reshape_fa(f"${total_comm:.2f} / ${total_swap:.2f}")],
+            [reshape_fa("سود/زیان خالص کل"), reshape_fa(f"{CURENCY_UNIT}{total_profit:.2f}"), reshape_fa("Payoff Ratio (نسبت سود/زیان)"), reshape_fa(f"{payoff:.2f}")],
+            [reshape_fa("بیشترین افت حساب (Max DD)"), reshape_fa(f"{CURENCY_UNIT}{max_dd:.2f}"), reshape_fa("Expectancy (امید ریاضی)"), reshape_fa(f"{expectancy:.2f}")],
+            [reshape_fa("میانگین سود / میانگین زیان"), reshape_fa(f"{CURENCY_UNIT}{avg_win:.2f} / {CURENCY_UNIT}{avg_loss:.2f}"), reshape_fa("کمیسیون و سواپ کل"), reshape_fa(f"{CURENCY_UNIT}{total_comm:.2f} / {CURENCY_UNIT}{total_swap:.2f}")],
             [reshape_fa("ارزیابی ریسک حساب"), reshape_fa(f"{risk_level_label}"), reshape_fa("پایداری سیستم استراتژی"), reshape_fa(f"{stability_label}")],
             [reshape_fa("ضریب انضباط ذهنی (AI)"), reshape_fa(f"{mental_discipline_score}% ({discipline_label})"), reshape_fa("بیشترین تسلسل موفقیت"), reshape_fa(f"{max_win_days} روز ({max_win_trades} ترید)")]
         ]
@@ -214,7 +214,7 @@ def generate_pdf_report(filename: str, period_name: str, metrics:dict, ai_analys
 
             for item in symbol_data:
                 profit_val = _safe_float(item.get('profit'))
-                profit_str = f"${profit_val:.2f}" if profit_val >= 0 else f"-${abs(profit_val):.2f}"
+                profit_str = f"{CURENCY_UNIT}{profit_val:.2f}" if profit_val >= 0 else f"-{CURENCY_UNIT}{abs(profit_val):.2f}"
                 win_r = _safe_float(item.get('win_rate'))
 
                 table_data.append([
@@ -318,7 +318,7 @@ def generate_pdf_report(filename: str, period_name: str, metrics:dict, ai_analys
                     t_vol = str(getattr(t, 'volume', 0.0))
                     profit_val = _safe_float(getattr(t, 'net_profit', 0.0))
 
-                profit_str = f"${profit_val:.2f}" if profit_val >= 0 else f"-${abs(profit_val):.2f}"
+                profit_str = f"{CURENCY_UNIT}{profit_val:.2f}" if profit_val >= 0 else f"-{CURENCY_UNIT}{abs(profit_val):.2f}"
 
                 table_trades_data.append([
                     reshape_fa(t_time),

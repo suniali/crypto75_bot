@@ -19,7 +19,7 @@ from bot_app.services.chart_service import (
 from bot_app.services.api_service import fetch_recent_klines
 from bot_app.services.bakup_restore_service import backup_database
 
-from bot_app.utils.text_helpers import fmt_price
+from bot_app.utils.text_helpers import fmt_price,CURENCY_UNIT
 
 logger = logging.getLogger(__name__)
 
@@ -135,10 +135,10 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
                         f"🏁 <b>قیمت ورود:</b> <code>{entry_price}</code> | <b>خروج:</b> <code>{exit_price}</code>\n"
                         f"🛑 <b>SL:</b> <code>{fmt_price(sl) or '-'}:</code> | 🎯 <b>TP:</b> <code>{fmt_price(tp) or '-'}</code>\n"
                         f"───────────────────\n"
-                        f"💵 <b>سود ناخالص:</b> <code>${gross_profit:,.2f}</code>\n"
-                        f"💸 <b>کمیسیون:</b> <code>${commission:,.2f}</code> | 🌙 <b>سوآپ:</b> <code>${swap:,.2f}</code>\n"
+                        f"💵 <b>سود ناخالص:</b> <code>{CURENCY_UNIT}{gross_profit:,.2f}</code>\n"
+                        f"💸 <b>کمیسیون:</b> <code>{CURENCY_UNIT}{commission:,.2f}</code> | 🌙 <b>سوآپ:</b> <code>{CURENCY_UNIT}{swap:,.2f}</code>\n"
                         f"───────────────────\n"
-                        f"{profit_icon} <b>سود/زیان خالص:</b> <b><code>${net_profit:,.2f}</code></b>"
+                        f"{profit_icon} <b>سود/زیان خالص:</b> <b><code>{CURENCY_UNIT}{net_profit:,.2f}</code></b>"
                     )
 
                     if journal_chart_buf:
@@ -164,9 +164,9 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
                             f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
                             f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
                             f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
-                            f"📈 <b>میانگین سود:</b> <code>${avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>${avg_loss:,.2f}</code>\n"
+                            f"📈 <b>میانگین سود:</b> <code>{CURENCY_UNIT}{avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>{CURENCY_UNIT}{avg_loss:,.2f}</code>\n"
                             f"───────────────────\n"
-                            f"{net_icon} <b>سود/زیان خالص کل امروز:</b> <b><code>${day_net_profit:,.2f}</code></b>"
+                            f"{net_icon} <b>سود/زیان خالص کل امروز:</b> <b><code>{CURENCY_UNIT}{day_net_profit:,.2f}</code></b>"
                         )
                         chart_buf = generate_pro_daily_dashboard(wins, losses, day_net_profit, win_rate, avg_win, avg_loss, profits_history)
                         if chart_buf:

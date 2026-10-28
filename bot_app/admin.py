@@ -8,6 +8,7 @@ from bot_app.models import (
     MarketCandle,
     TradeDecisionLog,
     )
+from bot_app.utils.text_helpers import CURENCY_UNIT
 
 
 @admin.register(TelegramUser)
@@ -65,11 +66,11 @@ class TradeJournalAdmin(admin.ModelAdmin):
     list_per_page = 25
 
     # نمایش زیباتر سود خالص در ادمین
-    @admin.display(description='سود خالص ($)')
+    @admin.display(description=f'سود خالص ({CURENCY_UNIT})')
     def net_profit_display(self, obj):
         val = obj.net_profit
         color = 'green' if val >= 0 else 'red'
-        return f"${val:,.2f}"
+        return f"{CURENCY_UNIT}{val:,.2f}"
 
 
 @admin.register(MarketCandle)

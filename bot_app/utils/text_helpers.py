@@ -2,6 +2,8 @@
 import arabic_reshaper
 from bidi.algorithm import get_display
 
+CURENCY_UNIT='¢'
+
 def reshape_fa(text: str) -> str:
     if not text:
         return ""

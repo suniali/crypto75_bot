@@ -167,25 +167,25 @@
                 <!-- سود ناخالص -->
                 <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
                     <span class="text-xs text-slate-400 block mb-1">سود ناخالص (Gross)</span>
-                    <span id="modalGrossProfit" class="text-base font-mono font-semibold text-slate-200">$0.00</span>
+                    <span id="modalGrossProfit" class="text-base font-mono font-semibold text-slate-200">{{unit}}0.00</span>
                 </div>
 
                 <!-- کمیسیون -->
                 <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
                     <span class="text-xs text-slate-400 block mb-1">کمیسیون</span>
-                    <span id="modalCommission" class="text-base font-mono font-semibold text-amber-400">$0.00</span>
+                    <span id="modalCommission" class="text-base font-mono font-semibold text-amber-400">{{unit}}0.00</span>
                 </div>
 
                 <!-- سواپ -->
                 <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-2xl">
                     <span class="text-xs text-slate-400 block mb-1">سواپ (Swap)</span>
-                    <span id="modalSwap" class="text-base font-mono font-semibold text-slate-300">$0.00</span>
+                    <span id="modalSwap" class="text-base font-mono font-semibold text-slate-300">{{unit}}0.00</span>
                 </div>
 
                 <!-- سود خالص نهایی -->
                 <div class="bg-slate-800/80 border border-slate-700 p-3 rounded-2xl">
                     <span class="text-xs text-slate-400 block mb-1">سود خالص (Net)</span>
-                    <span id="modalNetProfit" class="text-lg font-mono font-bold">$0.00</span>
+                    <span id="modalNetProfit" class="text-lg font-mono font-bold">{{unit}}0.00</span>
                 </div>
             </div>
 
@@ -446,7 +446,7 @@
                 <div class="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
 
                 <!-- سمت راست: ضریب انضباط ذهنی -->
-                <div class="flex items-center gap-4 relative z-10">
+                <div class="flex items-center gap-4 relative pr-5 z-10">
                     <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
                         <span class="font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
                     </div>
@@ -459,7 +459,7 @@
                 </div>
 
                 <!-- وسط: تاریخ و ساعت سایبرپانکی (مختص تریدرها) -->
-                <div class="hidden xl:flex flex-col items-center justify-center font-mono relative z-10 px-5 py-3 ml-16 bg-[#090d16]/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_25px_rgba(0,240,255,0.12)]">
+                <div class="hidden xl:flex flex-col items-center justify-center font-mono relative z-10 px-5 py-3 ml-20 bg-[#090d16]/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_25px_rgba(0,240,255,0.12)]">
                     <!-- افکت نوری پس‌زمینه ملایم -->
                     <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-emerald-500/5 to-purple-500/5 rounded-2xl pointer-events-none blur-md"></div>
 
@@ -548,7 +548,7 @@
                             <!-- 🎯 ریسک پیشنهادی معامله بعدی -->
                             <div class="bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-right font-mono">
                                 <span class="text-[9px] text-slate-500 block">ریسک پیشنهاد بعدی:</span>
-                                <span class="text-sm font-black text-emerald-400">${{ current_risk }}</span>
+                                <span class="text-sm font-black text-emerald-400">{{unit}}{{ current_risk }}</span>
                             </div>
 
                             <!-- نوار پیشرفت کوچک -->
@@ -596,7 +596,7 @@
                                     <div>
                                         <div class="flex justify-between items-center mb-2">
                                             <span class="text-xs font-mono font-bold text-slate-300">سطح {{ lvl.level_num }}</span>
-                                            <span class="text-[10px] font-mono text-slate-500">ریسک: <strong class="text-white">${{ lvl.risk_per_trade }}</strong></span>
+                                            <span class="text-[10px] font-mono text-slate-500">ریسک: <strong class="text-white">{{unit}}{{ lvl.risk_per_trade }}</strong></span>
                                         </div>
                                         
                                         <div class="space-y-1 my-2 text-[11px] font-mono text-slate-400">
@@ -610,19 +610,19 @@
                                             </div>
                                             <div class="flex justify-between">
                                                 <span>سود سطح:</span>
-                                                <span class="text-emerald-400 font-bold">+${{ lvl.stage_profit|floatformat:1 }}</span>
+                                                <span class="text-emerald-400 font-bold">+{{unit}}{{ lvl.stage_profit|floatformat:1 }}</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div class="pt-2 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-mono">
                                         <span class="text-slate-500">تجمعی:</span>
-                                        <span class="text-white font-bold">${{ lvl.cumulative_profit|floatformat:1 }}</span>
+                                        <span class="text-white font-bold">{{unit}}{{ lvl.cumulative_profit|floatformat:1 }}</span>
                                     </div>
                                     
                                     {% if lvl.has_payout %}
                                     <div class="mt-2 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 text-[9px] text-amber-400 text-center font-mono font-bold">
-                                        🎁 ۱۰٪ خروج (${{ lvl.payout_amount|floatformat:1 }})
+                                        🎁 ۱۰٪ خروج ({{unit}}{{ lvl.payout_amount|floatformat:1 }})
                                     </div>
                                     {% endif %}
                                 </div>
@@ -641,7 +641,7 @@
                         <div>
                             <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">سود / زیان خالص نهایی</span>
                             <h3 class="text-2xl font-black font-mono tracking-tight dir-ltr text-right {% if total_net_profit > 0 %}text-sky-400{% elif total_net_profit < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
-                                {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
+                                {% if total_net_profit >= 0 %}+{{unit}}{{ total_net_profit|floatformat:2 }}{% else %}-{{unit}}{{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
                             </h3>
                             <span class="text-[10px] text-slate-500 font-mono mt-1 block">برآیند حساب</span>
                         </div>
@@ -660,8 +660,8 @@
                     </div>
 
                     <div class="mt-4 pt-3 border-t border-slate-800/80 flex justify-between text-[11px] text-slate-400 font-mono dir-ltr">
-                        <span>کمیسیون: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">-${{ total_commission|floatformat:2 }}</strong></span>
-                        <span>سوآپ: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">${{ total_swap|floatformat:2 }}</strong></span>
+                        <span>کمیسیون: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">-{{unit}}{{ total_commission|floatformat:2 }}</strong></span>
+                        <span>سوآپ: <strong class="{% if total_net_profit > 0 %}text-slate-300{% else %}text-slate-400{% endif %}">{{unit}}{{ total_swap|floatformat:2 }}</strong></span>
                     </div>
                 </div>
 
@@ -737,8 +737,8 @@
                             </span>
                         </div>
                         <div class="flex justify-between text-[11px] text-slate-400 font-mono">
-                            <span>میانگین برد: <strong class="{% if avg_win %}text-sky-400{% else %}text-slate-400{% endif %}">+${{ avg_win }}</strong></span>
-                            <span>میانگین باخت: <strong class="{% if avg_loss %}text-rose-400{% else %}text-slate-400{% endif %}">-${{ avg_loss }}</strong></span>
+                            <span>میانگین برد: <strong class="{% if avg_win %}text-sky-400{% else %}text-slate-400{% endif %}">+{{unit}}{{ avg_win }}</strong></span>
+                            <span>میانگین باخت: <strong class="{% if avg_loss %}text-rose-400{% else %}text-slate-400{% endif %}">-{{unit}}{{ avg_loss }}</strong></span>
                         </div>
                     </div>
                 </div>
@@ -771,7 +771,7 @@
                         <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mb-1.5">
                             <span>امید ریاضی (Expectancy):</span>
                             <strong class="font-mono {% if expectancy > 0 %}text-sky-400{% elif expectancy < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
-                                ${{ expectancy }}
+                                %{{ expectancy }}
                             </strong>
                         </div>
                         <div class="flex justify-between text-[11px] text-slate-400 font-mono">
@@ -793,7 +793,7 @@
                             <div>
                                 <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">عملکرد کل (Performance)</span>
                                 <h3 class="text-2xl font-black font-mono {% if total_net_profit > 0 %}text-sky-400{% elif total_net_profit < 0 %}text-rose-400{% else %}text-slate-400{% endif %} dir-ltr text-right">
-                                    {% if total_net_profit >= 0 %}+${{ total_net_profit|floatformat:2 }}{% else %}-${{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
+                                    {% if total_net_profit >= 0 %}+{{unit}}{{ total_net_profit|floatformat:2 }}{% else %}-{{unit}}{{ total_net_profit|floatformat:2|slice:"1:" }}{% endif %}
                                 </h3>
                                 <span class="text-[10px] text-slate-500 font-mono mt-0.5 block">سود خالص کل (NET P&L)</span>
                             </div>
@@ -1022,7 +1022,7 @@
                         <div class="text-center">
                             <span class="text-slate-500 block text-[10px] uppercase">Profits</span>
                             <span class="font-bold text-sm {% if month_total_pnl >= 0 %}text-sky-400{% else %}text-rose-400{% endif %}">
-                                {% if month_total_pnl >= 0 %}+${{ month_total_pnl|floatformat:2 }}{% else %}-${{ month_total_pnl|floatformat:2|slice:"1:" }}{% endif %}
+                                {% if month_total_pnl >= 0 %}+{{unit}}{{ month_total_pnl|floatformat:2 }}{% else %}-{{unit}}{{ month_total_pnl|floatformat:2|slice:"1:" }}{% endif %}
                             </span>
                         </div>
                     </div>
@@ -1073,7 +1073,7 @@
                                     <div class="text-center my-auto">
                                         <span class="block text-xs font-mono font-black tracking-tight
                                             {% if day.pnl > 0 %}text-sky-400{% elif day.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
-                                            {% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
+                                            {{unit}}{% if day.pnl > 0 %}+{{ day.pnl|floatformat:2 }}{% else %}{{ day.pnl|floatformat:2 }}{% endif %}
                                         </span>
                                         <span class="block text-[10px] font-mono text-slate-500">
                                             {% if day.pnl_percent >= 0 %}+{% endif %}{{ day.pnl_percent }}%
@@ -1084,11 +1084,11 @@
                                 {% endfor %}
 
                                 <!-- کارت جمع هفتگی (Total) -->
-                                <div class="relative h-20 p-2 rounded-xl border border-slate-800 bg-slate-900/90 flex flex-col justify-center items-center dir-ltr">
+                                <div class="relative h-20 p-2 rounded-xl border border-slate-800 bg-slate-900/90 flex flex-col justify-center items-center">
                                     <span class="text-[10px] text-slate-500 font-mono block mb-1">WEEK</span>
                                     <span class="text-xs font-mono font-black tracking-tight
                                         {% if week.week_total_pnl > 0 %}text-sky-400{% elif week.week_total_pnl < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
-                                        {% if week.week_total_pnl > 0 %}+${{ week.week_total_pnl|floatformat:2 }}{% elif week.week_total_pnl < 0 %}-${{ week.week_total_pnl|floatformat:2|slice:"1:" }}{% else %}$0.00{% endif %}
+                                        {% if week.week_total_pnl > 0 %}{{unit}}+{{ week.week_total_pnl|floatformat:2 }}{% elif week.week_total_pnl < 0 %}{{unit}}-{{ week.week_total_pnl|floatformat:2|slice:"1:" }}{% else %}{{unit}}0.00{% endif %}
                                     </span>
                                 </div>
 
@@ -1116,7 +1116,7 @@
                                 <th class="p-3">(سود ناخالص، کمیسیون، سوآپ)</th>
                                 <th class="p-3">SL / TP</th>
                                 <th class="p-3">R:R برنامه/واقعی</th>
-                                <th class="p-3">سود خالص ($)</th>
+                                <th class="p-3">سود خالص ({{unit}})</th>
                                 <th class="p-3">نتیجه</th>
                                 <th class="p-3">زمان ورود</th>
                             </tr>
@@ -1133,15 +1133,16 @@
                                 data-exit="{{ trade.fmt_exit|default:'-' }}"
                                 data-sl="{{ trade.fmt_sl|default:'-' }}"
                                 data-tp="{{ trade.fmt_tp|default:'-' }}"
-                                data-profit="${{ trade.profit|floatformat:2 }}"
-                                data-commission="${{ trade.fmt_comm|floatformat:2 }}"
-                                data-swap="${{ trade.swap|floatformat:2 }}"
-                                data-netprofit="${{ trade.net_profit|floatformat:2 }}"
+                                data-profit="{{unit}}{{ trade.profit|floatformat:2 }}"
+                                data-commission="{{unit}}{{ trade.fmt_comm|floatformat:2 }}"
+                                data-swap="{{unit}}{{ trade.swap|floatformat:2 }}"
+                                data-netprofit="{{unit}}{{ trade.net_profit|floatformat:2 }}"
                                 data-is-positive="{% if trade.net_profit >= 0 %}true{% else %}false{% endif %}"
                                 data-planned-rr="{{ trade.calc_planned_rr }}"
                                 data-realized-rr="{{ trade.calc_realized_rr }}"
                                 data-time="{{ trade.entry_time|date:'Y-m-d H:i' }}"
                                 data-note="{{ trade.notes }}"
+                                unit="{{unit}}"
                                 data-image="{% if trade.image %}{{ trade.image.url }}{% endif %}">
                                 
                                 <!-- ستون نماد، نوع پوزیشن (Buy/Sell) و آیدی پوزیشن -->
@@ -1177,19 +1178,19 @@
                                         <div class="flex justify-between gap-2">
                                             <span class="text-slate-500">Profit:</span>
                                             <span class="{% if trade.profit >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
-                                                ${{ trade.profit|floatformat:2 }}
+                                                {{unit}}{{ trade.profit|floatformat:2 }}
                                             </span>
                                         </div>
                                         <div class="flex justify-between gap-2">
                                             <span class="text-slate-500">Comm:</span>
                                             <span class="text-amber-400/90">
-                                                ${{ trade.fmt_comm|floatformat:2 }}
+                                                {{unit}}{{ trade.fmt_comm|floatformat:2 }}
                                             </span>
                                         </div>
                                         {% if trade.swap %}
                                         <div class="flex justify-between gap-2 text-slate-400">
                                             <span class="text-slate-500">Swap:</span>
-                                            <span>${{ trade.swap|floatformat:2 }}</span>
+                                            <span>{{unit}}{{ trade.swap|floatformat:2 }}</span>
                                         </div>
                                         {% endif %}
                                     </div>
@@ -1215,7 +1216,7 @@
 
                                 <!-- سود خالص -->
                                 <td class="p-3 font-bold dir-ltr text-right {% if trade.net_profit >= 0 %}text-emerald-400{% else %}text-rose-500{% endif %}">
-                                    ${{ trade.net_profit|floatformat:2 }}
+                                    {{unit}}{{ trade.net_profit|floatformat:2 }}
                                 </td>
 
                                 <!-- نتیجه -->
@@ -1461,7 +1462,7 @@
             data: {
                 labels: pnlLabels,
                 datasets: [{
-                    label: 'سود تراکمی ($)',
+                    label: `سود تراکمی (${"{{ unit|default:'$' }}"})`,
                     data: pnlData,
                     borderWidth: 3,
                     fill: true,
@@ -1529,7 +1530,7 @@
             data: {
                 labels: pnlLabels,
                 datasets: [{
-                    label: 'افت حساب ($)',
+                    label: `افت حساب (${"{{ unit|default:'$' }}"})`,
                     data: drawdownData,
                     borderColor: '#f43f5e',
                     borderWidth: 1.5,
@@ -1641,6 +1642,7 @@
             const time = row.getAttribute('data-time');
             const note = row.getAttribute('data-note');
             const imageUrl = row.getAttribute('data-image');
+            const unit = row.getAttribute('unit');
             currentTicketId = ticket;
 
             // ۲. ست کردن مقادیر هدر و آیدی
@@ -1890,6 +1892,7 @@
             const modal = document.getElementById('dayTradesModal');
             const title = document.getElementById('modalDateTitle');
             const container = document.getElementById('dayTradesContainer');
+            const unit='{{unit}}'
             
             title.innerText = dateStr;
             container.innerHTML = '<div class="text-center text-slate-400 py-8">در حال دریافت اطلاعات معاملات...</div>';
@@ -1928,7 +1931,7 @@
                                     </div>
                                     <div class="text-left">
                                         <span class="block text-base font-black font-mono ${isWin ? 'text-emerald-400' : (isLoss ? 'text-rose-400' : 'text-slate-300')}">
-                                            ${t.net_profit >= 0 ? '+' : ''}$${t.net_profit.toFixed(2)}
+                                            ${t.net_profit >= 0 ? '+' : ''}${unit}${t.net_profit.toFixed(2)}
                                         </span>
                                         <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${isWin ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : (isLoss ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-slate-800 text-slate-400')}">
                                             ${t.result}
@@ -1952,7 +1955,7 @@
                                     </div>
                                     <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/60">
                                         <span class="text-slate-500 block text-[10px] mb-0.5">کمیسیون / سوآپ:</span>
-                                        <span class="text-amber-400/90">-${t.commission.toFixed(2)}</span> <span class="text-slate-600">|</span> <span class="text-slate-400">$${t.swap.toFixed(2)}</span>
+                                        <span class="text-amber-400/90">-${t.commission.toFixed(2)}</span> <span class="text-slate-600">|</span> <span class="text-slate-400">${unit}${t.swap.toFixed(2)}</span>
                                     </div>
                                 </div>
 

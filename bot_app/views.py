@@ -15,6 +15,8 @@ from .models import TradeJournal
 from .services.bakup_restore_service import backup_database,get_backups,restore_backup
 from bot_app.services.analysis_service import calculate_trading_metrics, analyze_trades_with_gemini
 
+from bot_app.utils.text_helpers import CURENCY_UNIT
+
 logger = logging.getLogger(__name__)
 CACHE_DIR = Path("ai_analysis_cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -105,7 +107,7 @@ def journal_dashboard(request):
     except EmptyPage:
         metrics['trades'] = paginator.page(paginator.num_pages)
 
-    context = {**metrics,'ai_analysis_data': ai_analysis_data,}
+    context = {**metrics,'ai_analysis_data': ai_analysis_data,'unit':CURENCY_UNIT}
 
     return render(request, 'dashboard.html', context)
 
@@ -202,6 +204,7 @@ def day_trades_api_view(request):
             'image_url': t.image.url if t.image else None,
             'entry_time': t.entry_time.strftime('%H:%M:%S') if t.entry_time else '-',
             'exit_time': t.exit_time.strftime('%H:%M:%S') if t.exit_time else '-',
+            'unit':CURENCY_UNIT
         })
         
     return JsonResponse({

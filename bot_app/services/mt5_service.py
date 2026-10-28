@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from bot_app.utils.time_frame_helper import TIMEFRAME_TO_MT5_TIMEFRAME
+from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.models import TelegramUser, TradeJournal, MarketType
 
@@ -378,7 +379,7 @@ def close_all_positions():
                 closed_count += 1
                 total_closed_profit += pos_profit
                 p_icon = "🟢" if pos_profit >= 0 else "🔴"
-                details.append(f"✅ <code>{pos.ticket}</code> ({pos.symbol}) | {p_icon} <code>{pos_profit:.2f}$</code>")
+                details.append(f"✅ <code>{pos.ticket}</code> ({pos.symbol}) | {p_icon} <code>{pos_profit:.2f}{CURENCY_UNIT}</code>")
             else:
                 comment = res.comment if res else "پاسخی دریافت نشد"
                 details.append(f"❌ <code>{pos.ticket}</code> ({pos.symbol}): {comment}")
@@ -390,7 +391,7 @@ def close_all_positions():
             f"{status_icon} <b>نتیجه عملیات بستن تمامی پوزیشن‌ها:</b>\n"
             f"───────────────────\n"
             f"📊 <b>موفقیت:</b> <code>{closed_count}</code> از <code>{total_positions}</code> پوزیشن\n"
-            f"{profit_summary_icon} <b>مجموع سود/زیان بسته‌شده:</b> <code>${total_closed_profit:,.2f}</code>\n"
+            f"{profit_summary_icon} <b>مجموع سود/زیان بسته‌شده:</b> <code>{CURENCY_UNIT}{total_closed_profit:,.2f}</code>\n"
             f"───────────────────\n"
             f"📝 <b>جزئیات پوزیشن‌ها:</b>\n"
         )
