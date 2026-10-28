@@ -445,22 +445,40 @@
                 <!-- افکت نوری پس‌زمینه سایبرپانک -->
                 <div class="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
 
+                <!-- سمت راست: ضریب انضباط ذهنی -->
                 <div class="flex items-center gap-4 relative z-10">
-                    <!-- دایره درخشان درصد (مشابه المان‌های گرد کارت‌های پایین) -->
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
-                        <span class="text-lg font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
+                    <div class="relative w-12 h-12 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
+                        <span class="font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
                     </div>
                     
                     <div class="space-y-1 font-mono text-right">
                         <span class="text-[10px] text-slate-400 block uppercase tracking-wider">ضریب انضباط ذهنی پویا</span>
-                        <strong class="text-xs {{ discipline_color }} block font-bold">{{ discipline_label }}</strong>
+                        <strong class="text-xs {{ discipline_color|default:'text-slate-400' }} block font-bold">{{ discipline_label }}</strong>
                         <span class="text-[9px] text-slate-500 block">ارزیابی هوشمند از ژورنال</span>
                     </div>
                 </div>
 
-                <div class="text-left font-mono relative z-10 border-r border-slate-800/80 pr-4">
+                <!-- وسط: تاریخ و ساعت سایبرپانکی (مختص تریدرها) -->
+                <div class="hidden md:flex gap-3 items-center justify-center font-mono relative z-10 px-4 ml-10 border-x border-slate-800/80">
+                    <!-- تاریخ میلادی/شمسی متناسب با تریدر -->
+                    <div class="text-sm, text-slate-500 tracking-tight mt-0.5">
+                        {{ current_date|default:"2026.10.28" }}
+                    </div>
+                    <!-- ساعت زنده -->
+                    <div class="text-lg font-bold text-cyan-300 tracking-wider mt-0.5" id="cyber-clock">
+                        {{ current_time|default:"00:00:00" }}
+                    </div>
+                    <div class="flex items-center gap-1.5 text-[10px] text-slate-500 mt-0.5 tracking-widest uppercase">
+                        <span>MARKET TIME</span>
+                    </div>
+                </div>
+
+                <!-- سمت چپ: وضعیت سیستم هوش مصنوعی -->
+                <div class="text-left font-mono relative z-10 pl-2">
                     <span class="text-[9px] text-cyan-400/70 block">AI SYSTEM</span>
-                    <span class="text-xs font-bold text-cyan-400">ACTIVE</span>
+                    <span class="text-xs font-bold text-cyan-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ACTIVE
+                    </span>
                 </div>
             </div>
 
@@ -2011,118 +2029,131 @@
         
         // انیمیشن ورود کارت‌ها با Intersection Observer
         document.addEventListener("DOMContentLoaded", function() {
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: "0px 0px -50px 0px"
+            const observerOptions = {
+                threshold: 0.1,
+                rootMargin: "0px 0px -50px 0px"
+            };
+
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.opacity = "1";
+                        entry.target.style.transform = "translateY(0)";
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, observerOptions);
+
+            // اعمال حالت اولیه به کارت‌ها برای انیمیشن ورود
+            document.querySelectorAll('.glass-card').forEach(card => {
+                card.style.opacity = "0";
+                card.style.transform = "translateY(20px)";
+                card.style.transition = "opacity 0.6s ease-out, transform 0.6s ease-out";
+                observer.observe(card);
+            });
+        });
+
+        // ایجاد افکت زنده (Live Ticker / Pulse) روی دکمه‌ها و وضعیت سیستم قلب‌ها
+        setInterval(() => {
+            const heartBadge = document.querySelector('.animate-live-pulse');
+            if(heartBadge) {
+                heartBadge.style.filter = 'brightness(1.2)';
+                setTimeout(() => {
+                    heartBadge.style.filter = 'brightness(1)';
+                }, 1000);
+            }
+        }, 3000);
+
+        // تابع سوئیچ بین تب‌های داشبورد استاندارد و هوش مصنوعی
+        function switchDashboardTab(tab) {
+            const standardPanel = document.getElementById('standard-panel');
+            const aiPanel = document.getElementById('ai-panel');
+            const btnStandard = document.getElementById('btn-standard');
+            const btnAi = document.getElementById('btn-ai');
+            const slider = document.getElementById('slider-indicator');
+
+            if (tab === 'ai') {
+                // حرکت انیمیشنی اسلایدر به سمت چپ (در حالت RTL)
+                slider.style.transform = 'translateX(-100%)';
+                
+                // تغییر رنگ و جلوه متون
+                btnAi.classList.remove('text-slate-400');
+                btnAi.classList.add('text-slate-950');
+                btnStandard.classList.remove('text-slate-950');
+                btnStandard.classList.add('text-slate-400');
+                
+                // سوییچ کامل پنل‌ها
+                if (standardPanel) standardPanel.classList.add('hidden');
+                if (aiPanel) aiPanel.classList.remove('hidden');
+            } else {
+                // بازگشت اسلایدر به جایگاه اولیه
+                slider.style.transform = 'translateX(0%)';
+                
+                // تغییر رنگ و جلوه متون
+                btnStandard.classList.remove('text-slate-400');
+                btnStandard.classList.add('text-slate-950');
+                btnAi.classList.remove('text-slate-950');
+                btnAi.classList.add('text-slate-400');
+                
+                // سوییچ کامل پنل‌ها
+                if (aiPanel) aiPanel.classList.add('hidden');
+                if (standardPanel) standardPanel.classList.remove('hidden');
+            }
+        }
+
+        // تابع لود تنبل تحلیل هوش مصنوعی پس از لود کامل صفحه
+        function loadAIAnalysis() {
+        const box = document.getElementById('ai-response-box');
+        if(box.dataset.loaded === "true") return;
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const period = urlParams.get('period') || 'weekly';
+
+        fetch(`{% url 'api_ai_analysis' %}?period=${period}`)
+            .then(async res => {
+                if (!res.ok) {
+                    // اگر سرور ارور داد، متن ارور را از سرور بخوان و چاپ کن
+                    const errorText = await res.text();
+                    console.error("Server Error Details:", errorText);
+                    throw new Error(`HTTP error! status: ${res.status}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                if(data.status === 'success') {
+                    box.innerHTML = marked.parse(data.analysis);
+                    box.dataset.loaded = "true";
+                } else {
+                    box.innerHTML = `<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[ERROR]: ${data.message || 'خطا در پردازش هوش مصنوعی'}</span></div>`;
+                }
+            })
+            .catch(err => {
+                console.error("Fetch Catch Error:", err);
+                box.innerHTML = '<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[CONNECTION_FAIL]: خطای ارتباط با سرور هوش مصنوعی (F12 را چک کنید).</span></div>';
+            });
+        }
+
+        // اصلاح تابع switchDashboardTab برای اینکه به محض باز شدن تب هوش مصنوعی، دیتا فراخوانی شود
+        const originalSwitchTab = window.switchDashboardTab;
+        window.switchDashboardTab = function(tab) {
+            if(typeof originalSwitchTab === 'function') originalSwitchTab(tab);
+            if(tab === 'ai') {
+                loadAIAnalysis();
+            }
         };
 
-        const observer = new IntersectionObserver((entries, observer) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.style.opacity = "1";
-                    entry.target.style.transform = "translateY(0)";
-                    observer.unobserve(entry.target);
-                }
-            });
-        }, observerOptions);
-
-        // اعمال حالت اولیه به کارت‌ها برای انیمیشن ورود
-        document.querySelectorAll('.glass-card').forEach(card => {
-            card.style.opacity = "0";
-            card.style.transform = "translateY(20px)";
-            card.style.transition = "opacity 0.6s ease-out, transform 0.6s ease-out";
-            observer.observe(card);
-        });
-    });
-
-    // ایجاد افکت زنده (Live Ticker / Pulse) روی دکمه‌ها و وضعیت سیستم قلب‌ها
-    setInterval(() => {
-        const heartBadge = document.querySelector('.animate-live-pulse');
-        if(heartBadge) {
-            heartBadge.style.filter = 'brightness(1.2)';
-            setTimeout(() => {
-                heartBadge.style.filter = 'brightness(1)';
-            }, 1000);
-        }
-    }, 3000);
-
-    // تابع سوئیچ بین تب‌های داشبورد استاندارد و هوش مصنوعی
-    function switchDashboardTab(tab) {
-        const standardPanel = document.getElementById('standard-panel');
-        const aiPanel = document.getElementById('ai-panel');
-        const btnStandard = document.getElementById('btn-standard');
-        const btnAi = document.getElementById('btn-ai');
-        const slider = document.getElementById('slider-indicator');
-
-        if (tab === 'ai') {
-            // حرکت انیمیشنی اسلایدر به سمت چپ (در حالت RTL)
-            slider.style.transform = 'translateX(-100%)';
-            
-            // تغییر رنگ و جلوه متون
-            btnAi.classList.remove('text-slate-400');
-            btnAi.classList.add('text-slate-950');
-            btnStandard.classList.remove('text-slate-950');
-            btnStandard.classList.add('text-slate-400');
-            
-            // سوییچ کامل پنل‌ها
-            if (standardPanel) standardPanel.classList.add('hidden');
-            if (aiPanel) aiPanel.classList.remove('hidden');
-        } else {
-            // بازگشت اسلایدر به جایگاه اولیه
-            slider.style.transform = 'translateX(0%)';
-            
-            // تغییر رنگ و جلوه متون
-            btnStandard.classList.remove('text-slate-400');
-            btnStandard.classList.add('text-slate-950');
-            btnAi.classList.remove('text-slate-950');
-            btnAi.classList.add('text-slate-400');
-            
-            // سوییچ کامل پنل‌ها
-            if (aiPanel) aiPanel.classList.add('hidden');
-            if (standardPanel) standardPanel.classList.remove('hidden');
-        }
-    }
-
-    // تابع لود تنبل تحلیل هوش مصنوعی پس از لود کامل صفحه
-    function loadAIAnalysis() {
-    const box = document.getElementById('ai-response-box');
-    if(box.dataset.loaded === "true") return;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const period = urlParams.get('period') || 'weekly';
-
-    fetch(`{% url 'api_ai_analysis' %}?period=${period}`)
-        .then(async res => {
-            if (!res.ok) {
-                // اگر سرور ارور داد، متن ارور را از سرور بخوان و چاپ کن
-                const errorText = await res.text();
-                console.error("Server Error Details:", errorText);
-                throw new Error(`HTTP error! status: ${res.status}`);
+        <!-- اسکریپت آپدیت زنده ساعت (فرانت‌اند) -->
+        function updateCyberClock() {
+            const now = new Date();
+            const hours = String(now.getUTCHours()).padStart(2, '0');
+            const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+            const clockElement = document.getElementById('cyber-clock');
+            if (clockElement) {
+                clockElement.innerText = `${hours}:${minutes}:${seconds}`;
             }
-            return res.json();
-        })
-        .then(data => {
-            if(data.status === 'success') {
-                box.innerHTML = marked.parse(data.analysis);
-                box.dataset.loaded = "true";
-            } else {
-                box.innerHTML = `<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[ERROR]: ${data.message || 'خطا در پردازش هوش مصنوعی'}</span></div>`;
-            }
-        })
-        .catch(err => {
-            console.error("Fetch Catch Error:", err);
-            box.innerHTML = '<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[CONNECTION_FAIL]: خطای ارتباط با سرور هوش مصنوعی (F12 را چک کنید).</span></div>';
-        });
-}
-
-    // اصلاح تابع switchDashboardTab برای اینکه به محض باز شدن تب هوش مصنوعی، دیتا فراخوانی شود
-    const originalSwitchTab = window.switchDashboardTab;
-    window.switchDashboardTab = function(tab) {
-        if(typeof originalSwitchTab === 'function') originalSwitchTab(tab);
-        if(tab === 'ai') {
-            loadAIAnalysis();
         }
-    };
+        setInterval(updateCyberClock, 1000);
 
     </script>
 </body>
