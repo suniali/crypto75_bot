@@ -1,6 +1,7 @@
 import os
 import io
 
+from decouple import config
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import (
     SimpleDocTemplate,
@@ -19,12 +20,13 @@ from reportlab.pdfgen import canvas
 
 from bot_app.services.analysis_service import generate_report_charts
 from bot_app.utils.math_helpers import calculate_symbol_breakdown
-from bot_app.utils.text_helpers import reshape_fa, reshape_multiline_fa,CURENCY_UNIT
-
+from bot_app.utils.text_helpers import reshape_fa, reshape_multiline_fa
 
 # ------------------------------------------------------------------
 # ثبت فونت وزیر به همراه مدیریت مسیر چندلایه
 # ------------------------------------------------------------------
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
+ 
 SERVICES_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(os.path.dirname(SERVICES_DIR))
 FONT_PATH = os.path.join(ROOT_DIR, "Vazirmatn-Regular.ttf")

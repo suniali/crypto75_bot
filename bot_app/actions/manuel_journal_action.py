@@ -1,11 +1,13 @@
+from decouple import config
 from decimal import Decimal, InvalidOperation
 
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.services.journal_service import parse_trade_text
+
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 (
     WAITING_FOR_TRADE_IMAGE,

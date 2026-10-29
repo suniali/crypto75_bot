@@ -27,12 +27,12 @@ from bot_app.services.mt5_service import get_rates_data
 from bot_app.utils.math_helpers import calculate_symbol_breakdown
 from bot_app.utils.month_calender_data import get_monthly_calendar_data,calculate_streaks
 from bot_app.utils.ai_modules import AI_MODULES
-from bot_app.utils.text_helpers import fmt_price,CURENCY_UNIT
 
 from bot_app.models import TradeJournal, TelegramUser
 
 API_KEY = config('GEMINI_API_KEY', default='')
 MIN_RESERVE_HEARTS = 4   # حداقل قلب ذخیره در شروع مرحله
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,10 @@
 from django.db import models
 from decimal import Decimal
 
-from bot_app.utils.text_helpers import CURENCY_UNIT
+from decouple import config
+
+
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 class MarketType(models.TextChoices):
     CRYPTO = 'CRYPTO', 'کریپتوکارنسی'

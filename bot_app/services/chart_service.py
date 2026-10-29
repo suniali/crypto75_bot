@@ -8,11 +8,12 @@ import matplotlib.pyplot as plt
 import mplfinance as mpf
 import matplotlib.gridspec as gridspec
 
+from decouple import config
 from datetime import datetime, date
 
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 logger = logging.getLogger(__name__)
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 
 def calculate_heikin_ashi(df_ohlc: pd.DataFrame) -> pd.DataFrame:

@@ -1,4 +1,5 @@
 from django.contrib import admin
+from decouple import config
 
 from bot_app.models import (
     UserAlert,
@@ -8,7 +9,8 @@ from bot_app.models import (
     MarketCandle,
     TradeDecisionLog,
     )
-from bot_app.utils.text_helpers import CURENCY_UNIT
+
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 
 @admin.register(TelegramUser)

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from decouple import config
 from datetime import datetime
 
 from bot_app.services.mt5_service import (
@@ -19,9 +20,9 @@ from bot_app.services.chart_service import (
 from bot_app.services.api_service import fetch_recent_klines
 from bot_app.services.bakup_restore_service import backup_database
 
-from bot_app.utils.text_helpers import fmt_price,CURENCY_UNIT
 
 logger = logging.getLogger(__name__)
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 async def sl_tp_monitor_loop(chat_id: int, bot):
     logger.info("🚀 [STARTED] Global SL/TP Monitor Task")

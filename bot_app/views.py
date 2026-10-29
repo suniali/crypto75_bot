@@ -1,8 +1,8 @@
-import os
 import json
 import logging
 import hashlib
 from pathlib import Path
+from decouple import config
 
 from datetime import datetime
 from django.utils import timezone
@@ -15,11 +15,12 @@ from .models import TradeJournal
 from .services.bakup_restore_service import backup_database,get_backups,restore_backup
 from bot_app.services.analysis_service import calculate_trading_metrics, analyze_trades_with_gemini
 
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 logger = logging.getLogger(__name__)
 CACHE_DIR = Path("ai_analysis_cache")
 CACHE_DIR.mkdir(exist_ok=True)
+
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 def generate_trades_hash(processed_trades) -> str:
     """تولید یک اثر انگشت (Hash) یکتا بر اساس شناسه، زمان و وضعیت تریدها"""
