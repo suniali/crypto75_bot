@@ -116,7 +116,6 @@ from bot_app.actions.reporting_action import (
 )
 
 TOKEN = config("TELEGRAM_BOT_TOKEN")
-ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
 
 # ------------------------------------------------------------------
 # 5. Start And Stop Handlers

@@ -12,8 +12,10 @@ from bot_app.loops.alert_loop import check_alerts_loop
 from bot_app.loops.sl_tp_monitor_loop import sl_tp_monitor_loop
 from bot_app.loops.worker import start_ai_analysis_job,shutdown_ai_jobs
 
+from bot_app.models import TelegramUser
+
 logger = logging.getLogger(__name__)
-ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
+
 
 
 async def on_startup(app):
@@ -28,9 +30,10 @@ async def on_startup(app):
         logger.info("Starting bot background workers...")
 
         # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت برای ادمین
-        if ADMIN_CHAT_ID:
+        user = await TelegramUser.objects.afirst()
+        if user:
             sl_tp_task = asyncio.create_task(
-                sl_tp_monitor_loop(int(ADMIN_CHAT_ID), app.bot)
+                sl_tp_monitor_loop(int(user.chat_id), app.bot)
             )
             ACTIVE_WORKERS["global_sl_tp_monitor"] = sl_tp_task
 
