@@ -104,11 +104,13 @@ def _broker_sync_worker():
 
             # پیدا کردن یا ساخت کاربر پیش‌فرض برای اتصال معاملات به او
             user = TelegramUser.objects.first()
-
             if not user:
                 logger.error("❌ No TelegramUser found in database to assign trades!")
                 return None
+            
+            pending_trades = TradeJournal.objects.filter(result='PENDING')
             synced_count = 0
+
             for deal in deals:
                 # ۱. فیلتر کردن واریز، برداشت و سایر عملیات غیرتجاری (فقط BUY و SELL مجاز هستند)
                 if deal.type not in (mt5.DEAL_TYPE_BUY, mt5.DEAL_TYPE_SELL):
@@ -122,7 +124,7 @@ def _broker_sync_worker():
                 ticket = deal.position_id
 
                 # ۱. اگر این تیکت قبلاً در دیتابیس بود، رد شو
-                if TradeJournal.objects.filter(position_id=ticket).exists():
+                if (TradeJournal.objects.filter(position_id=ticket).exists()) and (not pending_trades.filter(position_id=ticket).exists()):
                     continue
 
                 # ۲. محاسبه سود و زیان
@@ -143,23 +145,25 @@ def _broker_sync_worker():
                 trade_type = 'BUY' if deal.type == mt5.DEAL_TYPE_BUY else 'SELL'
 
                 # ۳. ذخیره ساده و مستقیم در دیتابیس
-                TradeJournal.objects.create(
-                    user=user,
+                TradeJournal.objects.update_or_create(
                     position_id=ticket,
-                    symbol=deal.symbol,
-                    market_type=MarketType.FOREX,
-                    trade_type=trade_type,
-                    volume=Decimal(str(deal.volume)),
-                    entry_price=Decimal(str(deal.price)),
-                    exit_price=Decimal(str(deal.price)),
-                    profit=profit,
-                    commission=commission,
-                    swap=swap,
-                    result=result,
-                    notes="همگام‌سازی ساده از متاتریدر",
-                    entry_time=deal_time,
-                    exit_time=deal_time,
-                    is_active=True
+                    defaults=dict(
+                        user=user,
+                        symbol=deal.symbol,
+                        market_type=MarketType.FOREX,
+                        trade_type=trade_type,
+                        volume=Decimal(str(deal.volume)),
+                        entry_price=Decimal(str(deal.price)),
+                        exit_price=Decimal(str(deal.price)),
+                        profit=profit,
+                        commission=commission,
+                        swap=swap,
+                        result=result,
+                        notes="همگام‌سازی ساده از متاتریدر",
+                        entry_time=deal_time,
+                        exit_time=deal_time,
+                        is_active=True
+                    )
                 )
                 synced_count += 1
                 print(f"✅ {synced_count} new trades synced successfully.")
