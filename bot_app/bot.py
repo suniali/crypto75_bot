@@ -118,7 +118,6 @@ from bot_app.actions.reporting_action import (
 TOKEN = config("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_ID = config("ADMIN_CHAT_ID")
 
-
 # ------------------------------------------------------------------
 # 5. Start And Stop Handlers
 # ------------------------------------------------------------------
@@ -456,20 +455,21 @@ if __name__ == "__main__":
     app.add_handler(CallbackQueryHandler(confirm_close_all_handler, pattern="^confirm_close_all$"))
     # ------------------ 5️⃣ اجرا ------------------
 
-    while True:
-        try:
-            logger.info("🚀 Starting Telegram bot polling...")
-            app.run_polling(
-                poll_interval=2.0,
-                timeout=30,
-                close_loop=False,
-            )
-        except (NetworkError, httpx.RemoteProtocolError) as e:
-            logger.warning(f"⚠️ Network connection lost: {e}. Restarting application in 5 seconds...")
-            time.sleep(5)
-        except KeyboardInterrupt:
-            logger.info("🛑 Bot stopped manually by user.")
-            break
-        except Exception as e:
-            logger.error(f"❌ Unexpected error occurred: {e}. Restarting in 5 seconds...")
-            time.sleep(5)
+    try:
+        logger.info("🚀 Starting Telegram bot polling...")
+        # اجرای عادی ربات (در این حالت Ctrl + C مستقیماً برنامه را خاموش می‌کند)
+        app.run_polling(
+            poll_interval=2.0,
+            timeout=30,
+            close_loop=False
+        )
+    except (NetworkError, httpx.RemoteProtocolError) as e:
+        logger.warning(f"⚠️ Network connection lost: {e}. Restarting application in 5 seconds...")
+        time.sleep(5)
+        
+        # ری‌استارت کامل و تمیز کل اسکریپت پایتون
+        os.execv(sys.executable, ['python'] + sys.argv)
+        
+    except KeyboardInterrupt:
+        logger.info("🛑 Bot stopped manually by user.")
+        sys.exit(0)
