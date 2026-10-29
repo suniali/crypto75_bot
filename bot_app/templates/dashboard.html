@@ -131,6 +131,186 @@
             border-color: rgba(217, 70, 239, 0.2);
             margin: 1.2rem 0;
         }
+        
+        /* ویجت ضریب انظباط ذهنی */
+        .jv {
+            --jv-cyan: #3fe0f5;
+            --jv-pink: #f05cf0;
+            --jv-green: #2ee98a;
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 60;
+            width: max-content;
+            max-width: calc(100vw - 12px);
+            font-family: 'Roboto', 'Vazirmatn', sans-serif;
+            direction: ltr;
+        }
+
+        /* هاله‌ی نوری ملایم زیر ویجت */
+        .jv-aura {
+            position: absolute;
+            inset: 0 -30px -30px -30px;
+            background: radial-gradient(ellipse at 50% 35%, rgba(63, 224, 245, .2), rgba(63, 224, 245, 0) 70%);
+            filter: blur(20px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .4s ease;
+        }
+        .jv.is-open .jv-aura { opacity: .5; }
+
+        /* جزیره پویا (ارتفاع بسیار کم در حالت بسته و کاملاً فشرده در حالت باز) */
+        .jv-island {
+            position: relative;
+            z-index: 1;
+            outline: none;
+            padding: 4px 12px;
+            border-radius: 0 0 16px 16px;
+            background-color: #03060b;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            max-height: 28px;
+            overflow: hidden;
+            transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1), padding 0.35s ease, background-color 0.35s ease, box-shadow 0.35s ease;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.6);
+        }
+
+        .jv.is-open .jv-island,
+        .jv-island:hover {
+            max-height: 210px; /* ارتفاع فشرده شده برای جلوگیری از فضای خالی زیاد */
+            padding: 8px 12px;
+            background-color: rgba(11, 19, 33, 0.96);
+            box-shadow: 0 6px 20px rgba(63, 224, 245, 0.15);
+        }
+
+        /* ناچ بالای صفحه */
+        .jv-notch {
+            position: absolute;
+            top: 8px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.2s ease;
+        }
+        .jv.is-open .jv-notch,
+        .jv-island:hover .jv-notch {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .jv-lens {
+            position: relative; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--jv-cyan);
+            box-shadow: 0 0 6px var(--jv-cyan);
+        }
+
+        .jv-body {
+            display: flex;
+            gap: 10px;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+        }
+        .jv.is-open .jv-body,
+        .jv-island:hover .jv-body {
+            opacity: 1;
+            visibility: visible;
+            transition-delay: 0.05s;
+        }
+
+        /* کارت ضریب انضباط ذهنی (فشرده) */
+        .jv-card {
+            width: 130px;
+            flex-shrink: 0;
+            padding: 6px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            direction: rtl;
+            background: linear-gradient(165deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .01));
+            border: 1px solid rgba(200, 235, 255, .2);
+        }
+        .jv-card-title { font-size: 10px; font-weight: 700; color: #fff; }
+
+        .jv-gauge { position: relative; width: 75px; height: 75px; margin: 2px 0; }
+        .jv-gauge svg { width: 100%; height: 100%; transform: rotate(135deg); overflow: visible; }
+        .jv-gauge circle { fill: none; stroke-linecap: round; }
+        .jv-gauge .ring  { stroke: rgba(190, 230, 255, .15); stroke-width: 1.5; stroke-dasharray: 75 100; }
+        .jv-gauge .track { stroke: rgba(120, 170, 210, .12); stroke-width: 5; stroke-dasharray: 75 100; }
+        .jv-gauge .bar {
+            stroke: #2ee9f5;
+            stroke-width: 5;
+            stroke-dasharray: 0 100;
+            transition: stroke-dasharray .3s ease;
+        }
+
+        .jv.is-open .jv-gauge .bar, .jv-island:hover .jv-gauge .bar {
+            opacity: 1;
+            transition: stroke-dasharray 1.4s .15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .jv-gauge-value {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            direction: ltr;
+            font-family: 'Roboto', sans-serif;
+            font-size: 16px; font-weight: 700; color: #f2feff;
+        }
+        .jv-gauge-value small { font-size: 10px; font-weight: 500; }
+
+        .jv-card-sub { font-size: 9px; color: #8fa6c4; }
+        .jv-card-label { font-size: 10px; font-weight: 700; margin-top: 1px; }
+
+        /* پنل ساعت‌ها (بسیار فشرده و بدون فضای خالی اضافی) */
+        .jv-panel {
+            position: relative;
+            flex: 1; min-width: 0;
+            padding: 8px 12px;
+            border-radius: 12px;
+            display: flex; flex-direction: column;
+            background: linear-gradient(160deg, rgba(20, 40, 64, .4), rgba(8, 16, 30, .4));
+            border: 1px solid rgba(63, 224, 245, .3);
+        }
+       /* ساعت‌ها: سه ستون مساوی، وسط‌چین عمودی در فضای باقی‌مانده */
+        .jv-clocks {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            align-items: center;
+        }
+        .jv-clock {
+            display: flex; flex-direction: column; align-items: center;
+            gap: 3px;
+            padding: 0 14px;
+        }
+        .jv-clock + .jv-clock { border-left: 1px solid rgba(160, 210, 240, .14); }
+
+        .jv-city {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 12px; font-weight: 500; letter-spacing: .08em; line-height: 1;
+        }
+        .jv-time {
+            font-size: 19px; font-weight: 400; letter-spacing: .02em; line-height: 1.1;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 10px currentColor;
+        }
+        .jv-dot { position: relative; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 5px currentColor; }
+
+        .c-ldn { color: var(--jv-cyan); }
+        .c-nyc { color: var(--jv-pink); }
+        .c-thr { color: var(--jv-green); }
+
+        /* خط + فوتر: جمع و چسبیده به پایین پنل */
+        .jv-line {
+            height: 1px; border: 0; margin: 0 0 7px;
+            background: linear-gradient(90deg, transparent, rgba(160, 210, 240, .35), transparent);
+        }
+        .jv-foot { display: flex; align-items: center; justify-content: center; }
+        .jv-date {
+            font-size: 12px; color: #eaf6fb;
+            letter-spacing: .12em; font-variant-numeric: tabular-nums;
+        }
+        
     </style>
 </head>
 <!-- ================= Modal 2027 Glassmorphism ================= -->
@@ -321,7 +501,65 @@
 </div>
 
 <body class="p-4 md:p-8 min-h-screen">
-    
+    <!-- ویجت شناور سایبرپانک (Dynamic Island / Cyberpunk Floating HUD) -->
+    <div class="jv" id="jarvis-hud">
+        <div class="jv-aura"></div>
+
+        <!-- استفاده از رویداد مستقیم onmouseenter و onmouseleave برای تضمین کارکرد هاور بدون نیاز به تنظیمات پیچیده جی‌اس -->
+        <div class="jv-island" id="jv-island" tabindex="0" aria-expanded="false">
+
+            <!-- ناچ بالای صفحه -->
+            <div class="jv-notch"><i class="jv-lens" id="jv-lens-dot"></i></div>
+
+            <div class="jv-body">
+
+            <!-- کارت ضریب انضباط ذهنی -->
+            <div class="jv-card">
+                <div class="jv-card-title">ضریب انضباط ذهنی</div>
+
+                <div class="jv-gauge" id="jv-gauge" data-score="{{ mental_discipline_score|default:0 }}">
+                <svg viewBox="0 0 140 140" aria-hidden="true">
+                    <circle class="ring"  cx="70" cy="70" r="66" pathLength="100"/>
+                    <circle class="track" cx="70" cy="70" r="56" pathLength="100"/>
+                    <circle class="bar"   cx="70" cy="70" r="56" pathLength="100" id="jv-bar"/>
+                </svg>
+                <div class="jv-gauge-value"><span><span id="jv-score-num">{{ mental_discipline_score|default:0 }}</span><small>%</small></span></div>
+                </div>
+
+                <div class="jv-card-sub">ضریب انضباط ذهنی پویا</div>
+                <!-- استفاده مستقیم از متغیر discipline_color جنگو -->
+                <div class="jv-card-label {{ discipline_color|default:'text-cyan-400' }}" id="jv-discipline-label">
+                {{ discipline_label }}
+                </div>
+            </div>
+
+            <!-- پنل ساعت‌ها (کاملاً فشرده) -->
+            <div class="jv-panel">
+                <div class="jv-clocks">
+                <div class="jv-clock c-ldn">
+                    <div class="jv-city"><span>LDN</span><i class="jv-dot"></i></div>
+                    <div class="jv-time" id="clock-london">00:00:00</div>
+                </div>
+                <div class="jv-clock c-nyc">
+                    <div class="jv-city"><span>NYC</span><i class="jv-dot"></i></div>
+                    <div class="jv-time" id="clock-ny">00:00:00</div>
+                </div>
+                <div class="jv-clock c-thr">
+                    <div class="jv-city"><span>THR</span><i class="jv-dot"></i></div>
+                    <div class="jv-time" id="clock-tehran">00:00:00</div>
+                </div>
+                </div>
+
+                <hr class="jv-line">
+
+                <div class="jv-foot">
+                    <span class="jv-date text-[10px] font-bold" id="shared-date">----.--.--</span>
+                </div>
+            </div>
+
+            </div>
+        </div>
+    </div>
     <div class="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
         <header class="glass-card p-4 sm:p-5 flex flex-col xl:flex-row items-center justify-between gap-5 border-b border-cyan-500/30 relative backdrop-blur-2xl z-40 overflow-visible">
             
@@ -437,83 +675,6 @@
                 </div>
             </div>
         </header>
-
-    
-        <div id="standard-panel" class="max-w-7xl mx-auto space-y-8">
-             <!-- کارت ضریب انضباط ذهنی (کاملاً هماهنگ با استایل کارت‌های پایین صفحه) -->
-            <div class="glass-card p-5 bg-[#0f172a]/90 rounded-2xl flex items-center justify-between relative overflow-hidden group shadow-lg">
-                <!-- افکت نوری پس‌زمینه سایبرپانک -->
-                <div class="absolute -top-10 -right-10 w-28 h-28 bg-cyan-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-cyan-500/20 transition-all duration-500"></div>
-
-                <!-- سمت راست: ضریب انضباط ذهنی -->
-                <div class="flex items-center gap-4 relative pr-5 z-10">
-                    <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-1 bg-slate-950 border-2 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)] shrink-0">
-                        <span class="font-black font-mono text-cyan-400 neon-text-sky">{{ mental_discipline_score }}٪</span>
-                    </div>
-                    
-                    <div class="space-y-1 font-mono text-right">
-                        <span class="text-[10px] text-slate-400 block uppercase tracking-wider">ضریب انضباط ذهنی پویا</span>
-                        <strong class="text-xs {{ discipline_color|default:'text-slate-400' }} block font-bold">{{ discipline_label }}</strong>
-                        <span class="text-[9px] text-slate-500 block">ارزیابی هوشمند از ژورنال</span>
-                    </div>
-                </div>
-
-                <!-- وسط: تاریخ و ساعت سایبرپانکی (مختص تریدرها) -->
-                <div class="hidden xl:flex flex-col items-center justify-center font-mono relative z-10 px-5 py-3 ml-20 bg-[#090d16]/95 border border-cyan-500/30 rounded-2xl shadow-[0_0_25px_rgba(0,240,255,0.12)]">
-                    <!-- افکت نوری پس‌زمینه ملایم -->
-                    <div class="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-emerald-500/5 to-purple-500/5 rounded-2xl pointer-events-none blur-md"></div>
-
-                    <!-- ردیف ساعت‌ها (کنار هم با تفکیک رنگی خفن و شیک) -->
-                    <div class="flex items-center justify-center gap-5 relative z-10 w-full pb-2 border-b border-slate-800/80">
-                        <!-- 1. لندن (Cyan / فیروزه‌ای سایبری) -->
-                        <div class="flex flex-col items-center px-3 border-r border-slate-800/80">
-                            <div class="flex items-center gap-1.5 text-[9px] text-cyan-400 tracking-widest uppercase mb-0.5 font-semibold">
-                                <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping"></span>
-                                <span>LDN</span>
-                            </div>
-                            <div class="text-sm font-black text-cyan-300 tracking-wider drop-shadow-[0_0_10px_rgba(0,240,255,0.5)]" id="clock-london">
-                                00:00:00
-                            </div>
-                        </div>
-
-                        <!-- 2. نیویورک (Neon Magenta / سرخابی سایبرپانک) -->
-                        <div class="flex flex-col items-center px-3 border-r border-slate-800/80">
-                            <div class="flex items-center gap-1.5 text-[9px] text-fuchsia-400 tracking-widest uppercase mb-0.5 font-semibold">
-                                <span class="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-pulse"></span>
-                                <span>NYC</span>
-                            </div>
-                            <div class="text-sm font-black text-fuchsia-300 tracking-wider drop-shadow-[0_0_10px_rgba(232,121,249,0.5)]" id="clock-ny">
-                                00:00:00
-                            </div>
-                        </div>
-
-                        <!-- 3. تهران (Matrix Green / سبز ماتریسی) -->
-                        <div class="flex flex-col items-center px-2">
-                            <div class="flex items-center gap-1.5 text-[9px] text-emerald-400 tracking-widest uppercase mb-0.5 font-semibold">
-                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                <span>THR</span>
-                            </div>
-                            <div class="text-sm font-black text-emerald-300 tracking-wider drop-shadow-[0_0_10px_rgba(52,211,153,0.5)]" id="clock-tehran">
-                                00:00:00
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ردیف تاریخ واحد در زیر ساعت‌ها -->
-                    <div class="text-[10px] text-slate-400 tracking-widest mt-2 relative z-10 flex items-center gap-2">
-                        <span id="shared-date" class="font-extrabold text-slate-200 tracking-wider">----.--.--</span>
-                    </div>
-                </div>
-
-                <!-- سمت چپ: وضعیت سیستم هوش مصنوعی -->
-                <div class="text-left font-mono relative z-10 pl-2">
-                    <span class="text-[9px] text-cyan-400/70 block">AI SYSTEM</span>
-                    <span class="text-xs font-bold text-cyan-400 flex items-center gap-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ACTIVE
-                    </span>
-                </div>
-            </div>
-
             <!-- ۱.۵. کارت نقشه راه رشد اکانت (سیستم قلب‌ها) -->
             <div class="glass-card p-5 bg-[#0f172a]/95 border border-slate-800/80 rounded-2xl shadow-xl">
                 <details class="group">
@@ -2178,41 +2339,123 @@
         };
 
         <!-- اسکریپت آپدیت زنده ساعت (فرانت‌اند) -->
-        function updateWorldClocks() {
-            const now = new Date();
+        (function () {
+            const root   = document.getElementById('jarvis-hud');
+            const island = document.getElementById('jv-island');
+            const bar    = document.getElementById('jv-bar');
+            const numEl  = document.getElementById('jv-score-num');
+            
+            const scoreElem = document.getElementById('jv-gauge');
+            const score  = scoreElem ? Math.max(0, Math.min(100, parseFloat(scoreElem.dataset.score) || 0)) : 0;
+            const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            
+            // محاسبه هدف انیمیشن دایره (محیط دایره ۷۵ است)
+            const targetDash = (score / 100) * 75;
 
-            // تابع کمکی برای گرفتن ساعت هر منطقه
-            function getTimeString(timeZone) {
-                return new Intl.DateTimeFormat('en-GB', {
-                    timeZone: timeZone,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                }).format(now);
+            // همگام‌سازی رنگ نئونی دایره‌ها و نمودار با رنگ متن ضریب انضباط
+            const labelEl = document.getElementById('jv-discipline-label');
+            const lensDot = document.getElementById('jv-lens-dot');
+            if (labelEl) {
+                setTimeout(() => {
+                    const computedColor = window.getComputedStyle(labelEl).color;
+                    if (computedColor && computedColor !== 'rgba(0, 0, 0, 0)') {
+                        // تنظیم رنگ دایره کوچک بالا (حالت بسته)
+                        if (lensDot) {
+                            lensDot.style.background = computedColor;
+                            lensDot.style.boxShadow = `0 0 8px ${computedColor}`;
+                        }
+                        // تنظیم رنگ و افکت نئونی دایره نمودار انضباط
+                        if (bar) {
+                            bar.style.stroke = computedColor;
+                            bar.style.filter = `drop-shadow(0 0 6px ${computedColor})`;
+                        }
+                    }
+                }, 50);
             }
 
-            // آپدیت ساعت‌ها
-            document.getElementById('clock-london').innerText = getTimeString('Europe/London');
-            document.getElementById('clock-ny').innerText = getTimeString('America/New_York');
-            document.getElementById('clock-tehran').innerText = getTimeString('Asia/Tehran');
+            /* ───── باز و بسته شدن با هاور و مدیریت پیشرفته ───── */
+            let closeTimer = null, pointerType = 'mouse';
 
-            // گرفتن تاریخ واحد بر اساس وقت لندن (استاندارد بازار)
-            const rawDate = new Intl.DateTimeFormat('en-GB', {
-                timeZone: 'Europe/London',
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit'
-            }).format(now);
+            function countUp() {
+                if (!numEl) return;
+                if (reduce) { numEl.textContent = Math.round(score); return; }
+                const t0 = performance.now(), dur = 1200, delay = 200;
+                (function step(now) {
+                    const p = Math.min(Math.max((now - t0 - delay) / dur, 0), 1);
+                    numEl.textContent = Math.round(score * (1 - Math.pow(1 - p, 3)));
+                    if (p < 1 && root.classList.contains('is-open')) requestAnimationFrame(step);
+                })(t0);
+            }
 
-            const [day, month, year] = rawDate.split('/');
-            document.getElementById('shared-date').innerText = `${year}.${month}.${day}`;
-        }
+            function setOpen(open) {
+                if (root.classList.contains('is-open') === open) return;
+                root.classList.toggle('is-open', open);
+                if (island) island.setAttribute('aria-expanded', String(open));
+                
+                // کنترل دقیق انیمیشن پر و خالی شدن دایره هنگام باز و بسته شدن
+                if (bar) {
+                    bar.style.strokeDasharray = open ? `${targetDash} 100` : '0 100';
+                }
 
-        // اجرای اولیه و تنظیم تیک‌تاک هر یک ثانیه
-        updateWorldClocks();
-        setInterval(updateWorldClocks, 1000);
+                if (open && numEl) { 
+                    numEl.textContent = '0'; 
+                    countUp(); 
+                }
+            }
 
+            if (island) {
+                island.addEventListener('pointerdown', e => { pointerType = e.pointerType; });
+
+                island.addEventListener('pointerenter', e => {
+                    if (e.pointerType === 'touch') return;
+                    clearTimeout(closeTimer);
+                    setOpen(true);
+                });
+                
+                island.addEventListener('mouseleave', e => {
+                    if (e.pointerType === 'touch') return;
+                    clearTimeout(closeTimer);
+                    closeTimer = setTimeout(() => setOpen(false), 280);
+                });
+
+                // موبایل / تاچ: با لمس باز و بسته می‌شود
+                island.addEventListener('click', () => {
+                    if (pointerType === 'touch') setOpen(!root.classList.contains('is-open'));
+                });
+            }
+
+            document.addEventListener('pointerdown', e => {
+                if (e.pointerType === 'touch' && root && !root.contains(e.target)) setOpen(false);
+            });
+
+            // کیبورد
+            if (island) {
+                island.addEventListener('focus', () => setOpen(true));
+                island.addEventListener('blur',  () => { if (!island.matches(':hover')) setOpen(false); });
+            }
+            document.addEventListener('keydown', e => { if (e.key === 'Escape') { setOpen(false); if(island) island.blur(); } });
+
+            /* ───── ساعت‌های جهانی و تاریخ بازار ───── */
+            const zones = [
+                ['clock-london', 'Europe/London'],
+                ['clock-ny',     'America/New_York'],
+                ['clock-tehran', 'Asia/Tehran'],
+            ].map(([id, tz]) => ({
+                el: document.getElementById(id),
+                fmt: new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            }));
+
+            const dateEl  = document.getElementById('shared-date');
+            const dateFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+            function tick() {
+                const now = new Date();
+                zones.forEach(z => { if(z.el) z.el.textContent = z.fmt.format(now); });
+                if(dateEl) dateEl.textContent = dateFmt.format(now).replace(/-/g, '.');
+            }
+            tick();
+            setInterval(tick, 1000);
+        })();
     </script>
 </body>
 </html>
