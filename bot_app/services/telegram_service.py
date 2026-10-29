@@ -1,11 +1,18 @@
+import asyncio
+import logging
 import html
 import time
-import asyncio
-from telegram import Bot
-from telegram.request import HTTPXRequest
+
 from decouple import config
 
+from telegram import Bot
+from telegram.request import HTTPXRequest
+
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
+
+from bot_app.models import TelegramUser
+
+logger = logging.getLogger(__name__)
 
 # اگر رباتت پروکسی نیاز داره یا request سفارشی داری تنظیم می‌کنی
 request_config = HTTPXRequest(connection_pool_size=8, read_timeout=30.0)
@@ -41,15 +48,20 @@ def send_telegram_trade_alert(signal_data):
     async def _send():
         async with bot:
             time.sleep(2)
-            await bot.send_message(
-                chat_id=config('ADMIN_CHAT_ID'),
-                text=message,
-                parse_mode='HTML',
-                reply_markup=MAIN_KEYBOARD,
-            ) 
+            user = await TelegramUser.objects.afirst()
+            if user:
+                await bot.send_message(
+                    chat_id=user.chat_id,
+                    text=message,
+                    parse_mode='HTML',
+                    reply_markup=MAIN_KEYBOARD,
+                ) 
+                logging.info('✅ Telegram signal alert sent successfully!')
+            else:
+                logging.warning('⚠️ Telegram signal not sent !! No User Exists yet !!')
+    
     try:
         # اجرا کردن تابع async درون محیط همزمان جنگو/تسک
         asyncio.run(_send())
-        print('✅ Telegram signal alert sent successfully!')
     except Exception as e:
-        print(f'❌ Telegram Send Error: {e}')
+        logging.error(f'❌ Telegram Send Error: {e}')
