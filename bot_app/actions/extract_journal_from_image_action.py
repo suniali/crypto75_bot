@@ -1,13 +1,15 @@
 import os
 import logging
-from PIL import Image
+
+from decouple import config
 from decimal import Decimal, InvalidOperation
+
+from PIL import Image
 
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.services.analysis_service import extract_trade_from_image
 from bot_app.services.journal_service import (
@@ -17,6 +19,8 @@ from bot_app.services.journal_service import (
 )
 
 logger = logging.getLogger(__name__)
+
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 WAITING_FOR_TRADE_IMAGE, CONFIRM_JOURNAL_DATA, EDITING_JOURNAL_DATA = range(100, 103)
 

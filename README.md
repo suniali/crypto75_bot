@@ -149,6 +149,7 @@
   TELEGRAM_BOT_TOKEN=your_bot_token_here
   SECRET_KEY=your_django_secret_key
   GEMINI_API_KEY=your_gemini_api_key
+  CURENCY_UNIT=$
   ```
   ## چگونه SECRET_KEY اختصاصی بسازیم؟
   برای ساختن یک کلید امن و تصادفی برای جنگو، کافی است ترمینال (یا CMD) را در مسیر پروژه باز کرده و دستور زیر را اجرا کنید تا کلید خودکار برایتان تولید شود:

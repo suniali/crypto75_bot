@@ -1,12 +1,12 @@
 import asyncio
 import logging
+from decouple import config
 
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 from telegram.error import BadRequest
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.services.mt5_service import (
     get_open_positions,
@@ -20,6 +20,7 @@ from bot_app.services.mt5_service import (
 )
 
 logger = logging.getLogger(__name__)
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار پیام لیست پوزیشن‌ها هر چند ثانیه یک‌بار"""

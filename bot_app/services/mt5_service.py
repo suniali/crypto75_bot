@@ -1,15 +1,17 @@
 import threading
 import logging
 import MetaTrader5 as mt5
+
+from decouple import config
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from bot_app.utils.time_frame_helper import TIMEFRAME_TO_MT5_TIMEFRAME
-from bot_app.utils.text_helpers import CURENCY_UNIT
 
 from bot_app.models import TelegramUser, TradeJournal, MarketType
 
 logger = logging.getLogger(__name__)
+CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
 # ------------------------------------------------------------------
 # Constants & Configurations
