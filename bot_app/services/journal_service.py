@@ -268,20 +268,23 @@ def sync_open_trade_to_db(chat_id: int, pos_data: dict):
         tp_price = pos_data.get("tp", 0.0)
         volume = pos_data.get("volume", 0.0)
 
+        updates_fields={
+            'user': user_obj,
+            'symbol': symbol,
+            'market_type': MarketType.FOREX,
+            'trade_type': trade_type,
+            'volume': volume,
+            'entry_price': entry_price,
+            'take_profit': tp_price,
+            'entry_time': entry_time,
+            'is_active': True,
+        }
+        if sl_price != entry_price:
+            updates_fields.update({'stop_loss': sl_price})
+
         TradeJournal.objects.update_or_create(
             position_id=position_id,
-            defaults={
-                'user': user_obj,
-                'symbol': symbol,
-                'market_type': MarketType.FOREX,
-                'trade_type': trade_type,
-                'volume': volume,
-                'entry_price': entry_price,
-                'stop_loss': sl_price,
-                'take_profit': tp_price,
-                'entry_time': entry_time,
-                'is_active': True,
-            }
+            defaults=updates_fields
         )
     except Exception as e:
         logger.error(f"❌ Error saving open position #{pos_data.get('ticket')}: {e}", exc_info=True)
