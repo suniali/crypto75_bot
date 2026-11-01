@@ -30,7 +30,7 @@ async def on_startup(app):
         logger.info("Starting bot background workers...")
 
         # ۱. استارت ورکر عمومی پایش استاپ‌لوس و تیک‌پرافیت برای ادمین
-        user = await TelegramUser.objects.afirst()
+        user = await TelegramUser.objects.filter(is_blocked=False).afirst()
         if user:
             sl_tp_task = asyncio.create_task(
                 sl_tp_monitor_loop(int(user.chat_id), app.bot)

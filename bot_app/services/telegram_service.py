@@ -20,7 +20,7 @@ request_config = HTTPXRequest(connection_pool_size=8, read_timeout=30.0)
 bot = Bot(token=config('TELEGRAM_BOT_TOKEN'), request=request_config)
 
 async def security_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = await TelegramUser.objects.afirst()
+    user = await TelegramUser.objects.filter(is_blocked=False).afirst()
     if update.effective_user.id != user.chat_id:
         await update.message.reply_text("⛔ Access Denied.")
         return False
@@ -56,7 +56,7 @@ def send_telegram_trade_alert(signal_data):
     async def _send():
         async with bot:
             time.sleep(2)
-            user = await TelegramUser.objects.afirst()
+            user = await TelegramUser.objects.filter(is_blocked=False).afirst()
             if user:
                 await bot.send_message(
                     chat_id=user.chat_id,
