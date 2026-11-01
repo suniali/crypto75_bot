@@ -9,6 +9,7 @@ from PIL import Image
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 
+from bot_app.services.telegram_service import security_check
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD,MAIN_MENU_TEXT
 
 from bot_app.services.analysis_service import extract_trade_from_image
@@ -28,6 +29,9 @@ WAITING_FOR_TRADE_IMAGE, CONFIRM_JOURNAL_DATA, EDITING_JOURNAL_DATA = range(100,
 # ۱. گام اول: درخواست تصویر چارت
 # ==========================================
 async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """گام ۱: درخواست تصویر چارت همراه با دکمه شیشه‌ای انصراف"""
     cancel_inline_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ انصراف", callback_data="confirm_journal_no")]
@@ -46,6 +50,8 @@ async def start_extract_trade_wizard(update: Update, context: ContextTypes.DEFAU
 # ۲. گام دوم: پردازش تصویر و استخراج هوشمند
 # ==========================================
 async def process_trade_image_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """گام ۲: دریافت تصویر، فشرده‌سازی، OCR، پارس کامل و نمایش پیش‌نمایش مالی"""
 
     await update.message.chat.send_action(action="typing")
@@ -141,6 +147,8 @@ async def process_trade_image_handler(update: Update, context: ContextTypes.DEFA
 # 1. گام ویرایش دستی (نمایش فرمت متنی قابل کپی)
 # ==========================================
 async def start_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """گام ۳-ب: درخواست ارسال متن اصلاح‌شده از کاربر"""
     query = update.callback_query
     await query.answer()
@@ -175,6 +183,8 @@ async def start_manual_edit_handler(update: Update, context: ContextTypes.DEFAUL
 # 2. دریافت و پارس مجدد متن ویرایش‌شده
 # ==========================================
 async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """گام ۳-ج: دریافت متن اصلاح‌شده کاربر، پارس مجدد و نمایش پیش‌نمایش تایید"""
     edited_text = update.message.text.strip() if update.message and update.message.text else ""
 
@@ -238,6 +248,9 @@ async def save_manual_edit_handler(update: Update, context: ContextTypes.DEFAULT
 # 3. گام نهایی: ذخیره واقعی در دیتابیس
 # ==========================================
 async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """گام نهایی: فراخوانی لایه سرویس و ثبت معامله در دیتابیس"""
     query = update.callback_query
     await query.answer()
@@ -289,6 +302,8 @@ async def confirm_journal_data_handler(update: Update, context: ContextTypes.DEF
 # 4. لغو عملیات
 # ==========================================
 async def cancel_extract_image_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """لغو فرآیند و پاکسازی داده‌های موقت"""
     query = update.callback_query
     await query.answer()

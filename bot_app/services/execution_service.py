@@ -16,7 +16,7 @@ def calculate_dynamic_lot_size(
     symbol, account_balance, risk_percentage, current_price, stop_loss
 ):
     # ۱. دریافت پویا‌ی Contract Size از بروکر
-    contract_size_float = get_broker_contract_size(symbol)
+    contract_size_float, point, digits = get_broker_contract_size(symbol)
     if not contract_size_float:
         # مقدار پیش‌فرض امن در صورت خطا (مثلا استاندارد فارکس)
         contract_size_float = 100000.0

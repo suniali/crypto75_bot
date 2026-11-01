@@ -259,6 +259,9 @@ def execute_trade(
     logger.info("Initiating trade - User: %s (%s), Symbol: %s, Action: %s, Lot: %s, Price: %s, SL: %s, TP: %s",
                 telegram_id, username, symbol, action, lot, entry_price, sl_price, tp_price)
 
+    if lot > 10.0:
+        return False, "❌ حجم معامله بیش از حد مجاز است (حداکثر ۱۰ لات).", None
+
     with mt5_session() as ok:
         if not ok:
             return False, ERROR_CANNOT_CONNECT_TO_METATRADER, None
@@ -699,7 +702,7 @@ def get_broker_contract_size(symbol: str) -> float:
     
     with mt5_session() as ok:
         if not ok:
-            return None
+            return None, None, None
         
         # دریافت اطلاعات کامل نماد
         symbol_info = mt5.symbol_info(symbol)
@@ -708,15 +711,17 @@ def get_broker_contract_size(symbol: str) -> float:
             logger.error(
                 f'❌ نماد {symbol} در پلتفرم یافت نشد یا اطلاعات آن قابل دریافت نیست.'
             )
-            return None
+            return None, None, None
 
         # اگر نماد در پلتفرم قابل معامله و قابل مشاهده باشد
         if not symbol_info.visible:
             if not mt5.symbol_select(symbol, True):
                 logger.warning(f'⚠️ نماد {symbol} در لیست مارکت واچ فعال نشد.')
-                return None
+                return None, None, None
 
         # استخراج اندازه قرارداد
         contract_size = float(symbol_info.trade_contract_size)
+        point = symbol_info.point
+        digits = symbol_info.digits
 
-        return contract_size
+        return contract_size, point, digits
