@@ -5,7 +5,8 @@ import time
 
 from decouple import config
 
-from telegram import Bot
+from telegram import Bot,Update
+from telegram.ext import ContextTypes
 from telegram.request import HTTPXRequest
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
@@ -17,6 +18,13 @@ logger = logging.getLogger(__name__)
 # اگر رباتت پروکسی نیاز داره یا request سفارشی داری تنظیم می‌کنی
 request_config = HTTPXRequest(connection_pool_size=8, read_timeout=30.0)
 bot = Bot(token=config('TELEGRAM_BOT_TOKEN'), request=request_config)
+
+async def security_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = await TelegramUser.objects.afirst()
+    if update.effective_user.id != user.chat_id:
+        await update.message.reply_text("⛔ Access Denied.")
+        return False
+    return True
 
 def send_telegram_trade_alert(signal_data):
 

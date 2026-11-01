@@ -16,10 +16,14 @@ from bot_app.services.watchlist_service import (
 )
 from bot_app.services.mt5_service import get_market_watch_symbols
 from bot_app.services.user_service import get_or_create_user
+from bot_app.services.telegram_service import security_check 
 
 logger = logging.getLogger(__name__)
 
 async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
 
     # ۱. پاسخ سریع جهت رفع لودینگ دکمه شیشه‌ای
@@ -109,6 +113,9 @@ async def show_watchlist_command(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text(error_msg, reply_markup=MAIN_KEYBOARD, parse_mode="Markdown")
 
 async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     if query:
         await query.answer()
@@ -131,8 +138,10 @@ async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT
 
 
 async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
-    chat_id = update.effective_chat.id
 
     # پاسخ لحظه‌ای به دکمه برای از بین بردن تأخیر ظاهری
     await query.answer("در حال پردازش...", show_alert=False)
@@ -177,6 +186,9 @@ ADD_WATCHLIST_MARKET, ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME = (
 
 # مرحله ۱: شروع و درخواست انتخاب مارکت
 async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     logger.info("Starting addWatchlist conversation for chat_id %s", update.effective_chat.id)
     context.user_data.clear()
 
@@ -198,6 +210,9 @@ async def start_add_watchlist(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # مرحله ۲: ذخیره مارکت و درخواست نماد (با پشتیبانی از واچ‌لیست MT5)
 async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     await query.answer()
 
@@ -240,6 +255,9 @@ async def add_watchlist_get_market_step(update: Update, context: ContextTypes.DE
 
 # مرحله ۳: ذخیره نماد و درخواست تایم‌فریم
 async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     # بررسی اینکه ورودی از کلیک دکمه بوده یا تایپ دستی
     if update.callback_query:
         query = update.callback_query
@@ -273,6 +291,9 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
 
 # مرحله ۴: ذخیره تایم‌فریم و ثبت نهایی در واچ‌لیست
 async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     await query.answer()
 
@@ -327,6 +348,9 @@ async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes
 
 # هندلر لغو عملیات
 async def cancel_watch_list_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     logger.info("AddWatchlist conversation cancelled by user %s", update.effective_chat.id)
     context.user_data.clear()
 

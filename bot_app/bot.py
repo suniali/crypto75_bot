@@ -88,7 +88,7 @@ from bot_app.actions.position_actions import (
     start_trade_wizard,
     new_trade_get_symbol_step,
     new_trade_get_action_step,
-    new_trade_get_lot_step,
+    new_trade_get_tp_step,
     new_trade_get_price_step,
     new_trade_get_sl_step,
     execute_trade_step,
@@ -339,7 +339,7 @@ if __name__ == "__main__":
             CallbackQueryHandler(start_trade_wizard, pattern="^start_new_trade$"),
             MessageHandler(filters.Regex(r"^\s*📈 معامله جدید$"), start_trade_wizard),
         ],
-        states={
+       states={
             NEW_TRADE_SYMBOL: [
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_symbol_step, pattern="^sym_"),
@@ -348,11 +348,6 @@ if __name__ == "__main__":
             NEW_TRADE_ACTION: [
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
                 CallbackQueryHandler(new_trade_get_action_step, pattern="^act_"),
-            ],
-            NEW_TRADE_LOT: [
-                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
-                CallbackQueryHandler(new_trade_get_lot_step, pattern="^lot_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_lot_step),
             ],
             NEW_TRADE_PRICE: [
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
@@ -366,7 +361,12 @@ if __name__ == "__main__":
             ],
             NEW_TRADE_TP: [
                 CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
-                CallbackQueryHandler(execute_trade_step, pattern="^tp_"),
+                CallbackQueryHandler(new_trade_get_tp_step, pattern="^tp_"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, new_trade_get_tp_step),
+            ],
+            NEW_TRADE_LOT: [
+                CallbackQueryHandler(cancel_trade_handler, pattern="^cancel_trade$"),
+                CallbackQueryHandler(execute_trade_step, pattern="^lot_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, execute_trade_step),
             ],
         },

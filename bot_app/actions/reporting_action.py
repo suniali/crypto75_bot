@@ -6,6 +6,7 @@ from asgiref.sync import sync_to_async
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
 from telegram.ext import ContextTypes,ConversationHandler
 
+from bot_app.services.telegram_service import security_check
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
 
 from bot_app.services.analysis_service import analyze_trades_with_gemini,calculate_trading_metrics
@@ -15,6 +16,8 @@ SELECT_REPORT_PERIOD = range(104, 105)
 
 
 async def start_report_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """شروع فرآیند دریافت گزارش"""
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("📅 روزانه (۲۴ ساعت)", callback_data="rep_1"),
@@ -36,6 +39,9 @@ async def start_report_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def process_report_generation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """پردازش، فراخوانی Gemini و ارسال PDF"""
     query = update.callback_query
     await query.answer()
@@ -88,6 +94,8 @@ async def process_report_generation(update: Update, context: ContextTypes.DEFAUL
 
 
 async def cancel_report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """لغو گزارش‌گیری"""
     query = update.callback_query
     if query:

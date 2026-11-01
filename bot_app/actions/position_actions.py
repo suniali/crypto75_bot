@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from decimal import Decimal
 from decouple import config
 
 from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup
@@ -17,12 +18,20 @@ from bot_app.services.mt5_service import (
     close_position,
     close_position_by_ticket,
     close_all_positions,
+    get_broker_contract_size,
+    get_forex_price
 )
+from bot_app.services.telegram_service import security_check
+
+from bot_app.models import TelegramUser
 
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
-async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
+async def auto_refresh_positions_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """آپدیت خودکار پیام لیست پوزیشن‌ها هر چند ثانیه یک‌بار"""
     job = context.job
     chat_id = job.chat_id
@@ -125,7 +134,10 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
             exc_info=True
         )
 
-async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
+async def auto_refresh_single_position_job(update: Update,context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """آپدیت خودکار جزییات یک پوزیشن خاص هر چند ثانیه یک‌بار"""
     job = context.job
     chat_id = job.chat_id
@@ -225,6 +237,9 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
 
 
 async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """نمایش لیست پوزیشن‌های باز و فعال‌سازی آپدیت زنده (Live Update)"""
     chat_id = update.effective_chat.id
     query = update.callback_query
@@ -250,8 +265,10 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
     # ۳. بررسی خالی بودن لیست پوزیشن‌ها
     if not positions:
         text = "📭 **در حال حاضر هیچ پوزیشن بازی وجود ندارد.**"
-        keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("🔄 بروزرسانی مجدد", callback_data="refresh_positions_list")]])
+        keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 بروزرسانی مجدد", callback_data="refresh_positions_list")],
+                [InlineKeyboardButton("➕ معامله جدید", callback_data="start_new_trade")],
+                ])
 
         if query:
             await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
@@ -284,7 +301,10 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
     text += f"\n💰 **مجموع سود/ضرر کل:** `{round(total_profit, 2)}{CURENCY_UNIT}`"
 
     # اضافه کردن دکمه‌های کنترلی اصلی
-    keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
+    keyboard.append([
+        [InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")],
+        [InlineKeyboardButton("➕ معامله جدید", callback_data="start_new_trade")]
+        ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -330,6 +350,9 @@ def build_positions_keyboard(data):
     return InlineKeyboardMarkup(keyboard)
 
 async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+     
     query = update.callback_query
     await query.answer()
 
@@ -356,14 +379,14 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
     profit_emoji = "🟢" if pos["profit"] >= 0 else "🔴"
 
     caption = (
-        f"⚙️ **مدیریت پوزیشن `{pos['symbol']}`** (🎫 `{pos['ticket']}`)\n\n"
-        f"🔹 **نوع:** {trade_type} | 📦 **حجم:** `{pos['volume']}` لات\n"
-        f"💵 **قیمت ورود:** `{pos['price_open']:.5f}`\n"
-        f"📈 **قیمت لحظه‌ای:** `{pos['price_current']:.5f}`\n"
-        f"🛑 **SL:** `{pos['sl']}` | 🎯 **TP:** `{pos['tp']}`\n"
-        f"───────────────────\n"
-        f"📊 **سود/زیان لحظه‌ای:** {profit_emoji} **`{CURENCY_UNIT}{pos['profit']:,.2f}`**"
-    )
+            f"⚙️ <b>مدیریت پوزیشن <code>{pos['symbol']}</code></b> (🎫 <code>{pos['ticket']}</code>)\n\n"
+            f"🔹 <b>نوع:</b> {trade_type} | 📦 <b>حجم:</b> <code>{pos['volume']}</code> لات\n"
+            f"💵 <b>قیمت ورود:</b> <code>{pos['price_open']}</code>\n"
+            f"📈 <b>قیمت لحظه‌ای:</b> <code>{pos['price_current']:.5f}</code>\n"
+            f"🛑 <b>SL:</b> <code>{pos['sl']}</code> | 🎯 <b>TP:</b> <code>{pos['tp']}</code>\n"
+            f"───────────────────\n"
+            f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>{CURENCY_UNIT}{pos['profit']:,.2f}</code></b>"
+        )
 
     # دکمه بروزرسانی دستی حذف شد چون لایو اضافه گردیده است
     keyboard = [
@@ -399,6 +422,9 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
         )
 
 async def cancel_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     await query.answer("عملیات لغو شد.")
 
@@ -428,6 +454,9 @@ async def cancel_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     await query.answer()
 
@@ -622,6 +651,8 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def process_new_sltp_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
     """دریافت مقادیر جدید SL و TP از کاربر"""
     ticket = context.user_data.get("action_ticket")
 
@@ -669,6 +700,9 @@ async def process_new_sltp_input(update: Update, context: ContextTypes.DEFAULT_T
 # مراحل ConversationHandler برای دریافت عددی SL/TP یا Partial Close
 INPUT_NEW_SL_TP, INPUT_PARTIAL_LOT = ("INPUT_NEW_SL_TP","INPUT_PARTIAL_LOT")
 async def process_partial_close_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """دریافت حجم خروج جزئی دلخواه"""
     ticket = context.user_data.get("action_ticket")
 
@@ -690,17 +724,19 @@ async def process_partial_close_input(update: Update, context: ContextTypes.DEFA
     )
     return ConversationHandler.END
 
-# تعریف مراحل Conversation New Trade
-NEW_TRADE_SYMBOL, NEW_TRADE_ACTION, NEW_TRADE_LOT,NEW_TRADE_PRICE, NEW_TRADE_SL, NEW_TRADE_TP = (
+NEW_TRADE_SYMBOL, NEW_TRADE_ACTION, NEW_TRADE_PRICE, NEW_TRADE_SL, NEW_TRADE_TP, NEW_TRADE_LOT = (
     "NEW_TRADE_SYMBOL",
     "NEW_TRADE_ACTION",
-    "NEW_TRADE_LOT",
     "NEW_TRADE_PRICE",
     "NEW_TRADE_SL",
-    "NEW_TRADE_TP"
+    "NEW_TRADE_TP",
+    "NEW_TRADE_LOT"
 )
 
 async def start_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+
     """مرحله ۱: دریافت پویای نمادها از Market Watch و ساخت دکمه‌ها"""
     context.user_data.clear()
 
@@ -741,15 +777,18 @@ async def start_trade_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def new_trade_get_symbol_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+     
     """مرحله ۲: دریافت نماد و انتخاب جهت معامله (BUY/SELL)"""
 
     # ۱. برقراری ایمنی کامل برای CallbackQuery و Message
     if update.callback_query:
         query = update.callback_query
         await query.answer()
-        symbol = query.data.replace("sym_", "").strip().upper()
+        symbol = query.data.replace("sym_", "").strip()
     elif update.message and update.message.text:
-        symbol = update.message.text.strip().upper()
+        symbol = update.message.text.strip()
     else:
         # اگر ورودی غیرمتنی فرستاده شد
         return NEW_TRADE_SYMBOL
@@ -782,53 +821,15 @@ async def new_trade_get_symbol_step(update: Update, context: ContextTypes.DEFAUL
 
 
 async def new_trade_get_action_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۳: ذخیره جهت و دریافت حجم (Lot)"""
+    """مرحله ۳: ذخیره جهت و درخواست قیمت ورود (یا معامله مارکت)"""
+    if not await security_check(update, context):
+        return
+        
     query = update.callback_query
     await query.answer()
 
     action = query.data.replace("act_", "")
     context.user_data["trade_action"] = action
-
-    # دکمه‌های میانبر برای حجم‌های رایج
-    keyboard = [
-        [InlineKeyboardButton("0.01", callback_data="lot_0.01"), InlineKeyboardButton("0.05", callback_data="lot_0.05"),
-         InlineKeyboardButton("0.10", callback_data="lot_0.10")],
-        [InlineKeyboardButton("0.50", callback_data="lot_0.50"),
-         InlineKeyboardButton("1.00", callback_data="lot_1.00")],
-        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")]
-    ]
-
-    text = (
-        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>جهت:</b> <code>{action}</code>\n\n"
-        "<b>مرحله ۳ از ۵:</b> حجم معامله (Lot) را وارد کنید یا از دکمه‌ها انتخاب کنید:"
-    )
-
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
-    return NEW_TRADE_LOT
-
-
-async def new_trade_get_lot_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۴: ذخیره حجم و درخواست قیمت ورود (یا معامله مارکت)"""
-    if update.callback_query:
-        query = update.callback_query
-        await query.answer()
-        lot_str = query.data.replace("lot_", "")
-    else:
-        lot_str = update.message.text.strip()
-
-    try:
-        lot = float(lot_str)
-        if lot <= 0:
-            raise ValueError
-    except ValueError:
-        msg = "❌ <b>حجم وارد شده نامعتبر است. لطفاً یک عدد مثبت وارد کنید:</b>"
-        if update.callback_query:
-            await update.callback_query.message.reply_text(msg, parse_mode="HTML")
-        else:
-            await update.message.reply_text(msg, parse_mode="HTML")
-        return NEW_TRADE_LOT
-
-    context.user_data["trade_lot"] = lot
 
     # دکمه ورود با قیمت لحظه‌ای (Market Price)
     keyboard = [
@@ -838,28 +839,26 @@ async def new_trade_get_lot_step(update: Update, context: ContextTypes.DEFAULT_T
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     text = (
-        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
-        f"<b>جهت:</b> <code>{context.user_data['trade_action']}</code> | "
-        f"<b>حجم:</b> <code>{lot}</code>\n\n"
-        "<b>مرحله ۴ از ۶:</b> لطفاً <b>قیمت ورود مد نظر (Pending Order)</b> را تایپ کنید "
+        f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | <b>جهت:</b> <code>{action}</code>\n\n"
+        "<b>مرحله ۳ از ۶:</b> لطفاً <b>قیمت ورود مد نظر (Pending Order)</b> را تایپ کنید "
         "یا دکمه <b>ورود با قیمت لحظه‌ای</b> را بزنید:"
     )
 
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
-
+    await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
     return NEW_TRADE_PRICE
 
+
 async def new_trade_get_price_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۵: ذخیره قیمت ورود و درخواست قیمت حد ضرر (SL)"""
+    """مرحله ۴: ذخیره قیمت ورود و درخواست قیمت حد ضرر (SL)"""
+    if not await security_check(update, context):
+        return
+
     if update.callback_query:
         query = update.callback_query
         await query.answer()
 
         if query.data == "price_market":
-            entry_price = "MARKET"
+            entry_price =  get_forex_price(context.user_data["trade_symbol"])
         else:
             return NEW_TRADE_PRICE
     else:
@@ -887,9 +886,8 @@ async def new_trade_get_price_step(update: Update, context: ContextTypes.DEFAULT
     text = (
         f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
         f"<b>جهت:</b> <code>{context.user_data['trade_action']}</code> | "
-        f"<b>حجم:</b> <code>{context.user_data['trade_lot']}</code> | "
         f"<b>ورود:</b> <code>{price_display}</code>\n\n"
-        "<b>مرحله ۵ از ۶:</b> <b>قیمت دقیق حد ضرر (SL)</b> را وارد کنید (مثلاً <code>1.08500</code> یا <code>2650.50</code>):\n"
+        "<b>مرحله ۴ از ۶:</b> <b>قیمت دقیق حد ضرر (SL)</b> را وارد کنید (مثلاً <code>1.08500</code>):\n"
         "<i>(در صورت عدم نیاز عدد 0 را ارسال یا دکمه رد کردن را بزنید)</i>"
     )
 
@@ -902,7 +900,10 @@ async def new_trade_get_price_step(update: Update, context: ContextTypes.DEFAULT
 
 
 async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """مرحله ۶: ذخیره قیمت SL و دریافت قیمت حد سود (TP)"""
+    """مرحله ۵: ذخیره قیمت SL و درخواست قیمت حد سود (TP)"""
+    if not await security_check(update, context):
+        return
+
     if update.callback_query:
         query = update.callback_query
         await query.answer()
@@ -931,9 +932,10 @@ async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TY
 
     text = (
         f"📌 <b>نماد:</b> <code>{context.user_data['trade_symbol']}</code> | "
-        f"<b>حجم:</b> <code>{context.user_data['trade_lot']}</code>\n"
+        f"<b>جهت:</b> <code>{context.user_data['trade_action']}</code>\n"
         f"🛑 <b>قیمت SL:</b> <code>{sl_display}</code>\n\n"
-        "<b>مرحله ۶ از ۶:</b> <b>قیمت دقیق حد سود (TP)</b> را وارد کنید (مثلاً <code>1.09500</code> یا <code>2700.00</code>):"
+        "<b>مرحله ۵ از ۶:</b> <b>قیمت دقیق حد سود (TP)</b> را وارد کنید (مثلاً <code>1.09500</code>):\n"
+        "<i>(در صورت عدم نیاز عدد 0 را ارسال کنید)</i>"
     )
 
     if update.callback_query:
@@ -943,8 +945,145 @@ async def new_trade_get_sl_step(update: Update, context: ContextTypes.DEFAULT_TY
 
     return NEW_TRADE_TP
 
+def get_risk_limited_lot(user, stop_loss_pips=30, pip_value=10):
+    """
+    محاسبه لاتیج‌ها در بازه از حداقل ریسک (0.25٪) تا حداکثر ریسک (5.00٪) اکانت
+    """
+    balance = getattr(user, 'initial_balance', Decimal('100.00'))
+    
+    min_allowed_risk_pct = Decimal('0.25') # حداقل ۰.۲۵٪
+    max_allowed_risk_pct = Decimal('5.00') # حداکثر ۵٪
+    
+    if stop_loss_pips <= 0 or pip_value <= 0:
+        stop_loss_pips = 30
+        pip_value = 10
+
+    denominator = Decimal(str(stop_loss_pips)) * Decimal(str(pip_value))
+    
+    # محاسبه مبلغ ریالی/دلاری ریسک برای ۰.۲۵٪ و ۵٪
+    min_risk_amount = (balance * min_allowed_risk_pct) / Decimal('100.00')
+    max_risk_amount = (balance * max_allowed_risk_pct) / Decimal('100.00')
+    
+    # محاسبه لاتیج متناظر با حداقل و حداکثر ریسک
+    min_safe_lot = min_risk_amount / denominator if denominator > 0 else Decimal('0.01')
+    max_safe_lot = max_risk_amount / denominator if denominator > 0 else Decimal('0.10')
+
+    # لیست جامع‌تری از لاتیج‌های استاندارد برای پوشش کامل بازه
+    standard_lots = [
+        Decimal('0.01'), Decimal('0.02'), Decimal('0.03'), Decimal('0.05'),
+        Decimal('0.10'), Decimal('0.15'), Decimal('0.20'), Decimal('0.30'),
+        Decimal('0.50'), Decimal('0.75'), Decimal('1.00'), Decimal('1.50'), Decimal('2.00')
+    ]
+    
+    # فیلتر کردن لات‌هایی که دقیقاً بین حجمِ حداقل (۰.۲۵٪) و حجمِ حداکثر (۵٪) قرار دارند
+    # (همچنین اجازه می‌دهیم حداکثر لات تا سقف 5 درصد اعمال شود)
+    valid_lots = [lot for lot in standard_lots if min_safe_lot <= lot <= max_safe_lot]
+    
+    # اگر بازه به دلیل موجودی کم یا زیاد خالی ماند، نزدیک‌ترین مقدار ایمن را قرار می‌دهیم
+    if not valid_lots:
+        if max_safe_lot < min_safe_lot:
+            valid_lots = [max(Decimal('0.01'), max_safe_lot.quantize(Decimal('0.01')))]
+        else:
+            valid_lots = [min_safe_lot.quantize(Decimal('0.01'))]
+
+    return valid_lots
+
+async def new_trade_get_tp_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """مرحله ۶: ذخیره TP و ساخت کیبورد پویای حجم (Lot) بر اساس ریسک حساب"""
+    if not await security_check(update, context):
+        return
+
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        tp_str = query.data.replace("tp_", "")
+    else:
+        tp_str = update.message.text.strip()
+
+    try:
+        tp = float(tp_str)
+        if tp < 0:
+            raise ValueError
+    except ValueError:
+        await update.effective_message.reply_text(
+            "❌ <b>قیمت حد سود نامعتبر است. لطفاً یک عدد معتبر وارد کنید:</b>",
+            parse_mode="HTML"
+        )
+        return NEW_TRADE_TP
+
+    context.user_data["trade_tp"] = tp
+
+    entry_price = float(context.user_data["trade_price"])
+    sl_price = float(context.user_data["trade_sl"])
+
+    # دریافت اطلاعات کاربر برای محاسبه دقیق ریسک و لاتیج
+    user = await TelegramUser.objects.afirst()
+    if not user:
+        msg = "❌ کاربر یافت نشد."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(msg)
+        else:
+            await update.message.reply_text(msg)
+        return ConversationHandler.END
+
+    # فراخوانی تابع محاسبه لاتیج پویا (حداکثر ۵٪ ریسک یا بر اساس استاپ لاس)
+    contract_size, point, digits = get_broker_contract_size(context.user_data['trade_symbol'])
+        
+   # ۲. تعیین اندازه دقیق پیپ
+    pip_size = point * 10 if digits in [3, 5] else point
+
+    # ۳. محاسبه فاصله استاپ‌لاس به پیپ
+    price_diff = abs(entry_price - sl_price)
+    stop_loss_pips = price_diff / pip_size if pip_size > 0 else 0.0
+
+    # ۴. دریافت لیست لاتیج‌های مجاز در بازه 0.25٪ تا 5٪
+    valid_lots = get_risk_limited_lot(
+        user,
+        stop_loss_pips=stop_loss_pips,
+        pip_value=contract_size * pip_size
+    )
+
+    # ۵. ساخت کیبورد تلگرام به صورت پویا (ردیف‌های ۲تایی)
+    keyboard = []
+    row = []
+
+    for lot in valid_lots:
+        btn_text = f"{lot} لات"
+        row.append(InlineKeyboardButton(btn_text, callback_data=f"lot_{lot}"))
+        
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+            
+    if row:
+        keyboard.append(row)
+        
+    # دکمه انصراف ثابت در انتهای لیست
+    keyboard.append([InlineKeyboardButton("❌ انصراف", callback_data="cancel_trade")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    text = (
+        f"📌 <b>مشخصات معامله تاکنون:</b>\n"
+        f"• نماد: <code>{context.user_data['trade_symbol']}</code>\n"
+        f"• جهت: <code>{context.user_data['trade_action']}</code>\n"
+        f"• ورود: <code>{context.user_data['trade_price']}</code>\n"
+        f"• SL: <code>{context.user_data['trade_sl']}</code> | TP: <code>{tp}</code>\n\n"
+        "<b>مرحله ۶ از ۶:</b> لطفاً <b>حجم معامله (Lot)</b> را انتخاب کنید یا تایپ نمایید:"
+    )
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="HTML")
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="HTML")
+
+    return NEW_TRADE_LOT
+
 
 async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """مرحله نهایی: جمع‌آوری تمامی اطلاعات و اجرای معامله"""
     # ۱. دریافت اطلاعات کاربر تلگرام
     user = update.effective_user
@@ -1017,6 +1156,9 @@ async def execute_trade_step(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ConversationHandler.END
 
 async def cancel_trade_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """انصراف از ساخت معامله و بازگشت به منوی اصلی"""
     context.user_data.clear()
 
@@ -1042,6 +1184,9 @@ async def cancel_trade_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
     await query.answer()
 
@@ -1055,6 +1200,9 @@ async def close_position_callback(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def close_all_positions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """نمایش پیام تاییدیه قبل از اجرای دستور بستن همه پوزیشن‌ها"""
     chat_id = update.effective_chat.id
     query = update.callback_query
@@ -1085,6 +1233,9 @@ async def close_all_positions_handler(update: Update, context: ContextTypes.DEFA
 
 
 async def confirm_close_all_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """اجرای واقعی بستن تمامی پوزیشن‌ها پس از تایید کاربر"""
     query = update.callback_query
     await query.answer("در حال بستن همه پوزیشن‌ها...")

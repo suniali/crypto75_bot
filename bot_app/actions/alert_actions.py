@@ -17,12 +17,16 @@ from bot_app.services.mt5_service import get_market_watch_symbols,check_symbol_i
 from bot_app.services.user_service import get_or_create_user
 from bot_app.services.chart_service import create_pending_alert_chart
 from bot_app.services.api_service import fetch_recent_klines
+from bot_app.services.telegram_service import security_check
 
 from bot_app.models import MarketType
 
 logger = logging.getLogger(__name__)
 
 async def show_active_alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     query = update.callback_query
 
     if query:
@@ -84,6 +88,9 @@ async def show_active_alerts_command(update: Update, context: ContextTypes.DEFAU
             await update.message.reply_text(error_msg, parse_mode="Markdown")
 
 async def confirm_delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """مرحله ۱: درخواست تأیید از کاربر قبل از غیرفعالسازی"""
     query = update.callback_query
     await query.answer()
@@ -104,6 +111,9 @@ async def confirm_delete_alert_callback(update: Update, context: ContextTypes.DE
     )
 
 async def delete_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """مرحله ۲: اجرای نهایی غیرفعالسازی پس از تأیید"""
     query = update.callback_query
     await query.answer()
@@ -125,6 +135,9 @@ ADD_ALERT_MARKET, ADD_ALERT_SYMBOL, ADD_ALERT_PRICE = (
 )
 
 async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """شروع فرایند ثبت هشدار و نمایش دکمه انتخاب بازار"""
     keyboard = [
         [
@@ -143,6 +156,9 @@ async def start_alert_wizard(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return ADD_ALERT_MARKET
 
 async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """پردازش انتخاب بازار و ساخت کیبورد شیشه‌ای واچ‌لیست برای فارکس"""
     query = update.callback_query
     await query.answer()
@@ -187,6 +203,9 @@ async def add_alert_market_selected(update: Update, context: ContextTypes.DEFAUL
 
 
 async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """دریافت نماد انتخاب‌شده (تایپ متنی یا دکمه شیشه‌ای) و اعتبارسنجی آن"""
     cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ انصراف", callback_data="cancel_alert")]])
     is_forex = context.user_data.get("is_forex", False)
@@ -262,6 +281,9 @@ async def add_alert_symbol_received(update: Update, context: ContextTypes.DEFAUL
 async def add_alert_price_received(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ):
+    if not await security_check(update, context):
+        return
+    
     """دریافت قیمت هدف و ذخیره نهایی هشدار به همراه ارسال چارت"""
     chat_id = update.effective_chat.id
     symbol = str(context.user_data.get("symbol"))
@@ -393,6 +415,9 @@ async def add_alert_price_received(
     return ConversationHandler.END
 
 async def cancel_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await security_check(update, context):
+        return
+    
     """لغو عملیات در صورت کلیک روی دکمه انصراف"""
     query = update.callback_query
     await query.answer()
