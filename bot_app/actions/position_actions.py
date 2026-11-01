@@ -1017,7 +1017,7 @@ async def new_trade_get_tp_step(update: Update, context: ContextTypes.DEFAULT_TY
     sl_price = float(context.user_data["trade_sl"])
 
     # دریافت اطلاعات کاربر برای محاسبه دقیق ریسک و لاتیج
-    user = await TelegramUser.objects.afirst()
+    user = await TelegramUser.objects.filter(is_blocked=False).afirst()
     if not user:
         msg = "❌ کاربر یافت نشد."
         if update.callback_query:

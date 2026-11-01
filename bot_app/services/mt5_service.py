@@ -106,7 +106,7 @@ def _broker_sync_worker():
             logger.info(f"🔄 Total deals fetched from MT5: {len(deals)}")
 
             # پیدا کردن یا ساخت کاربر پیش‌فرض برای اتصال معاملات به او
-            user = TelegramUser.objects.first()
+            user = TelegramUser.objects.filter(is_blocked=False).first()
             if not user:
                 logger.error("❌ No TelegramUser found in database to assign trades!")
                 return None
