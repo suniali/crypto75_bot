@@ -12,6 +12,7 @@ from bot_app.models import TelegramUser, TradeJournal, MarketType
 
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
+MT5_PATH = config("MT5_PATH", default = None)
 
 # ------------------------------------------------------------------
 # Constants & Configurations
@@ -33,7 +34,7 @@ def start_mt5_connection() -> bool:
     """فراخوانی تک‌باره هنگام بالا آمدن ربات/برنامه"""
     global _mt5_connected
     with _mt5_lock:
-        if not mt5.initialize():
+        if not mt5.initialize(path = MT5_PATH):
             logger.critical("Failed to initialize MT5 on startup. Error: %s", mt5.last_error())
             _mt5_connected = False
             return False
