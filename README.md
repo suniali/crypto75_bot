@@ -149,6 +149,7 @@
   TELEGRAM_BOT_TOKEN=your_bot_token_here
   SECRET_KEY=your_django_secret_key
   GEMINI_API_KEY=your_gemini_api_key
+  MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
   CURENCY_UNIT=$
   ```
   ## چگونه SECRET_KEY اختصاصی بسازیم؟
