@@ -150,6 +150,7 @@
   SECRET_KEY=your_django_secret_key
   GEMINI_API_KEY=your_gemini_api_key
   MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
+  DASHBOARD_PORT=8000
   CURENCY_UNIT=$
   ```
   ## چگونه SECRET_KEY اختصاصی بسازیم؟
