@@ -220,14 +220,14 @@ class TradeJournal(models.Model):
 class MarketCandle(models.Model):
     """مدل برای ذخیره کندل‌های بازار (جهت تحلیل و استخراج ویژگی‌ها)"""
 
-    symbol = models.CharField(max_length=20, db_index=True)  # مثل EURUSD یا BTCUSDT
-    timeframe = models.CharField(max_length=10)  # مثل 1h, 15m, 4h
-    open_time = models.DateTimeField(db_index=True)
-    open_price = models.DecimalField(max_digits=12, decimal_places=5)
-    high_price = models.DecimalField(max_digits=12, decimal_places=5)
-    low_price = models.DecimalField(max_digits=12, decimal_places=5)
-    close_price = models.DecimalField(max_digits=12, decimal_places=5)
-    volume = models.DecimalField(max_digits=20, decimal_places=2)
+    symbol = models.CharField(max_length=20, db_index=True,verbose_name="نماد")  # مثل EURUSD یا BTCUSDT
+    timeframe = models.CharField(max_length=10, verbose_name="تایم فریم")  # مثل 1h, 15m, 4h
+    open_time = models.DateTimeField(db_index=True, verbose_name="زمان باز شدن کندل")
+    open_price = models.DecimalField(max_digits=12, decimal_places=5, verbose_name="قیمت باز شدن")
+    high_price = models.DecimalField(max_digits=12, decimal_places=5, verbose_name="بالاترین قیمت")
+    low_price = models.DecimalField(max_digits=12, decimal_places=5, verbose_name="پایین‌ترین قیمت")
+    close_price = models.DecimalField(max_digits=12, decimal_places=5, verbose_name="قیمت بسته شدن")
+    volume = models.DecimalField(max_digits=20, decimal_places=2, verbose_name="حجم")
 
     class Meta:
         unique_together = ('symbol', 'timeframe', 'open_time')
@@ -248,24 +248,25 @@ class TradeDecisionLog(models.Model):
         ('HOLD', 'Hold / Neutral'),
     ]
 
-    symbol = models.CharField(max_length=20)
-    timestamp = models.DateTimeField(auto_now_add=True)
-    action = models.CharField(max_length=10, choices=ACTION_CHOICES)
+    symbol = models.CharField(max_length=20,verbose_name="نماد معاملاتی")
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان تصمیم‌گیری")
+    action = models.CharField(max_length=10, choices=ACTION_CHOICES, verbose_name='اقدام')
     ai_confidence = models.FloatField(
+        verbose_name='درصد اطمینان مدل',
         help_text='درصد اطمینان مدل هوش مصنوعی (بین 0 تا 1)'
     )
 
     # مقادیر ویژگی‌ها در لحظه تصمیم‌گیری (به صورت JSON برای انعطاف‌پذیری)
     features_snapshot = models.JSONField(
-        default=dict, help_text='مقادیر RSI, ATR, فاصله تا اردر بلاک و غیره'
+        default=dict, help_text='مقادیر RSI, ATR, فاصله تا اردر بلاک و غیره',verbose_name="ویژگی‌ها در لحظه تصمیم‌گیری"
     )
 
     # نتیجه معامله‌ای که بر اساس این تصمیم انجام شده
     result_status = models.CharField(
-        max_length=10, blank=True, null=True
+        max_length=10, blank=True, null=True,verbose_name="نتیجه معامله",
     )  # WIN, LOSS, BE
     net_profit = models.DecimalField(
-        max_digits=10, decimal_places=2, blank=True, null=True
+        max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="سود خالص"
     )
 
     def __str__(self):
