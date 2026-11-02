@@ -1680,6 +1680,7 @@
         const symbolPnlData = {{ symbols_pnl_json|default:"[]"|safe }};
         const plannedRrData = {{ planned_rr_json|default:"[]"|safe }};
         const realizedRrData = {{ realized_rr_json|default:"[]"|safe }};
+        
 
         // ۱. نمودار رشد حساب (Equity Curve)
         const ctxPnL = document.getElementById('pnlChart').getContext('2d');
@@ -1760,7 +1761,7 @@
             data: {
                 labels: pnlLabels,
                 datasets: [{
-                    label: `افت حساب (${"{{ unit|default:'$' }}"})`,
+                    label: 'افت حساب (%)',
                     data: drawdownData,
                     borderColor: '#f43f5e',
                     borderWidth: 1.5,
@@ -1773,10 +1774,17 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toFixed(2)}%` } }
+                },
                 scales: {
                     x: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } },
-                    y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#9ca3af' } }
+                    y: {
+                        max: 0,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#9ca3af', callback: v => v + '%' }
+                    }
                 }
             }
         });
@@ -1827,13 +1835,15 @@
         });
 
         // ۶. مقایسه R:R برنامه‌ریزی‌شده و واقعی
+        const rrPlanned = plannedRrData.slice(1);
+        const rrRealized = realizedRrData.slice(1);
         new Chart(document.getElementById('rrCompareChart'), {
             type: 'bar',
             data: {
-                labels: plannedRrData.map((_, i) => `#${i + 1}`),
+                labels: rrPlanned.map((_, i) => `#${i + 1}`),
                 datasets: [
-                    { label: 'برنامه‌ریزی', data: plannedRrData, backgroundColor: '#4b5563' },
-                    { label: 'واقعی', data: realizedRrData, backgroundColor: '#818cf8' }
+                    { label: 'برنامه‌ریزی', data: rrPlanned, backgroundColor: '#4b5563' },
+                    { label: 'واقعی', data: rrRealized, backgroundColor: '#818cf8' }
                 ]
             },
             options: {
