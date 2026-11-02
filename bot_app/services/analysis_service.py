@@ -9,6 +9,8 @@ import httpx
 from decimal import Decimal,ROUND_CEILING,ROUND_HALF_UP
 from datetime import timedelta
 from django.utils import timezone
+from django.db.models import DecimalField, ExpressionWrapper, F, Sum
+from django.db.models.functions import Abs, Coalesce
 from collections import defaultdict
 
 import numpy as np
@@ -646,17 +648,80 @@ def get_user_progression_plan(user):
         'stage_heart_slots': stage_heart_slots, 
     }
 
-def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_month: int=None) -> dict:
-    now = timezone.now()
+RATIO_CAP = 99.0                       # سقف نسبت‌هایی که مخرج صفر دارند
+CLOSED_RESULTS = ['WIN', 'LOSS', 'BE']  # PENDING وارد محاسبات نمی‌شود
+ 
+# معادل دیتابیسیِ property مدل:  net_profit = profit - abs(commission) + swap
+NET_PROFIT_EXPR = ExpressionWrapper(
+    F('profit') - Abs(F('commission')) + F('swap'),
+    output_field=DecimalField(max_digits=20, decimal_places=2),
+)
+ 
+ 
+def _dec(value) -> Decimal:
+    return Decimal(str(value)) if value is not None else Decimal('0.00')
+ 
+ 
+def _local(dt):
+    if dt is not None and timezone.is_aware(dt):
+        return timezone.localtime(dt)
+    return dt
+ 
+ 
+def compute_drawdown(pnls, start_equity: Decimal) -> dict:
+    """
+    منحنی اکوییتی و درادان را از لیست PnL معاملات (به ترتیب زمان بسته‌شدن) می‌سازد.
+    قله از اکوییتی ابتدای بازه شروع می‌شود (نه از صفر).
+    درادان درصدی نسبت به قله اکوییتی است؛ درادان دلاری هم جداگانه برگردانده می‌شود.
+    """
+    running = Decimal('0.00')
+    peak_running = Decimal('0.00')
+    peak_equity = start_equity
+ 
+    cumulative, dd_pct_curve = [], []
+    max_dd_usd = Decimal('0.00')
+    max_dd_pct = Decimal('0.00')
+ 
+    for pnl in pnls:
+        running += pnl
+        equity = start_equity + running
+ 
+        peak_running = max(peak_running, running)
+        peak_equity = max(peak_equity, equity)
+ 
+        max_dd_usd = min(max_dd_usd, running - peak_running)
+ 
+        dd_pct = ((equity - peak_equity) / peak_equity * 100) if peak_equity > 0 else Decimal('0.00')
+        max_dd_pct = min(max_dd_pct, dd_pct)
+ 
+        cumulative.append(running)
+        dd_pct_curve.append(dd_pct)
+ 
+    return {
+        'cumulative': cumulative,
+        'dd_pct_curve': dd_pct_curve,
+        'max_dd_usd': max_dd_usd,
+        'max_dd_pct': max_dd_pct,
+        'total': running,
+    }
+ 
+ 
+def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
+                              req_month: int = None, user=None) -> dict:
+    now = timezone.localtime(timezone.now())
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
+ 
+    # ------------------------------------------------------------------
+    # ۱. بازه زمانی
+    # ------------------------------------------------------------------
+    def week_start():
+        days_since_saturday = (now.weekday() - 5) % 7   # شروع هفته: شنبه
+        return today_start - timedelta(days=days_since_saturday)
+ 
     if period == 'daily':
-        # از ساعت ۰۰:۰۰ امروز تا الان
         start_date = today_start
     elif period == 'weekly':
-        # شروع هفته از روز شنبه (محاسبه دقیق فاصله تا شنبه گذشته)
-        days_since_saturday = (now.weekday() - 5) % 7
-        start_date = today_start - timedelta(days=days_since_saturday)
+        start_date = week_start()
     elif period == 'monthly':
         start_date = now - timedelta(days=30)
     elif period == '3months':
@@ -669,101 +734,101 @@ def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_mont
         start_date = None
     else:
         period = 'weekly'
-        days_since_saturday = (now.weekday() - 5) % 7
-        start_date = today_start - timedelta(days=days_since_saturday)
-
-    trades_qs = TradeJournal.active_objects.all()
+        start_date = week_start()
+ 
+    # ------------------------------------------------------------------
+    # ۲. حساب، بالانس اولیه و کوئری پایه
+    # ------------------------------------------------------------------
+    account = user or TelegramUser.objects.filter(is_blocked=False).order_by('id').first()
+    initial_balance = _dec(account.initial_balance) if account else Decimal('100.00')
+ 
+    # زمان تحقق سود = زمان خروج؛ اگر خالی بود ورود؛ اگر آن هم خالی بود زمان ثبت
+    base_qs = (
+        TradeJournal.active_objects
+        .filter(result__in=CLOSED_RESULTS)
+        .annotate(close_time=Coalesce('exit_time', 'entry_time', 'created_at'))
+    )
+    if account:
+        base_qs = base_qs.filter(user=account)
+ 
+    prior_pnl = Decimal('0.00')
+    trades_qs = base_qs
     if start_date:
-        trades_qs = trades_qs.filter(entry_time__gte=start_date)
-
-    # مرتب‌سازی صعودی برای محاسبه دقیق PnL تجمعی و نمودارها
-    trades_ascending = trades_qs.order_by('entry_time', 'created_at')
-
+        prior_pnl = _dec(
+            base_qs.filter(close_time__lt=start_date).aggregate(s=Sum(NET_PROFIT_EXPR))['s']
+        )
+        trades_qs = base_qs.filter(close_time__gte=start_date)
+ 
+    start_equity = initial_balance + prior_pnl
+    trades_ascending = list(trades_qs.order_by('close_time', 'id'))
+ 
+    # ------------------------------------------------------------------
+    # ۳. پردازش معاملات
+    # ------------------------------------------------------------------
     processed_trades = []
+    pnl_list = []
     symbol_pnl = defaultdict(Decimal)
     day_pnl = {i: Decimal('0.00') for i in range(7)}
-
-    chart_labels = ['Start']
-    cumulative_pnl_data = [0.0]
-    drawdown_data = [0.0]
-
+ 
     planned_rr_list = [0.0]
     realized_rr_list = [0.0]
-
-    running_total = Decimal('0.00')
-    peak_pnl = Decimal('0.00')
-    max_drawdown = Decimal('0.00')
-
+    chart_labels = ['Start']
+ 
     gross_wins = Decimal('0.00')
     gross_losses = Decimal('0.00')
     total_commission = Decimal('0.00')
     total_swap = Decimal('0.00')
-
-    # ۲. پردازش دقیق معاملات
+    wins = losses = be_count = 0
+ 
     for trade in trades_ascending:
-        entry = Decimal(str(trade.entry_price)) if trade.entry_price is not None else None
-        exit_p = Decimal(str(trade.exit_price)) if trade.exit_price is not None else None
-        sl = Decimal(str(trade.stop_loss)) if trade.stop_loss is not None else None
-        tp = Decimal(str(trade.take_profit)) if trade.take_profit is not None else None
-
-        # R:R برنامه‌ریزی شده
-        planned_val = 0.0
-        planned_rr = "-"
+        entry = _dec(trade.entry_price) if trade.entry_price is not None else None
+        exit_p = _dec(trade.exit_price) if trade.exit_price is not None else None
+        sl = _dec(trade.stop_loss) if trade.stop_loss is not None else None
+        tp = _dec(trade.take_profit) if trade.take_profit is not None else None
+ 
+        # R:R برنامه‌ریزی‌شده
+        planned_val, planned_rr = 0.0, "-"
         if entry and sl and tp:
             risk = abs(entry - sl)
-            reward = abs(tp - entry)
             if risk > 0:
-                planned_val = round(float(reward / risk), 2)
+                planned_val = round(float(abs(tp - entry) / risk), 2)
                 planned_rr = f"1:{planned_val:g}"
-
-        # R:R واقعی (محاسبه برای برآیند مثبت یا WIN)
-        realized_val = 0.0
-        realized_rr = "-"
-        if trade.result == 'WIN' and entry and sl and exit_p:
+ 
+        # R:R واقعی علامت‌دار (ضرر منفی)
+        realized_val, realized_rr = 0.0, "-"
+        if entry and sl and exit_p:
             risk = abs(entry - sl)
-            actual_reward = (exit_p - entry) if trade.trade_type == 'BUY' else (entry - exit_p)
             if risk > 0:
-                realized_val = round(float(actual_reward / risk), 2)
-                realized_rr = f"1:{realized_val:g}"
-
-        # سود خالص
-        pnl = Decimal(str(trade.net_profit)) if trade.net_profit is not None else Decimal('0.00')
-
-        # کمیسیون و سواپ
-        comm = Decimal(str(trade.commission)) if trade.commission is not None else Decimal('0.00')
-        swp = Decimal(str(trade.swap)) if trade.swap is not None else Decimal('0.00')
-
+                move = (exit_p - entry) if trade.trade_type == 'BUY' else (entry - exit_p)
+                realized_val = round(float(move / risk), 2)
+                realized_rr = f"{realized_val:+g}R"
+ 
+        pnl = _dec(trade.net_profit)                 # profit - abs(commission) + swap
+        comm = -abs(_dec(trade.commission))          # همیشه هزینه (منفی)، هماهنگ با net_profit
+        swp = _dec(trade.swap)
+ 
         total_commission += comm
         total_swap += swp
-
-        # تفکیک سود و زیان ناخالص
-        if pnl > 0:
+ 
+        # شمارش و جمع ناخالص هر دو بر اساس result
+        if trade.result == 'WIN':
+            wins += 1
             gross_wins += pnl
-        elif pnl < 0:
+        elif trade.result == 'LOSS':
+            losses += 1
             gross_losses += abs(pnl)
-
-        trade_time = trade.entry_time or trade.created_at
+        else:
+            be_count += 1
+ 
+        close_time = _local(trade.close_time)
         symbol_pnl[trade.symbol] += pnl
-        day_pnl[trade_time.weekday()] += pnl
-
+        day_pnl[close_time.weekday()] += pnl
+ 
+        pnl_list.append(pnl)
         planned_rr_list.append(planned_val)
         realized_rr_list.append(realized_val)
-
-        # محاسبه PnL تجمعی و Drawdown
-        running_total += pnl
-        if running_total > peak_pnl:
-            peak_pnl = running_total
-
-        current_dd = running_total - peak_pnl
-        if current_dd < max_drawdown:
-            max_drawdown = current_dd
-
-        date_str = trade_time.strftime('%Y-%m-%d %H:%M')
-        chart_labels.append(date_str)
-        cumulative_pnl_data.append(float(round(running_total, 2)))
-        drawdown_data.append(float(round(current_dd, 2)))
-
-        # مقادیر فرمت‌شده برای تمپلیت
+        chart_labels.append(close_time.strftime('%Y-%m-%d %H:%M'))
+ 
         trade.fmt_comm = float(comm)
         trade.fmt_entry = float(entry) if entry else None
         trade.fmt_exit = float(exit_p) if exit_p else None
@@ -772,155 +837,145 @@ def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_mont
         trade.calc_planned_rr = planned_rr
         trade.calc_realized_rr = realized_rr
         processed_trades.append(trade)
-
-    # ۳. محاسبات نهایی آمار کل
+ 
+    # ------------------------------------------------------------------
+    # ۴. درادان و منحنی سود
+    # ------------------------------------------------------------------
+    dd = compute_drawdown(pnl_list, start_equity)
+    cumulative_pnl_data = [0.0] + [float(round(x, 2)) for x in dd['cumulative']]
+    drawdown_data = [0.0] + [float(round(x, 2)) for x in dd['dd_pct_curve']]
+    max_drawdown_usd = dd['max_dd_usd']
+    max_drawdown_pct = dd['max_dd_pct']
+    abs_dd_pct = abs(float(max_drawdown_pct))
+    running_total = dd['total']
+ 
+    # ------------------------------------------------------------------
+    # ۵. آمار کل
+    # ------------------------------------------------------------------
     total_trades = len(processed_trades)
-    wins = sum(1 for t in processed_trades if t.result == 'WIN')
-    losses = sum(1 for t in processed_trades if t.result == 'LOSS')
-    be_count = sum(1 for t in processed_trades if t.result == 'BE')
-
-    win_rate = round((wins / total_trades * 100), 1) if total_trades > 0 else 0.0
+    win_rate = round(wins / total_trades * 100, 1) if total_trades > 0 else 0.0
     total_net_profit = float(round(running_total, 2))
-
-    # میانگین سود و زیان
+ 
     avg_win = float(round(gross_wins / wins, 2)) if wins > 0 else 0.0
     avg_loss = float(round(gross_losses / losses, 2)) if losses > 0 else 0.0
-    
-    # نسبت Payoff (میانگین سود به میانگین زیان)
-    payoff_ratio = round(avg_win / avg_loss, 2) if avg_loss > 0 else (avg_win if avg_win > 0 else 0.0)
-
-    # امید ریاضی (Expectancy)
+ 
+    if avg_loss > 0:
+        payoff_ratio = round(avg_win / avg_loss, 2)
+    elif avg_win > 0:
+        payoff_ratio = RATIO_CAP
+    else:
+        payoff_ratio = 0.0
+ 
     win_prob = wins / total_trades if total_trades > 0 else 0.0
     loss_prob = losses / total_trades if total_trades > 0 else 0.0
-    expectancy = round((win_prob * avg_win) - (loss_prob * avg_loss), 2) if total_trades > 0 else 0.0
-
-    # محاسبه Sharpe Ratio بر اساس سود/زیان هر معامله
-    trade_pnls = [float(t.net_profit) for t in processed_trades if t.net_profit is not None]
+    expectancy = round(win_prob * avg_win - loss_prob * avg_loss, 2) if total_trades > 0 else 0.0
+ 
+    # Sharpe per-trade (annualize نشده، واریانس نمونه n-1)
+    trade_pnls = [float(p) for p in pnl_list]
     if len(trade_pnls) > 1:
         mean_pnl = sum(trade_pnls) / len(trade_pnls)
-        variance = sum((x - mean_pnl) ** 2 for x in trade_pnls) / len(trade_pnls)
+        variance = sum((x - mean_pnl) ** 2 for x in trade_pnls) / (len(trade_pnls) - 1)
         std_dev = math.sqrt(variance)
         sharpe_ratio = round(mean_pnl / std_dev, 2) if std_dev > 0 else 0.0
     else:
         sharpe_ratio = 0.0
-
-    # محاسبه دقیق Profit Factor
+ 
     if gross_losses > 0:
-        profit_factor = round(float(gross_wins / gross_losses), 2)
+        profit_factor = round(min(float(gross_wins / gross_losses), RATIO_CAP), 2)
     elif gross_wins > 0:
-        profit_factor = round(float(gross_wins), 2)
+        profit_factor = RATIO_CAP
     else:
         profit_factor = 0.0
-
-    # محاسبه متوالی‌ها (Winstreaks)
+ 
     streaks_data = calculate_streaks(processed_trades)
-
-    # تعیین هوشمند نرخ پایداری سیستم بر اساس عملکرد کل
+ 
+    # ------------------------------------------------------------------
+    # ۶. بازدهی بر اساس اکوییتی ابتدای بازه و روزهای واقعی
+    # ------------------------------------------------------------------
+    start_equity_f = float(start_equity)
+    gain_percent = round(total_net_profit / start_equity_f * 100, 2) if start_equity_f > 0 else 0.0
+ 
+    if start_date:
+        period_days = max(1, (now - start_date).days)
+    elif processed_trades:
+        first_time = _local(processed_trades[0].close_time)
+        period_days = max(1, (now - first_time).days)
+    else:
+        period_days = 1
+ 
+    if total_trades > 0:
+        period_daily_return = round(gain_percent / period_days, 2)
+        period_weekly_return = round(gain_percent / period_days * 7, 2)
+        period_monthly_return = round(gain_percent / period_days * 30, 2)
+        period_annual_return = round(gain_percent / period_days * 365, 2)
+    else:
+        period_daily_return = period_weekly_return = period_monthly_return = period_annual_return = 0.0
+ 
+    # ------------------------------------------------------------------
+    # ۷. ریسک، پایداری، رادار (همه بر پایه درادان درصدی)
+    # ------------------------------------------------------------------
+    if abs_dd_pct <= 5.0:
+        risk_level_label, risk_level_color = "پایین (ایمن)", "text-emerald-400"
+    elif abs_dd_pct <= 15.0:
+        risk_level_label, risk_level_color = "متوسط (کنترل‌شده)", "text-sky-400"
+    elif abs_dd_pct <= 25.0:
+        risk_level_label, risk_level_color = "بالا (هشدار)", "text-amber-400"
+    else:
+        risk_level_label, risk_level_color = "بسیار بالا (خطرناک)", "text-rose-400"
+ 
     if profit_factor >= 2.0 and win_rate >= 50:
-        stability_label = "عالی و باثبات"
-        stability_color = "text-emerald-400"
+        stability_label, stability_color = "عالی و باثبات", "text-emerald-400"
     elif profit_factor >= 1.2 and win_rate >= 40:
-        stability_label = "بسیار خوب"
-        stability_color = "text-emerald-400"
+        stability_label, stability_color = "بسیار خوب", "text-emerald-400"
     elif profit_factor >= 1.0:
-        stability_label = "نرمال / لب‌مرز"
-        stability_color = "text-amber-400"
+        stability_label, stability_color = "نرمال / لب‌مرز", "text-amber-400"
     else:
-        stability_label = "نیاز به بازنگری ریسک"
-        stability_color = "text-rose-400"
-
-    # محاسبه امتیازات Radar (بر اساس ۵ معیار تخصصی)
-    entry_score = min(100, int(win_rate * 1.5))
-    exit_score = min(100, int(payoff_ratio * 35))
-    risk_score = max(10, 100 - int(abs(float(max_drawdown)) / 50))
-    stability_score = min(100, int((sharpe_ratio + 1) * 30))
-    tempo_score = min(100, int(total_trades * 3))
+        stability_label, stability_color = "نیاز به بازنگری ریسک", "text-rose-400"
+ 
+    entry_score = max(0, min(100, int(win_rate * 1.5)))
+    exit_score = max(0, min(100, int(payoff_ratio * 35)))
+    risk_score = max(10, min(100, 100 - int(abs_dd_pct * 2)))   # ۴۵٪ افت => ۱۰
+    stability_score = max(0, min(100, int((sharpe_ratio + 1) * 30)))
+    tempo_score = max(0, min(100, int(total_trades * 3)))
     radar_score_overall = int((entry_score + exit_score + risk_score + stability_score + tempo_score) / 5)
-
     radar_data = [entry_score, risk_score, exit_score, stability_score, tempo_score]
-
-    # بالانس اولیه پیش‌فرض جهت درصدها
-    account = TelegramUser.objects.filter(is_blocked=False).first()
-    if account:
-        initial_balance = account.initial_balance
+ 
+    # ------------------------------------------------------------------
+    # ۸. زاویه گیج‌ها
+    # ------------------------------------------------------------------
+    abs_gain_percent = abs(gain_percent)
+    gauge_angle = min(360, int((abs_gain_percent / 100) * 360)) if abs_gain_percent > 0 else 0
+    win_rate_angle = int((win_rate / 100) * 360) if win_rate > 0 else 0
+    pf_angle = min(360, int((profit_factor / 3.0) * 360)) if profit_factor > 0 else 0
+    dd_angle = min(360, int((abs_dd_pct / 50.0) * 360)) if abs_dd_pct > 0 else 0   # ۵۰٪ افت = دایره کامل
+ 
+    # ------------------------------------------------------------------
+    # ۹. انضباط ذهنی
+    # ------------------------------------------------------------------
+    win_rate_bonus = min(20.0, (win_rate / 100.0) * 25.0)
+    dd_penalty = min(25.0, abs_dd_pct * 1.5)
+    payoff_bonus = min(15.0, float(payoff_ratio) * 5.0) if payoff_ratio > 0 else 0.0
+    mental_discipline_score = max(10, min(100, int(50.0 + win_rate_bonus - dd_penalty + payoff_bonus)))
+ 
+    if mental_discipline_score >= 80:
+        discipline_label, discipline_color = "فوق‌العاده و حرفه‌ای", "text-emerald-400"
+    elif mental_discipline_score >= 60:
+        discipline_label, discipline_color = "پایدار و کنترل‌شده", "text-cyan-400"
+    elif mental_discipline_score >= 40:
+        discipline_label, discipline_color = "نیاز به تمرکز بیشتر", "text-amber-400"
     else:
-        initial_balance = Decimal('100.00')
-
-
-    gain_percent = round((total_net_profit / float(initial_balance)) * 100, 2)
-
-    # بازدهی بازه‌ها
-    period_daily_return = round(total_net_profit / 30 / float(initial_balance) * 100, 2) if total_trades > 0 else 0.0
-    period_weekly_return = round(total_net_profit / 4 / float(initial_balance) * 100, 2) if total_trades > 0 else 0.0
-    period_monthly_return = gain_percent
-    period_annual_return = round(gain_percent * 12, 2)
-
+        discipline_label, discipline_color = "رفتار هیجانی / پرخطر", "text-rose-400"
+ 
+    # ------------------------------------------------------------------
+    # ۱۰. داده‌های نمودار و context
+    # ------------------------------------------------------------------
     days_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     day_pnl_values = [float(round(day_pnl[i], 2)) for i in range(7)]
-
     symbols_list = list(symbol_pnl.keys())
     symbols_pnl_values = [float(round(symbol_pnl[s], 2)) for s in symbols_list]
-
-    # محاسبه پویا و دقیق ارزیابی سطح ریسک حساب بر اساس Drawdown
-    abs_dd = abs(float(max_drawdown))
-    if abs_dd <= 5.0:
-        risk_level_label = "پایین (ایمن)"
-        risk_level_color = "text-emerald-400"
-    elif abs_dd <= 15.0:
-        risk_level_label = "متوسط (کنترل‌شده)"
-        risk_level_color = "text-sky-400"
-    elif abs_dd <= 25.0:
-        risk_level_label = "بالا (هشدار)"
-        risk_level_color = "text-amber-400"
-    else:
-        risk_level_label = "بسیار بالا (خطرناک)"
-        risk_level_color = "text-rose-400"
-
-    abs_gain_percent = abs(gain_percent)
-
-    # تبدیل درصد به زاویه (۳۶۰ درجه) برای CSS conic-gradient
-    # محدود کردن حداکثر زاویه به ۳۶۰ درجه
-    gauge_angle = min(360, int((abs_gain_percent / 100) * 360)) if abs_gain_percent > 0 else 0
-    # تبدیل درصد وین‌ریت به زاویه برای حلقه دایره‌ای (۳۶۰ درجه)
-    win_rate_angle = int((win_rate / 100) * 360) if win_rate > 0 else 0
-    # تبدیل Profit Factor به زاویه (فرض: حداکثر مطلوب ۳.۰ معادل دایره کامل ۳۶۰ درجه)
-    pf_angle = min(360, int((float(profit_factor) / 3.0) * 360)) if profit_factor > 0 else 0
-    # تبدیل حداکثر افت حساب به زاویه (فرض: حداکثر مقیاس بحرانی ۵۰٪ افت معادل ۳۶۰ درجه)
-    # اگر خواستید حساس‌تر یا بازتر باشد می‌توانید عدد مخرج (50.0) را تغییر دهید
-    dd_angle = min(360, int((abs(float(max_drawdown)) / 50.0) * 360)) if max_drawdown else 0
-
-    # --- محاسبه پویای ضریب انضباط ذهنی (Mental Discipline Score) ---
-    # فرمول ترکیبی بر اساس وین‌ریت، کنترل دراوداون و Payoff Ratio
-    base_discipline = 50.0
-    
-    # تاثیر وین‌ریت (تا +۲۰ امتیاز)
-    win_rate_bonus = min(20.0, (win_rate / 100.0) * 25.0)
-    
-    # تاثیر کنترل دراوداون (اگر دراوداون کمتر از ۱۰٪ باشد امتیاز کامل می‌گیرد)
-    dd_val = abs(float(max_drawdown))
-    dd_penalty = min(25.0, dd_val * 1.5)
-    
-    # تاثیر نسبت Payoff (اگر بالای ۱.۵ باشد نشان‌دهنده صبر و انضباط در خروج است)
-    payoff_bonus = min(15.0, float(payoff_ratio) * 5.0) if payoff_ratio > 0 else 0.0
-
-    mental_discipline_score = max(10, min(100, int(base_discipline + win_rate_bonus - dd_penalty + payoff_bonus)))
-    
-    # تعیین رنگ و برچسب وضعیت بر اساس امتیاز انضباط
-    if mental_discipline_score >= 80:
-        discipline_label = "فوق‌العاده و حرفه‌ای"
-        discipline_color = "text-emerald-400"
-    elif mental_discipline_score >= 60:
-        discipline_label = "پایدار و کنترل‌شده"
-        discipline_color = "text-cyan-400"
-    elif mental_discipline_score >= 40:
-        discipline_label = "نیاز به تمرکز بیشتر"
-        discipline_color = "text-amber-400"
-    else:
-        discipline_label = "رفتار هیجانی / پرخطر"
-        discipline_color = "text-rose-400"
-
+ 
     context = {
-        'trades': list(processed_trades),
+        'trades': processed_trades,
         'current_period': period,
         'total_trades': total_trades,
         'win_rate': win_rate,
@@ -934,7 +989,8 @@ def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_mont
         'payoff_ratio': payoff_ratio,
         'expectancy': expectancy,
         'sharpe_ratio': sharpe_ratio,
-        'max_drawdown': float(round(max_drawdown, 2)),
+        'max_drawdown': float(round(max_drawdown_usd, 2)),       # دلاری
+        'max_drawdown_pct': float(round(max_drawdown_pct, 2)),   # درصدی
         'total_commission': float(round(total_commission, 2)),
         'total_swap': float(round(total_swap, 2)),
         'streaks': streaks_data,
@@ -943,6 +999,7 @@ def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_mont
         'radar_score_overall': radar_score_overall,
         'radar_json': json.dumps(radar_data),
         'gain_percent': gain_percent,
+        'abs_gain_percent': abs_gain_percent,
         'period_returns': {
             'daily': period_daily_return,
             'weekly': period_weekly_return,
@@ -961,25 +1018,21 @@ def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_mont
         'realized_rr_json': json.dumps(realized_rr_list),
         'risk_level_label': risk_level_label,
         'risk_level_color': risk_level_color,
-        'gain_percent': gain_percent,
-        'abs_gain_percent': abs_gain_percent,
         'gauge_angle': gauge_angle,
         'win_rate_angle': win_rate_angle,
         'pf_angle': pf_angle,
         'dd_angle': dd_angle,
         'mental_discipline_score': mental_discipline_score,
-        'discipline_label': discipline_label,   
+        'discipline_label': discipline_label,
         'discipline_color': discipline_color,
     }
-
+ 
     if req_year and req_month:
-        cal_data = get_monthly_calendar_data(req_year, req_month, initial_balance)
-        context.update(cal_data)
-
-    # دریافت پلن پیشرفت کاربر
-    user_progression_plan = get_user_progression_plan(account) if account else {}
-    context.update(user_progression_plan)
-    
+        context.update(get_monthly_calendar_data(req_year, req_month, initial_balance))
+ 
+    if account:
+        context.update(get_user_progression_plan(account))
+ 
     return context
 
 # ------------------------------------------------------------------
