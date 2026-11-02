@@ -426,138 +426,196 @@ def generate_report_charts(trades: list) -> dict:
 # ------------------------------------------------------------------
 # Calculate Tradeing Functions
 # ------------------------------------------------------------------
+# ---------- تنظیمات ----------
+MIN_HEARTS_STRONG = 4        # قلب لازم برای تریدر قوی
+MAX_HEARTS_WEAK = 10         # قلب لازم برای تریدر ضعیف
+START_REQUIRED_HEARTS = 7    # نقطه‌ی شروع (خنثی)
+MIN_TRADES_FOR_SCORE = 20    # زیر این تعداد، امتیاز خنثی
+SCORE_WINDOW = 50            # امتیاز فقط روی N معامله‌ی آخر
+EVAL_EVERY = 10              # هر چند معامله یک بار بازبینی شود
+GROWTH_CAP = Decimal('1.5')  # حداکثر رشد ریسک نسبت به مرحله‌ی قبل
+TARGET_HEARTS_PER_LEVEL = 4  # سود هر مرحله بر حسب قلب
+PAYOUT_EVERY = 4             # هر چند مرحله برداشت
+PAYOUT_RATIO = Decimal('0.10')
 
-def risk_from_reserve(reserve, base_risk,max_reserve_hearts):
+
+def _clamp01(x):
+    return max(Decimal('0'), min(Decimal('1'), x))
+
+
+def trader_quality_score(trades, base_risk):
+    """امتیاز کیفیت تریدر بین 0 تا 1. ترتیب trades باید زمانی باشد."""
+    n = len(trades)
+    if n < MIN_TRADES_FOR_SCORE:
+        return Decimal('0.5')
+
+    profits = [Decimal(str(t.net_profit)) for t in trades]
+    wins = [p for p in profits if p > 0]
+    gross_win = sum(wins, Decimal('0'))
+    gross_loss = -sum((p for p in profits if p < 0), Decimal('0'))
+
+    # ۱) وین‌ریت: 40% -> 0 ، 70% -> 1
+    win_rate = Decimal(len(wins)) / Decimal(n)
+    wr_score = _clamp01((win_rate - Decimal('0.40')) / Decimal('0.30'))
+
+    # ۲) پروفیت‌فاکتور: 1.0 -> 0 ، 2.0 -> 1
+    if gross_loss == 0:
+        pf_score = Decimal('1') if gross_win > 0 else Decimal('0')
+    else:
+        pf_score = _clamp01(gross_win / gross_loss - Decimal('1'))
+
+    # ۳) ثبات: حداکثر افت سرمایه بر حسب قلب (0 قلب -> 1 ، 10 قلب -> 0)
+    equity = peak = max_dd = Decimal('0')
+    for p in profits:
+        equity += p
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+    dd_hearts = max_dd / base_risk if base_risk > 0 else Decimal('10')
+    dd_score = _clamp01(Decimal('1') - dd_hearts / Decimal('10'))
+
+    return (Decimal('0.30') * wr_score +
+            Decimal('0.30') * pf_score +
+            Decimal('0.40') * dd_score)
+
+
+def target_hearts_from_score(score):
+    """امتیاز 1 -> 4 قلب ، امتیاز 0 -> 10 قلب"""
+    span = MAX_HEARTS_WEAK - MIN_HEARTS_STRONG
+    return MAX_HEARTS_WEAK - int((score * span).quantize(Decimal('1'), rounding=ROUND_HALF_UP))
+
+
+def smoothed_required_hearts(trades, base_risk):
     """
-    ریسک مرحله از روی ذخیره‌ی سود در شروع مرحله:
-    کوچک‌ترین مضرب ریسک پایه که قلب ذخیره از 10 بیشتر نشه،
-    و اگر کمتر از ۴ قلب موند، یک پله پایین‌تر.
+    از ابتدای تاریخچه جلو می‌رود؛ هر EVAL_EVERY معامله، امتیاز را روی
+    SCORE_WINDOW معامله‌ی آخر حساب می‌کند و required_hearts را حداکثر
+    یک پله به سمت هدف می‌برد. بدون نیاز به ذخیره در دیتابیس.
+    Returns: (required_hearts, آخرین امتیاز)
+    """
+    hearts = START_REQUIRED_HEARTS
+    score = Decimal('0.5')
+    for i in range(EVAL_EVERY, len(trades) + 1, EVAL_EVERY):
+        window = trades[max(0, i - SCORE_WINDOW):i]
+        score = trader_quality_score(window, base_risk)
+        target = target_hearts_from_score(score)
+        if target > hearts:
+            hearts += 1
+        elif target < hearts:
+            hearts -= 1
+    hearts = max(MIN_HEARTS_STRONG, min(MAX_HEARTS_WEAK, hearts))
+    return hearts, score
+
+
+def risk_from_reserve(reserve, base_risk, required_hearts, prev_risk=None):
+    """
+    بزرگ‌ترین ضریب k که ذخیره بعد از افزایش ریسک هنوز حداقل
+    required_hearts قلب بدهد؛ با سقف رشد نسبت به مرحله‌ی قبل.
     """
     if reserve <= 0:
         return base_risk
-    k = int(reserve / (base_risk * Decimal(str(max_reserve_hearts + 1)))) + 1
-    if k > 1 and int(reserve / (base_risk * k)) < MIN_RESERVE_HEARTS:
-        k -= 1
-    return base_risk * k
+    k = int(reserve / (base_risk * Decimal(required_hearts)))
+    risk = base_risk * max(k, 1)
+    if prev_risk is not None and prev_risk > 0:
+        risk = min(risk, prev_risk * GROWTH_CAP)
+    risk = max(risk, base_risk)
+    return risk.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
 
 def get_user_progression_plan(user):
-    all_trades = TradeJournal.active_objects.exclude(result='PENDING')
+    all_trades = list(
+        TradeJournal.active_objects
+        .filter(user=user)
+        .exclude(result='PENDING')
+        .order_by('exit_time') 
+    )
 
-    # ۱. محاسبه وین‌ریت معامله‌گر برای تعیین پویا ی MAX_RESERVE_HEARTS
-    total_trades = len(all_trades)
-    if total_trades > 0:
-        winning_trades = sum(1 for t in all_trades if Decimal(str(t.net_profit)) > 0)
-        win_rate = (Decimal(str(winning_trades)) / Decimal(str(total_trades))) * Decimal('100')
-    else:
-        win_rate = Decimal('50.0') # مقدار پیش‌فرض برای حساب‌های تازه بدون معامله
-        
-    # ۲. تعیین پویا ی MAX_RESERVE_HEARTS بر اساس وین‌ریت (تریدر قوی‌تر = عدد کمتر، حداقل ۵)
-    if win_rate >= Decimal('70.0'):
-        max_reserve_hearts = 5    # تریدر بسیار قوی (حداقل مجاز)
-    elif win_rate >= Decimal('60.0'):
-        max_reserve_hearts = 6
-    elif win_rate >= Decimal('50.0'):
-        max_reserve_hearts = 8
-    elif win_rate >= Decimal('40.0'):
-        max_reserve_hearts = 10
-    else:
-        max_reserve_hearts = 12   # تریدر ضعیف‌تر (نیاز به احتیاط و ذخیره بیشتر)
-    
-    # تبدیل امن بالانس اولیه و ریسک پایه به Decimal
-    base_risk = user.initial_balance / Decimal("100") if getattr(user, 'initial_balance', None) else Decimal("1.0")
-    
-    # جمع زدن سود کل معاملات
+    base_risk = (user.initial_balance / Decimal("100")
+                 if getattr(user, 'initial_balance', None) else Decimal("1.0"))
+
+    # ۱) کیفیت تریدر -> قلب لازم برای مرحله‌ی بعد (بین 4 تا 10)
+    required_hearts, quality_score = smoothed_required_hearts(all_trades, base_risk)
+
     total_net_profit = sum((Decimal(str(t.net_profit)) for t in all_trades), Decimal('0.0'))
-    
+
+    # ۲) ساخت جدول مراحل
     levels = []
     current_cumulative_profit = Decimal('0.0')
     reserve = Decimal('0.0')
+    prev_risk = None
 
-    # ساخت جدول پویای مراحل (تا ۱۰۰ مرحله)
     for lvl in range(1, 101):
-        risk_per_trade = risk_from_reserve(reserve, base_risk, max_reserve_hearts)
+        risk_per_trade = risk_from_reserve(reserve, base_risk, required_hearts, prev_risk)
+        prev_risk = risk_per_trade
         reserve_hearts = int(reserve / risk_per_trade) if risk_per_trade > 0 else 0
 
-        target_hearts = 4
-        stage_profit = risk_per_trade * Decimal(str(target_hearts))
+        stage_profit = risk_per_trade * Decimal(str(TARGET_HEARTS_PER_LEVEL))
         current_cumulative_profit += stage_profit
         reserve += stage_profit
 
-        has_payout = (lvl % 4 == 0)
-        payout_amount = reserve * Decimal('0.10') if has_payout else Decimal('0.0')
+        has_payout = (lvl % PAYOUT_EVERY == 0)
+        payout_amount = reserve * PAYOUT_RATIO if has_payout else Decimal('0.0')
         reserve -= payout_amount
 
         levels.append({
             'level_num': lvl,
             'risk_per_trade': risk_per_trade,
-            'target_hearts': target_hearts,
+            'target_hearts': TARGET_HEARTS_PER_LEVEL,
             'reserve_hearts': reserve_hearts,
             'stage_profit': stage_profit,
             'cumulative_profit': current_cumulative_profit,
             'has_payout': has_payout,
-            'payout_amount': payout_amount
+            'payout_amount': payout_amount,
         })
 
     earned_hearts_in_level = 0
     required_recovery_hearts = 0
-    is_in_loss = False
-    trend_status = ""
-    trend_color = "text-slate-400"
 
-    # 🛑 سناریوی اول: حساب در مجموع در ضرر است (منفی)
+    # 🛑 حساب در ضرر
     if total_net_profit < 0:
         is_in_loss = True
-        active_level_idx = 0
         current_level = levels[0]
         next_4_levels = levels[0:4]
-        
+
         first_stage_target = levels[0]['cumulative_profit']
         calculated_drawdown = (abs(total_net_profit) / first_stage_target) * Decimal('100')
         completion_percentage = min(100, max(1, int(calculated_drawdown)))
-        
-        # قلب‌های لازم برای جبران بر اساس ریسک سطح فعلی
+
         profit_per_heart = current_level['risk_per_trade']
         if profit_per_heart > 0:
-            div_result = abs(total_net_profit) / profit_per_heart
-            required_recovery_hearts = int(div_result.to_integral_value(rounding=ROUND_CEILING))
+            required_recovery_hearts = int(
+                (abs(total_net_profit) / profit_per_heart).to_integral_value(rounding=ROUND_CEILING)
+            )
         else:
             required_recovery_hearts = 1
-            
+
         trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}{CURENCY_UNIT}): نیازمند جبران ⚠️"
         trend_color = "text-rose-400"
-        
-    # 📈 سناریوی دوم: حساب در سود است (پیدا کردن سطح فعال بر اساس سود واقعی)
+
+    # 📈 حساب در سود
     else:
         is_in_loss = False
-        active_level_idx = 0
-        for i, lvl in enumerate(levels):
-            if total_net_profit < lvl['cumulative_profit']:
+        active_level_idx = len(levels) - 1
+        for i, lv in enumerate(levels):
+            if total_net_profit < lv['cumulative_profit']:
                 active_level_idx = i
                 break
-        else:
-            active_level_idx = len(levels) - 1
-            
+
         current_level = levels[active_level_idx]
-        start_show_idx = max(0, active_level_idx)
-        next_4_levels = levels[start_show_idx : start_show_idx + 4]
-        
-        prev_cumulative = levels[active_level_idx - 1]['cumulative_profit'] if active_level_idx > 0 else Decimal('0.0')
+        next_4_levels = levels[active_level_idx: active_level_idx + 4]
+
+        prev_cumulative = (levels[active_level_idx - 1]['cumulative_profit']
+                           if active_level_idx > 0 else Decimal('0.0'))
         progress_in_level = total_net_profit - prev_cumulative
         level_span = current_level['stage_profit']
-        
+
         if level_span > 0:
             pct_calc = (progress_in_level / level_span) * Decimal('100')
             completion_percentage = min(100, max(0, int(pct_calc.quantize(Decimal('1'), rounding=ROUND_HALF_UP))))
         else:
             completion_percentage = 0
-            
+
         profit_per_heart = current_level['risk_per_trade']
-        if profit_per_heart > 0:
-            earned_hearts_in_level = int(progress_in_level / profit_per_heart)
-        else:
-            earned_hearts_in_level = 0
-            
-        # تشخیص وضعیت روند برای نمایش پیام‌های جذاب
+        earned_hearts_in_level = int(progress_in_level / profit_per_heart) if profit_per_heart > 0 else 0
+
         if completion_percentage >= 75:
             trend_status = "نزدیک به پایان مرحله (عالی) 🚀"
             trend_color = "text-emerald-400"
@@ -567,6 +625,9 @@ def get_user_progression_plan(user):
         else:
             trend_status = "در آستانه شروع مرحله جدید 📊"
             trend_color = "text-amber-400"
+    
+    heart_slots = [i <= required_hearts for i in range(1, 11)]
+    stage_heart_slots = [i <= earned_hearts_in_level for i in range(1, TARGET_HEARTS_PER_LEVEL + 1)]
 
     return {
         'current_level_num': current_level['level_num'],
@@ -576,9 +637,13 @@ def get_user_progression_plan(user):
         'earned_hearts_in_level': earned_hearts_in_level,
         'required_recovery_hearts': required_recovery_hearts,
         'target_hearts': current_level['target_hearts'],
+        'required_hearts': required_hearts,                 # جدید: 4 تا 10
+        'quality_score': int(quality_score * 100),          # جدید: 0 تا 100
         'next_4_levels': next_4_levels,
         'trend_status': trend_status,
         'trend_color': trend_color,
+        'heart_slots': heart_slots,
+        'stage_heart_slots': stage_heart_slots, 
     }
 
 def calculate_trading_metrics(period: str='weekly', req_year: int=None, req_month: int=None) -> dict:
