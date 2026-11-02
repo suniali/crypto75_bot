@@ -20,6 +20,7 @@ from bot_app.services.chart_service import (
 from bot_app.services.api_service import fetch_recent_klines
 from bot_app.services.bakup_restore_service import backup_database
 
+from bot_app.utils.text_helpers import fmt_price
 
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
