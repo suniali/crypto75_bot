@@ -12,11 +12,8 @@ from bot_app.services.journal_service import (
     get_sl_tp_from_db,
     finalize_closed_trade_in_db
 )
-from bot_app.services.chart_service import (
-    create_journal_heikin_ashi_chart,
-    generate_pro_daily_dashboard,
-    calculate_today_stats,
-)
+from bot_app.services.chart_service import create_journal_heikin_ashi_chart
+
 from bot_app.services.api_service import fetch_recent_klines
 from bot_app.services.bakup_restore_service import backup_database
 
@@ -156,25 +153,7 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
                 # ارسال گزارش روزانه در صورت وجود معامله جدید
                 if new_deals_notified_count > 0:
                     backup_database()  # ایجاد بک‌آپ قبل از ارسال  گزارش
-
-                    stats = calculate_today_stats(closed_deals)
-                    if stats:
-                        total_trades, wins, losses, win_rate, day_net_profit, avg_win, avg_loss, profits_history = stats
-                        net_icon = "🚀" if day_net_profit >= 0 else "🔻"
-                        summary_msg = (
-                            f"📊 <b>گزارش عملکرد کل امروز ({datetime.now().strftime('%Y-%m-%d')})</b>\n\n"
-                            f"🔢 <b>مجموع معاملات امروز:</b> <code>{total_trades}</code>\n"
-                            f"✅ <b>تعداد برد:</b> <code>{wins}</code> | ❌ <b>تعداد باخت:</b> <code>{losses}</code>\n"
-                            f"🎯 <b>وین‌ریت (Win Rate):</b> <code>%{win_rate:.1f}</code>\n"
-                            f"📈 <b>میانگین سود:</b> <code>{CURENCY_UNIT}{avg_win:,.2f}</code> | 📉 <b>میانگین زیان:</b> <code>{CURENCY_UNIT}{avg_loss:,.2f}</code>\n"
-                            f"───────────────────\n"
-                            f"{net_icon} <b>سود/زیان خالص کل امروز:</b> <b><code>{CURENCY_UNIT}{day_net_profit:,.2f}</code></b>"
-                        )
-                        chart_buf = generate_pro_daily_dashboard(wins, losses, day_net_profit, win_rate, avg_win, avg_loss, profits_history)
-                        if chart_buf:
-                            await bot.send_photo(chat_id=chat_id, photo=chart_buf, caption=summary_msg, parse_mode="HTML")
-                            if hasattr(chart_buf, 'close'):
-                                chart_buf.close()
+                    
 
         except Exception as e:
             logger.error(f"Error in SL/TP monitor loop: {e}", exc_info=True)
