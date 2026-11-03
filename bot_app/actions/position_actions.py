@@ -104,6 +104,7 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
 
         # دکمه‌های کنترلی
         keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
+        keyboard.append([InlineKeyboardButton("➕ معامله جدید", callback_data="start_new_trade")])
 
         try:
             await context.bot.edit_message_text(
@@ -131,10 +132,7 @@ async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
             exc_info=True
         )
 
-async def auto_refresh_single_position_job(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    if not await security_check(update, context):
-        return
-    
+async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار جزییات یک پوزیشن خاص هر چند ثانیه یک‌بار"""
     job = context.job
     chat_id = job.chat_id
@@ -279,23 +277,33 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     keyboard = []
     for pos in positions:
-        profit = pos["profit"]
+        profit = pos.get("profit", 0.0)
         total_profit += profit
         profit_icon = "🟢" if profit >= 0 else "🔴"
 
+        symbol = pos.get('symbol', 'N/A')
+        pos_type = pos.get('type', 'N/A')
+        ticket = pos.get('ticket', '')
+        volume = pos.get('volume', 0)
+        price_open = pos.get('price_open', 0)
+        price_current = pos.get('price_current', 0)
+
         text += (
-            f"🔹 **تیکت:** `{pos['ticket']}` | **{pos['symbol']}** ({pos['type']})\n"
-            f"📊 **حجم:** `{pos['volume']}` | **ورود:** `{pos['price_open']:.5f}`\n"
-            f"📈 **قیمت فعلی:** `{pos['price_current']:.5f}`\n"
-            f"{profit_icon} **سود/ضرر:** `{profit}{CURENCY_UNIT}`\n"
+            f"🔹 <b>تیکت:</b> <code>{ticket}</code> | <b>{symbol}</b> ({pos_type})\n"
+            f"📊 <b>حجم:</b> <code>{volume}</code> | <b>ورود:</b> <code>{price_open}</code>\n"
+            f"📈 <b>قیمت فعلی:</b> <code>{price_current:.5f}</code>\n"
+            f"{profit_icon} <b>سود/ضرر:</b> <code>{profit:.2f}{CURENCY_UNIT}</code>\n"
             f"➖➖➖➖➖➖➖➖➖➖\n"
         )
 
-        # اضافه کردن دکمه مدیریت اختصاصی برای هر پوزیشن
-        keyboard.append(
-            [InlineKeyboardButton(f"⚙️ مدیریت پوزیشن {pos['ticket']}", callback_data=f"pos_detail_{pos['ticket']}")])
+        keyboard.append([
+            InlineKeyboardButton(
+                f"⚙️ مدیریت پوزیشن {ticket}",
+                callback_data=f"pos_detail_{ticket}"
+            )
+        ])
 
-    text += f"\n💰 **مجموع سود/ضرر کل:** `{round(total_profit, 2)}{CURENCY_UNIT}`"
+    text += f"\n💰 <b>مجموع سود/ضرر کل:</b> <code>{total_profit:.2f}{CURENCY_UNIT}</code>"
 
     # اضافه کردن دکمه‌های کنترلی اصلی
     keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
@@ -403,7 +411,7 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
         ],
     ]
 
-    msg = await query.edit_message_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    msg = await query.edit_message_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
     # ۳. راه اندازی آپدیت لایو اختصاصی برای این تک پوزیشن (هر ۳ ثانیه)
     if context.job_queue:

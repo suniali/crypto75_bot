@@ -22,6 +22,7 @@ bot = Bot(token=config('TELEGRAM_BOT_TOKEN'), request=request_config)
 async def security_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await TelegramUser.objects.filter(is_blocked=False).afirst()
     if update.effective_user.id != user.chat_id:
+        logger.warning(f"⚠️ Unauthorized access attempt by user ID: {update.effective_user.id}")
         await update.message.reply_text("⛔ Access Denied.")
         return False
     return True
