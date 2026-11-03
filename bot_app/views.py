@@ -93,8 +93,8 @@ def journal_dashboard(request):
     losing_notes = [t.notes for t in processed_trades if t.result == 'LOSS' and t.notes and t.notes.strip() != '']
 
     ai_analysis_data = {
-        'winning_notes': winning_notes[:5],
-        'losing_notes': losing_notes[:5],
+        'winning_notes': winning_notes[::-1][:5],
+        'losing_notes': losing_notes[::-1][:5],
     }
 
     # Pagination (نمایش معکوس برای اینکه جدیدترین معاملات در صفحه اول جدول قرار گیرند)
