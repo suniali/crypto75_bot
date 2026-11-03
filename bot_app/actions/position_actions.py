@@ -28,10 +28,7 @@ from bot_app.models import TelegramUser
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
-async def auto_refresh_positions_job(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await security_check(update, context):
-        return
-    
+async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار پیام لیست پوزیشن‌ها هر چند ثانیه یک‌بار"""
     job = context.job
     chat_id = job.chat_id
@@ -301,11 +298,9 @@ async def show_positions_handler(update: Update, context: ContextTypes.DEFAULT_T
     text += f"\n💰 **مجموع سود/ضرر کل:** `{round(total_profit, 2)}{CURENCY_UNIT}`"
 
     # اضافه کردن دکمه‌های کنترلی اصلی
-    keyboard.append([
-        [InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")],
-        [InlineKeyboardButton("➕ معامله جدید", callback_data="start_new_trade")]
-        ])
-
+    keyboard.append([InlineKeyboardButton("💥 بستن همه پوزیشن‌ها", callback_data="close_all_positions")])
+    keyboard.append([InlineKeyboardButton("➕ معامله جدید", callback_data="start_new_trade")])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # ۵. ارسال یا ویرایش پیام
