@@ -610,24 +610,29 @@
 
             <!-- ================= سوئیچ اسلایدی سوپر های‌تک (CYBER SWITCH) ================= -->
             <div class="w-full xl:w-auto flex justify-center">
-                <div class="relative flex items-center bg-slate-950/90 p-1.5 rounded-2xl border border-cyan-500/30 shadow-[0_0_25px_rgba(0,240,255,0.1)] w-full max-w-md xl:w-[420px]">
-                    <!-- اسلایدر هوشمند نئونی متحرک -->
-                    <div id="slider-indicator" class="absolute top-1.5 bottom-1.5 right-1.5 w-[calc(50%-6px)] rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 shadow-[0_0_15px_rgba(0,240,255,0.5)] transition-all duration-300 ease-out"></div>
-                    
-                    <!-- دکمه داشبورد معاملاتی -->
-                    <button type="button" onclick="switchDashboardTab('standard')" id="btn-standard" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <svg class="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M64 64c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32V64zM192 192c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H224c-17.7 0-32-14.3-32-32V192zM320 128c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32V384c0 17.7-14.3 32-32 32H352c-17.7 0-32-14.3-32-32V128zM32 448H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32z"/>
-                        </svg>
-                        <span>داشبورد معاملاتی</span>
+                <div class="relative flex items-center bg-slate-950/90 p-1.5 rounded-2xl border border-cyan-500/30 shadow-[0_0_25px_rgba(0,240,255,0.1)] w-full max-w-xl xl:w-[560px]">
+
+                    <div id="slider-indicator"
+                        class="absolute top-1.5 bottom-1.5 right-1.5 w-[calc(25%-4px)] rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 shadow-[0_0_15px_rgba(0,240,255,0.5)] transition-all duration-300 ease-out"></div>
+
+                    <button type="button" onclick="switchDashboardTab('standard')" id="btn-standard"
+                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <span>📊 داشبورد</span>
                     </button>
-                    
-                    <!-- دکمه هوش مصنوعی و روانشناسی -->
-                    <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai" class="relative z-10 w-1/2 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <svg class="w-3.5 h-3.5 text-purple-400 animate-pulse shrink-0 fill-current" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M256 0c31.6 0 62.4 6.7 90.7 19.3c-1.8 7.3-2.7 15-2.7 22.7c0 44.2 35.8 80 80 80c7.7 0 15.3-1 22.7-2.7C452.3 177.6 459 208.4 459 240c0 10.9-.7 21.6-2 32c32.7 19.1 55 54.5 55 95c0 60.1-48.8 109-109 109c-23.7 0-45.6-7.8-63.4-21c-22.3 15.5-49.7 25-79.6 25c-30 0-57.4-9.5-79.6-25c-17.8 13.2-39.7 21-63.4 21C48.8 476 0 427.2 0 367c0-40.5 22.3-75.9 55-95c-1.3-10.4-2-21.1-2-32c0-31.6 6.7-62.4 19.3-90.7c7.3 1.8 15 2.7 22.7 2.7c44.2 0 80-35.8 80-80c0-7.7-1-15.3-2.7-22.7C193.6 6.7 224.4 0 256 0z"/>
-                        </svg>
-                        <span>هوش مصنوعی AI</span>
+
+                    <button type="button" onclick="switchDashboardTab('calendar')" id="btn-calendar"
+                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <span>📅 تقویم</span>
+                    </button>
+
+                    <button type="button" onclick="switchDashboardTab('trades')" id="btn-trades"
+                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <span>📋 معاملات</span>
+                    </button>
+
+                    <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai"
+                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <span>🧠 هوش مصنوعی</span>
                     </button>
                 </div>
             </div>
@@ -688,6 +693,7 @@
                 </div>
             </div>
         </header>
+        <!-- پنل ۱: داشبورد (کارت قلب‌ها، KPIها، بخش میانی، نمودارها، R:R) -->
         <div id="standard-panel" class="max-w-7xl mx-auto space-y-8">
             <!-- ۱.۵. کارت نقشه راه رشد اکانت (سیستم قلب‌ها) -->
             <div class="rounded-2xl border border-slate-800/80 bg-[#0f172a]/95 p-5 shadow-xl">
@@ -1230,8 +1236,10 @@
                 <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
                 <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
             </div>
+        </div>
 
-            <!-- تقویم معاملاتی ماهانه (Trader Heatmap Calendar) -->
+        <!-- پنل ۲: تقویم -->
+        <div id="calendar-panel" class="max-w-7xl mx-auto space-y-8 tab-panel hidden">
             <div class="glass-card p-5 rounded-2xl  bg-[#0f172a]/90 border border-slate-800/80 shadow-2xl">
                 
                 <!-- هدر تقویم: کنترل ماه + خلاصه آمار -->
@@ -1240,12 +1248,12 @@
                     <!-- انوگیشن ماه (قبلی / بعدی) -->
                     <div class="flex items-center gap-3">
                         <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1">
-                            <a href="?year={% if current_month == 1 %}{{ current_year|add:-1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 1 %}12{% else %}{{ current_month|add:-1 }}{% endif %}" 
+                            <a href="?year={% if current_month == 1 %}{{ current_year|add:-1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 1 %}12{% else %}{{ current_month|add:-1 }}{% endif %}&period={{ current_period }}" 
                             class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
                             </a>
                             <span class="text-sm font-bold text-white px-3 font-mono">{{ month_name }}</span>
-                            <a href="?year={% if current_month == 12 %}{{ current_year|add:1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 12 %}1{% else %}{{ current_month|add:1 }}{% endif %}" 
+                            <a href="?year={% if current_month == 12 %}{{ current_year|add:1 }}{% else %}{{ current_year }}{% endif %}&month={% if current_month == 12 %}1{% else %}{{ current_month|add:1 }}{% endif %}&period={{ current_period }}" 
                             class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
                             </a>
@@ -1342,8 +1350,10 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- ۶. جدول کامل ژورنال معاملات -->
+        <!-- پنل ۳: ژورنال معاملات -->
+        <div id="trades-panel" class="max-w-7xl mx-auto space-y-8 tab-panel hidden">
             <div class="glass-card p-6 overflow-hidden  bg-[#0f172a]/90">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold text-white">📋 ریز معاملات (Journal Entries)</h2>
@@ -1538,8 +1548,7 @@
             {% endif %}
         </div>
 
-
-        <!-- ================= پنل هوش مصنوعی و روانشناسی (AI Core 2027) ================= -->
+        <!-- پنل ۴: هوش مصنوعی -->
         <div id="ai-panel" class="space-y-6 hidden transition-all duration-500">
         
             <!-- تفکیک هوشمند سناریوهای معاملاتی بر اساس یادداشت‌ها (Notes) - اشغال ۲ ستون -->
@@ -2295,8 +2304,8 @@
                     borderColor: radarBorderColor,
                     borderWidth: 2,
                     pointBackgroundColor: pointColor,
-                    pointRadius: 4
-                }]
+                    pointRadius: 4,
+                }],
             },
             options: {
                 responsive: true,
@@ -2353,82 +2362,92 @@
         }, 3000);
 
         // تابع سوئیچ بین تب‌های داشبورد استاندارد و هوش مصنوعی
-        function switchDashboardTab(tab) {
-            const standardPanel = document.getElementById('standard-panel');
-            const aiPanel = document.getElementById('ai-panel');
-            const btnStandard = document.getElementById('btn-standard');
-            const btnAi = document.getElementById('btn-ai');
-            const slider = document.getElementById('slider-indicator');
+        const DASH_TABS = ['standard', 'calendar', 'trades', 'ai'];
+        const DASH_TAB_KEY = 'dashboardActiveTab';
 
-            if (tab === 'ai') {
-                // حرکت انیمیشنی اسلایدر به سمت چپ (در حالت RTL)
-                slider.style.transform = 'translateX(-100%)';
-                
-                // تغییر رنگ و جلوه متون
-                btnAi.classList.remove('text-slate-400');
-                btnAi.classList.add('text-slate-950');
-                btnStandard.classList.remove('text-slate-950');
-                btnStandard.classList.add('text-slate-400');
-                
-                // سوییچ کامل پنل‌ها
-                if (standardPanel) standardPanel.classList.add('hidden');
-                if (aiPanel) aiPanel.classList.remove('hidden');
-            } else {
-                // بازگشت اسلایدر به جایگاه اولیه
-                slider.style.transform = 'translateX(0%)';
-                
-                // تغییر رنگ و جلوه متون
-                btnStandard.classList.remove('text-slate-400');
-                btnStandard.classList.add('text-slate-950');
-                btnAi.classList.remove('text-slate-950');
-                btnAi.classList.add('text-slate-400');
-                
-                // سوییچ کامل پنل‌ها
-                if (aiPanel) aiPanel.classList.add('hidden');
-                if (standardPanel) standardPanel.classList.remove('hidden');
-            }
-        }
+        function switchDashboardTab(tab, updateHash = true) {
+            if (!DASH_TABS.includes(tab)) tab = 'standard';
+            const index = DASH_TABS.indexOf(tab);
 
-        // تابع لود تنبل تحلیل هوش مصنوعی پس از لود کامل صفحه
-        function loadAIAnalysis() {
-        const box = document.getElementById('ai-response-box');
-        if(box.dataset.loaded === "true") return;
+            // نمایش/مخفی کردن پنل‌ها
+            DASH_TABS.forEach(t => {
+                const panel = document.getElementById(t + '-panel');
+                if (panel) panel.classList.toggle('hidden', t !== tab);
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const period = urlParams.get('period') || 'weekly';
-
-        fetch(`{% url 'api_ai_analysis' %}?period=${period}`)
-            .then(async res => {
-                if (!res.ok) {
-                    // اگر سرور ارور داد، متن ارور را از سرور بخوان و چاپ کن
-                    const errorText = await res.text();
-                    console.error("Server Error Details:", errorText);
-                    throw new Error(`HTTP error! status: ${res.status}`);
+                const btn = document.getElementById('btn-' + t);
+                if (btn) {
+                    btn.classList.toggle('text-slate-950', t === tab);
+                    btn.classList.toggle('text-slate-400', t !== tab);
                 }
-                return res.json();
-            })
-            .then(data => {
-                if(data.status === 'success') {
-                    box.innerHTML = marked.parse(data.analysis);
-                    box.dataset.loaded = "true";
-                } else {
-                    box.innerHTML = `<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[ERROR]: ${data.message || 'خطا در پردازش هوش مصنوعی'}</span></div>`;
-                }
-            })
-            .catch(err => {
-                console.error("Fetch Catch Error:", err);
-                box.innerHTML = '<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[CONNECTION_FAIL]: خطای ارتباط با سرور هوش مصنوعی (F12 را چک کنید).</span></div>';
             });
+
+            // حرکت اسلایدر (RTL: به سمت چپ = translateX منفی)
+            const slider = document.getElementById('slider-indicator');
+            if (slider) slider.style.transform = `translateX(-${index * 100}%)`;
+
+            // ذخیره تب فعلی
+            if (updateHash) history.replaceState(null, '', '#' + tab);
+            try { sessionStorage.setItem(DASH_TAB_KEY, tab); } catch (e) {}
+
+            // چارت‌ها وقتی در پنل hidden ساخته شوند اندازه‌شان صفر می‌شود؛ ریسایز کن
+            if (tab === 'standard' && window.Chart) {
+                Object.values(Chart.instances || {}).forEach(c => c.resize());
+            }
+
+            if (tab === 'ai') loadAIAnalysis();
         }
 
-        // اصلاح تابع switchDashboardTab برای اینکه به محض باز شدن تب هوش مصنوعی، دیتا فراخوانی شود
-        const originalSwitchTab = window.switchDashboardTab;
-        window.switchDashboardTab = function(tab) {
-            if(typeof originalSwitchTab === 'function') originalSwitchTab(tab);
-            if(tab === 'ai') {
-                loadAIAnalysis();
+        function loadAIAnalysis() {
+            const box = document.getElementById('ai-response-box');
+            if (!box || box.dataset.loaded === "true") return;
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const period = urlParams.get('period') || 'weekly';
+
+            fetch(`{% url 'api_ai_analysis' %}?period=${period}`)
+                .then(async res => {
+                    if (!res.ok) {
+                        const errorText = await res.text();
+                        console.error("Server Error Details:", errorText);
+                        throw new Error(`HTTP error! status: ${res.status}`);
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        box.innerHTML = marked.parse(data.analysis);
+                        box.dataset.loaded = "true";
+                    } else {
+                        box.innerHTML = `<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[ERROR]: ${data.message || 'خطا در پردازش هوش مصنوعی'}</span></div>`;
+                    }
+                })
+                .catch(err => {
+                    console.error("Fetch Catch Error:", err);
+                    box.innerHTML = '<div class="text-center py-8"><span class="text-rose-400 font-mono text-xs">[CONNECTION_FAIL]: خطای ارتباط با سرور هوش مصنوعی (F12 را چک کنید).</span></div>';
+                });
+        }
+
+        // بازیابی تب بعد از لود/رفرش: اول hash، بعد sessionStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            let tab = location.hash.replace('#', '');
+            if (!DASH_TABS.includes(tab)) {
+                try { tab = sessionStorage.getItem(DASH_TAB_KEY); } catch (e) {}
             }
-        };
+            switchDashboardTab(DASH_TABS.includes(tab) ? tab : 'standard', false);
+        });
+
+        // اگر کاربر دکمه back/forward زد یا hash دستی عوض شد
+        window.addEventListener('hashchange', () => {
+            const tab = location.hash.replace('#', '');
+            if (DASH_TABS.includes(tab)) switchDashboardTab(tab, false);
+        });
+
+        document.querySelectorAll('a[href^="?"]').forEach(a => {
+            a.addEventListener('click', () => {
+                const base = a.getAttribute('href').split('#')[0];
+                a.setAttribute('href', base + location.hash);
+            });
+        });
 
         <!-- اسکریپت آپدیت زنده ساعت (فرانت‌اند) -->
         (function () {
