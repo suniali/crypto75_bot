@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from django.db.models.functions import Abs, Coalesce
 from collections import defaultdict
+from dateutil.relativedelta import relativedelta 
 
 import numpy as np
 import pandas as pd
@@ -710,6 +711,7 @@ def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
                               req_month: int = None, user=None) -> dict:
     now = timezone.localtime(timezone.now())
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = today_start.replace(day=1)
  
     # ------------------------------------------------------------------
     # ۱. بازه زمانی
@@ -723,13 +725,17 @@ def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
     elif period == 'weekly':
         start_date = week_start()
     elif period == 'monthly':
-        start_date = now - timedelta(days=30)
+        # از اول ماه جاری
+        start_date = month_start
     elif period == '3months':
-        start_date = now - timedelta(days=90)
+        # ماه جاری + 2 ماه قبل
+        start_date = month_start - relativedelta(months=2)
     elif period == '6months':
-        start_date = now - timedelta(days=180)
+        # 6 ماه اول سال (از اول ژانویه)
+        start_date = today_start.replace(month=1, day=1)
     elif period == 'yearly':
-        start_date = now - timedelta(days=365)
+        # از اول سال جاری
+        start_date = today_start.replace(month=1, day=1)
     elif period == 'all':
         start_date = None
     else:
