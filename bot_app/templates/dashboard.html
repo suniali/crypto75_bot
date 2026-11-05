@@ -615,24 +615,52 @@
                     <div id="slider-indicator"
                         class="absolute top-1.5 bottom-1.5 right-1.5 w-[calc(25%-4px)] rounded-xl bg-gradient-to-r from-cyan-500 via-teal-400 to-purple-600 shadow-[0_0_15px_rgba(0,240,255,0.5)] transition-all duration-300 ease-out"></div>
 
+                    <!-- داشبورد -->
                     <button type="button" onclick="switchDashboardTab('standard')" id="btn-standard"
-                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <span>📊 داشبورد</span>
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-950 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="3" width="7" height="9" rx="1.5"/>
+                            <rect x="14" y="3" width="7" height="5" rx="1.5"/>
+                            <rect x="14" y="12" width="7" height="9" rx="1.5"/>
+                            <rect x="3" y="16" width="7" height="5" rx="1.5"/>
+                        </svg>
+                        <span>داشبورد</span>
                     </button>
 
+                    <!-- تقویم -->
                     <button type="button" onclick="switchDashboardTab('calendar')" id="btn-calendar"
-                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <span>📅 تقویم</span>
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="4" width="18" height="18" rx="2.5"/>
+                            <path d="M16 2v4M8 2v4M3 10h18"/>
+                            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>
+                        </svg>
+                        <span>تقویم</span>
                     </button>
 
+                    <!-- معاملات -->
                     <button type="button" onclick="switchDashboardTab('trades')" id="btn-trades"
-                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <span>📋 معاملات</span>
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9 5v4"/>
+                            <rect x="7" y="9" width="4" height="6" rx="1"/>
+                            <path d="M9 15v2"/>
+                            <path d="M17 3v2"/>
+                            <rect x="15" y="5" width="4" height="8" rx="1"/>
+                            <path d="M17 13v3"/>
+                            <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+                        </svg>
+                        <span>معاملات</span>
                     </button>
 
+                    <!-- هوش مصنوعی -->
                     <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai"
-                            class="tab-btn relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
-                        <span>🧠 هوش مصنوعی</span>
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                        <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
+                            <path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/>
+                        </svg>
+                        <span>هوش مصنوعی</span>
                     </button>
                 </div>
             </div>
