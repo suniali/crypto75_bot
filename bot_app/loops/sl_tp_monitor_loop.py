@@ -15,7 +15,11 @@ from bot_app.services.journal_service import (
     get_sl_tp_from_db,
     finalize_closed_trade_in_db
 )
-from bot_app.services.chart_service import create_journal_heikin_ashi_chart,generate_pro_daily_dashboard
+from bot_app.services.chart_service import (
+    create_journal_heikin_ashi_chart,generate_pro_daily_dashboard,
+    generate_extra_dashboards
+)
+
 
 from bot_app.services.api_service import fetch_recent_klines
 from bot_app.services.bakup_restore_service import backup_database
@@ -381,6 +385,13 @@ async def sl_tp_monitor_loop(chat_id: int, bot):
                                                 caption=short_caption, parse_mode="HTML")
                             if hasattr(chart_buf, 'close'):
                                 chart_buf.close()
+
+                            extra_charts = await asyncio.to_thread(generate_extra_dashboards, metrics)
+                            for caption, buf in extra_charts:
+                                try:
+                                    await bot.send_photo(chat_id=chat_id, photo=buf, caption=caption, parse_mode="HTML")
+                                finally:
+                                    buf.close()
 
                         sections = build_full_report_sections(metrics, "گزارش کامل عملکرد امروز")
                         for part in pack_sections(sections):

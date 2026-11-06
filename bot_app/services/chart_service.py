@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import pandas as pd
 import numpy as np
@@ -7,6 +8,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import mplfinance as mpf
 import matplotlib.gridspec as gridspec
+from matplotlib.patches import Patch
 from datetime import datetime
 
 from decouple import config
@@ -14,6 +16,8 @@ from decouple import config
 
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
+BG, GRID, TXT, TITLE = '#0D1117', '#30363D', '#8B949E', '#F0F6FC'
+GREEN, RED, BLUE, AMBER, CYAN = '#23D160', '#FF3860', '#58A6FF', '#FFB020', '#22D3EE'
 
 
 def calculate_heikin_ashi(df_ohlc: pd.DataFrame) -> pd.DataFrame:
@@ -213,6 +217,210 @@ def generate_pro_daily_dashboard(wins: int, losses: int, net_profit: float, win_
     buf.seek(0)
     plt.close(fig)
     return buf
+
+def _style_ax(ax):
+    ax.set_facecolor(BG)
+    for s in ('top', 'right'):
+        ax.spines[s].set_visible(False)
+    for s in ('left', 'bottom'):
+        ax.spines[s].set_color(GRID)
+    ax.tick_params(colors=TXT, labelsize=8)
+
+
+def _no_data(ax, title):
+    ax.set_facecolor(BG)
+    ax.set_title(title, fontsize=10, pad=8, weight='bold', color=TITLE)
+    ax.text(0.5, 0.5, 'No Data', transform=ax.transAxes, ha='center', va='center',
+            color=TXT, fontsize=10)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for s in ax.spines.values():
+        s.set_color(GRID)
+
+
+def _to_buf(fig) -> io.BytesIO:
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor(), dpi=180)
+    buf.seek(0)
+    plt.close(fig)
+    return buf
+
+def _json(m: dict, key: str) -> list:
+    """مقدار JSON-string داخل دیکشنری متریک‌ها را به لیست پایتون تبدیل می‌کند."""
+    try:
+        return json.loads(m.get(key) or '[]')
+    except (TypeError, ValueError):
+        return []
+    
+# ───────────────────────── داشبورد ۲: ریسک و انضباط ─────────────────────────
+def generate_risk_discipline_dashboard(m: dict) -> io.BytesIO:
+    plt.style.use('dark_background')
+    fig = plt.figure(figsize=(10, 7), dpi=180)
+    fig.patch.set_facecolor(BG)
+    gs = gridspec.GridSpec(2, 2, height_ratios=[1.05, 1], hspace=0.4, wspace=0.3)
+
+    # ---- درادان ----
+    ax = fig.add_subplot(gs[0, :])
+    dd = [-abs(float(v)) for v in _json(m, 'drawdown_json')]
+    if len(dd) < 2:
+        _no_data(ax, "Drawdown Curve")
+    else:
+        _style_ax(ax)
+        x = list(range(len(dd)))
+        ax.fill_between(x, dd, 0, color=RED, alpha=0.25)
+        ax.plot(x, dd, color=RED, linewidth=2.2, marker='o', markersize=4, markerfacecolor='#FFFFFF')
+        ax.axhline(0, color=GRID, linestyle='--', linewidth=1)
+        low = min(dd)
+        if low < 0:
+            i = int(np.argmin(dd))
+            ax.annotate(f"Max DD {low:.2f}%", xy=(i, low), xytext=(0, -14),
+                        textcoords='offset points', ha='center',
+                        color=RED, fontsize=9, weight='bold')
+            ax.set_ylim(low * 1.4, abs(low) * 0.1)
+        ax.set_xlabel("Trades Count", fontsize=9, color=TXT)
+        ax.set_ylabel("Drawdown (%)", fontsize=9, color=TXT)
+        ax.set_title(
+            f"Daily Drawdown  |  Max {m.get('max_drawdown_pct', 0)}%  "
+            f"({CURENCY_UNIT}{m.get('max_drawdown', 0):,.2f})",
+            fontsize=11, pad=8, weight='bold', color=TITLE)
+
+    # ---- گیج نظم ذهنی ----
+    ax = fig.add_subplot(gs[1, 0])
+    ax.set_facecolor(BG)
+    score = max(0, min(100, int(m.get('mental_discipline_score', 0))))
+    if score >= 80:
+        color, label = GREEN, "Elite"
+    elif score >= 60:
+        color, label = CYAN, "Stable"
+    elif score >= 40:
+        color, label = AMBER, "Needs Focus"
+    else:
+        color, label = RED, "Emotional / High Risk"
+    ax.pie([score, 100 - score, 100], startangle=180, counterclock=False,
+           colors=[color, '#21262D', 'none'],
+           wedgeprops=dict(width=0.35, edgecolor=BG, linewidth=2))
+    ax.set_xlim(-1.15, 1.15)
+    ax.set_ylim(-0.2, 1.15)
+    ax.text(0, 0.2, f"{score}", ha='center', va='center', fontsize=28, weight='bold', color=color)
+    ax.text(0, -0.02, f"/ 100  -  {label}", ha='center', va='center', fontsize=9, color=TXT)
+    ax.set_title("Mental Discipline", fontsize=10, pad=8, weight='bold', color=TITLE)
+
+    # ---- رادار ----
+    radar = _json(m, 'radar_json')   # [entry, risk, exit, stability, tempo]
+    if len(radar) == 5:
+        ax = fig.add_subplot(gs[1, 1], projection='polar')
+        ax.set_facecolor(BG)
+        labels = ['Entry', 'Risk', 'Exit', 'Stability', 'Tempo']
+        angles = np.linspace(0, 2 * np.pi, 5, endpoint=False).tolist()
+        vals = [float(v) for v in radar]
+        angles += angles[:1]
+        vals += vals[:1]
+        ax.plot(angles, vals, color=CYAN, linewidth=2)
+        ax.fill(angles, vals, color=CYAN, alpha=0.25)
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(labels, color='#C9D1D9', fontsize=8.5)
+        ax.set_ylim(0, 100)
+        ax.set_yticks([25, 50, 75, 100])
+        ax.set_yticklabels(['25', '50', '75', '100'], color=TXT, fontsize=6)
+        ax.grid(color=GRID)
+        ax.spines['polar'].set_color(GRID)
+        ax.set_title(f"WaveScore Radar - {m.get('radar_score_overall', 0)}/100",
+                     fontsize=10, pad=14, weight='bold', color=TITLE)
+    else:
+        _no_data(fig.add_subplot(gs[1, 1]), "WaveScore Radar")
+
+    fig.suptitle(f"RISK & DISCIPLINE - {datetime.now().strftime('%Y-%m-%d')}",
+                 fontsize=11, weight='bold', color=BLUE, y=0.98)
+    return _to_buf(fig)
+
+
+# ───────────────────────── داشبورد ۳: تفکیک عملکرد ─────────────────────────
+def generate_breakdown_dashboard(m: dict) -> io.BytesIO:
+    plt.style.use('dark_background')
+    fig = plt.figure(figsize=(10, 7.5), dpi=180)
+    fig.patch.set_facecolor(BG)
+    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 1], hspace=0.45, wspace=0.3)
+
+    # ---- سود بر اساس روز هفته ----
+    ax = fig.add_subplot(gs[0, 0])
+    day_names = [d[:3] for d in _json(m, 'days_names_json')]
+    day_vals = [float(v) for v in _json(m, 'day_pnl_json')]
+    if not day_vals or not any(day_vals):
+        _no_data(ax, "PnL by Weekday")
+    else:
+        _style_ax(ax)
+        bars = ax.bar(day_names, day_vals, color=[GREEN if v >= 0 else RED for v in day_vals],
+                      width=0.55, edgecolor=BG)
+        ax.axhline(0, color=GRID, linewidth=1)
+        for b, v in zip(bars, day_vals):
+            if v != 0:
+                ax.annotate(f"{v:,.1f}", xy=(b.get_x() + b.get_width() / 2, v),
+                            xytext=(0, 3 if v > 0 else -10), textcoords='offset points',
+                            ha='center', fontsize=7.5, weight='bold', color='#C9D1D9')
+        ax.set_title("PnL by Weekday", fontsize=10, pad=8, weight='bold', color=TITLE)
+
+    # ---- سود بر اساس نماد ----
+    ax = fig.add_subplot(gs[0, 1])
+    syms = _json(m, 'symbols_json')
+    sym_vals = [float(v) for v in _json(m, 'symbols_pnl_json')]
+    if not syms:
+        _no_data(ax, "PnL by Symbol")
+    else:
+        _style_ax(ax)
+        pairs = sorted(zip(syms, sym_vals), key=lambda p: abs(p[1]), reverse=True)[:10]
+        pairs.sort(key=lambda p: p[1])
+        names = [p[0] for p in pairs]
+        vals = [p[1] for p in pairs]
+        bars = ax.barh(names, vals, color=[GREEN if v >= 0 else RED for v in vals],
+                       height=0.55, edgecolor=BG)
+        ax.axvline(0, color=GRID, linewidth=1)
+        for b, v in zip(bars, vals):
+            ax.annotate(f"{v:,.1f}", xy=(v, b.get_y() + b.get_height() / 2),
+                        xytext=(4 if v >= 0 else -4, 0), textcoords='offset points',
+                        ha='left' if v >= 0 else 'right', va='center',
+                        fontsize=7.5, weight='bold', color='#C9D1D9')
+        ax.set_title("PnL by Symbol", fontsize=10, pad=8, weight='bold', color=TITLE)
+
+    # ---- R:R برنامه‌ای در برابر واقعی ----
+    ax = fig.add_subplot(gs[1, :])
+    planned = [float(v) for v in _json(m, 'planned_rr_json')[1:]][-25:]
+    realized = [float(v) for v in _json(m, 'realized_rr_json')[1:]][-25:]
+    if not planned:
+        _no_data(ax, "Planned R:R vs Realized R:R")
+    else:
+        _style_ax(ax)
+        x = np.arange(1, len(planned) + 1)
+        w = 0.38
+        ax.bar(x - w / 2, planned, w, color=BLUE, edgecolor=BG)
+        ax.bar(x + w / 2, realized, w,
+               color=[GREEN if v >= 0 else RED for v in realized], edgecolor=BG)
+        ax.axhline(0, color=GRID, linewidth=1)
+        ax.set_xticks(x)
+        ax.set_xlabel("Trade #", fontsize=9, color=TXT)
+        ax.set_ylabel("R multiple", fontsize=9, color=TXT)
+        ax.legend(handles=[Patch(color=BLUE, label='Planned'),
+                           Patch(color=GREEN, label='Realized (+)'),
+                           Patch(color=RED, label='Realized (-)')],
+                  fontsize=8, facecolor=BG, edgecolor=GRID, labelcolor='#C9D1D9', loc='upper right')
+        ax.set_title("Planned R:R vs Realized R:R", fontsize=10, pad=8, weight='bold', color=TITLE)
+
+    fig.suptitle(f"PERFORMANCE BREAKDOWN - {datetime.now().strftime('%Y-%m-%d')}",
+                 fontsize=11, weight='bold', color=BLUE, y=0.98)
+    return _to_buf(fig)
+
+
+def generate_extra_dashboards(m: dict) -> list[tuple[str, io.BytesIO]]:
+    """(caption, buffer) برای هر تصویر. اگر یکی خطا داد بقیه ساخته می‌شوند."""
+    out = []
+    for caption, fn in (
+        ("🛡 <b>ریسک و انضباط</b> — درادان، نظم ذهنی و رادار", generate_risk_discipline_dashboard),
+        ("📊 <b>تفکیک عملکرد</b> — روز هفته، نماد و R:R", generate_breakdown_dashboard),
+    ):
+        try:
+            out.append((caption, fn(m)))
+        except Exception:
+            logger.exception("Chart generation failed: %s", fn.__name__)
+    return out
 
 def create_journal_heikin_ashi_chart(
         df_ohlc: pd.DataFrame,
