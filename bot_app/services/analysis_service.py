@@ -711,25 +711,17 @@ def compute_drawdown(pnls, start_equity: Decimal) -> dict:
 # ----------------------------------------------------------------------
 # سشن‌های معاملاتی: ساعت‌ها به وقت محلی بازار هستند، پس DST خودکار اعمال می‌شود
 # ----------------------------------------------------------------------
+TEHRAN_TZ = ZoneInfo('Asia/Tehran')
+
+# open/close = (ساعت, دقیقه) به وقت محلی خود بازار؛ DST را zoneinfo خودکار اعمال می‌کند
 SESSIONS = [
-    {'key': 'sydney',  'name': 'سیدنی',    'icon': '🦘', 'tz': 'Australia/Sydney',  'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ سیدنی'},
-    {'key': 'tokyo',   'name': 'توکیو',    'icon': '🗼', 'tz': 'Asia/Tokyo',        'open': 9, 'close': 18, 'label': '۰۹:۰۰–۱۸:۰۰ توکیو'},
-    {'key': 'london',  'name': 'لندن',     'icon': '🎡', 'tz': 'Europe/London',     'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ لندن'},
-    {'key': 'newyork', 'name': 'نیویورک',  'icon': '🗽', 'tz': 'America/New_York',  'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ نیویورک'},
+    {'key': 'sydney',  'name': 'سیدنی',   'icon': '🦘', 'tz': 'Australia/Sydney', 'open': (7, 30), 'close': (16, 0)},
+    {'key': 'tokyo',   'name': 'توکیو',   'icon': '🗼', 'tz': 'Asia/Tokyo',       'open': (9, 0),  'close': (18, 0)},
+    {'key': 'london',  'name': 'لندن',    'icon': '🎡', 'tz': 'Europe/London',    'open': (8, 0),  'close': (17, 0)},
+    {'key': 'newyork', 'name': 'نیویورک', 'icon': '🗽', 'tz': 'America/New_York', 'open': (8, 0),  'close': (17, 0)},
 ]
 _SESSION_TZ = {s['key']: ZoneInfo(s['tz']) for s in SESSIONS}
-
-# هر ردیف: (کلید، نام، آیکون، سشن‌های لازم برای تطابق، آیا سشن اصلی است)
-SESSION_ROWS = [
-    ('sydney',         'سیدنی',            '🦘', {'sydney'},            True),
-    ('tokyo',          'توکیو',            '🗼', {'tokyo'},             True),
-    ('london',         'لندن',             '🎡', {'london'},            True),
-    ('newyork',        'نیویورک',          '🗽', {'newyork'},           True),
-    ('london_newyork', 'همپوشانی لندن/نیویورک', '🔥', {'london', 'newyork'}, False),
-    ('tokyo_london',   'همپوشانی توکیو/لندن',   '🔁', {'tokyo', 'london'},   False),
-    ('sydney_tokyo',   'همپوشانی سیدنی/توکیو',  '🔁', {'sydney', 'tokyo'},   False),
-    ('off',            'خارج از سشن‌ها',    '🌙', set(),                 False),
-]
+SESSION_META = {s['key']: s for s in SESSIONS}
 
 def _active_sessions(dt) -> set:
     """سشن‌هایی که در لحظه dt باز بودند (آخر هفته‌ی محلی هر بازار بسته است)."""
@@ -738,18 +730,126 @@ def _active_sessions(dt) -> set:
         local = dt.astimezone(_SESSION_TZ[s['key']])
         if local.weekday() >= 5:
             continue
-        if s['open'] <= local.hour < s['close']:
+        minutes = local.hour * 60 + local.minute
+        if s['open'][0] * 60 + s['open'][1] <= minutes < s['close'][0] * 60 + s['close'][1]:
             active.add(s['key'])
     return active
 
 
-def compute_session_stats(trades, start_equity) -> dict:
-    acc = {
-        key: {'trades': 0, 'wins': 0, 'losses': 0, 'be': 0,
-              'gw': Decimal('0'), 'gl': Decimal('0'), 'pnl': Decimal('0'),
-              'best': None, 'worst': None}
-        for key, *_ in SESSION_ROWS
+def _zone_key(active: set) -> str:
+    """کلید ناحیه: سشن‌های باز به ترتیب ثابت، مثل 'london_newyork' یا 'off'."""
+    keys = [s['key'] for s in SESSIONS if s['key'] in active]
+    return '_'.join(keys) if keys else 'off'
+
+
+def _zone_meta(zkey: str):
+    """(نام، آیکون، تعداد سشن‌های همزمان)"""
+    if zkey == 'off':
+        return 'خارج از سشن‌ها', '🌙', 0
+    keys = zkey.split('_')
+    if len(keys) == 1:
+        s = SESSION_META[keys[0]]
+        return f"فقط {s['name']}", s['icon'], 1
+    name = 'همپوشانی ' + ' / '.join(SESSION_META[k]['name'] for k in keys)
+    icon = '🔥' if zkey == 'london_newyork' else '🔁'
+    return name, icon, len(keys)
+
+
+def session_tehran_window(s) -> str:
+    """بازه یک سشن اصلی به وقت تهران، بر اساس DST امروز."""
+    tz = _SESSION_TZ[s['key']]
+    today = timezone.now().astimezone(tz)
+    o = today.replace(hour=s['open'][0], minute=s['open'][1], second=0, microsecond=0)
+    c = today.replace(hour=s['close'][0], minute=s['close'][1], second=0, microsecond=0)
+    return f"{o.astimezone(TEHRAN_TZ):%H:%M} تا {c.astimezone(TEHRAN_TZ):%H:%M}"
+
+
+def zone_windows_tehran() -> dict:
+    """
+    ساعت هر ناحیه (فقط یک سشن، همپوشانی، خارج از سشن) به وقت تهران.
+    یک روز کاری (چهارشنبه‌ی اخیر) را هر ۱۵ دقیقه اسکن می‌کند، پس DST فعلی خودکار لحاظ می‌شود.
+    """
+    now = timezone.now().astimezone(dt_timezone.utc)
+    ref = (now - timedelta(days=(now.weekday() - 2) % 7)).replace(
+        hour=0, minute=0, second=0, microsecond=0)
+
+    slots = defaultdict(set)   # zone_key -> {دقیقه‌ی روز به وقت تهران}
+    for i in range(96):
+        dt = ref + timedelta(minutes=15 * i)
+        th = dt.astimezone(TEHRAN_TZ)
+        slots[_zone_key(_active_sessions(dt))].add(th.hour * 60 + th.minute)
+
+    out = {}
+    for zkey, sl in slots.items():
+        if len(sl) == 96:
+            out[zkey] = 'تمام روز'
+            continue
+        starts = sorted(m for m in sl if (m - 15) % 1440 not in sl)
+        parts = []
+        for st in starts:
+            e = st
+            while (e + 15) % 1440 in sl:
+                e = (e + 15) % 1440
+            e = (e + 15) % 1440
+            parts.append(f"{st // 60:02d}:{st % 60:02d} تا {e // 60:02d}:{e % 60:02d}")
+        out[zkey] = ' و '.join(parts)
+    return out
+
+
+# ----------------------------------------------------------------------
+# انباشت و نهایی‌سازی آمار
+# ----------------------------------------------------------------------
+def _new_acc():
+    return {'trades': 0, 'wins': 0, 'losses': 0, 'be': 0,
+            'gw': Decimal('0'), 'gl': Decimal('0'), 'pnl': Decimal('0'),
+            'best': None, 'worst': None}
+
+
+def _acc_add(a, result, pnl):
+    a['trades'] += 1
+    a['pnl'] += pnl
+    if result == 'WIN':
+        a['wins'] += 1
+        a['gw'] += pnl
+    elif result == 'LOSS':
+        a['losses'] += 1
+        a['gl'] += abs(pnl)
+    else:
+        a['be'] += 1
+    a['best'] = pnl if a['best'] is None else max(a['best'], pnl)
+    a['worst'] = pnl if a['worst'] is None else min(a['worst'], pnl)
+
+
+def _finalize(a, total, eq) -> dict:
+    n = a['trades']
+    pnl = float(a['pnl'])
+    if a['gl'] > 0:
+        pf = round(min(float(a['gw'] / a['gl']), RATIO_CAP), 2)
+    else:
+        pf = RATIO_CAP if a['gw'] > 0 else 0.0
+    return {
+        'trades': n, 'wins': a['wins'], 'losses': a['losses'], 'be': a['be'],
+        'win_rate': round(a['wins'] / n * 100, 1) if n else 0.0,
+        'pnl': round(pnl, 2),
+        'pnl_pct': round(pnl / eq * 100, 2) if eq > 0 else 0.0,
+        'avg_pnl': round(pnl / n, 2) if n else 0.0,
+        'profit_factor': pf,
+        'best': float(round(a['best'], 2)) if a['best'] is not None else 0.0,
+        'worst': float(round(a['worst'], 2)) if a['worst'] is not None else 0.0,
+        'share': round(n / total * 100, 1) if total else 0.0,
     }
+
+
+def _add_bars(rows):
+    max_abs = max((abs(r['pnl']) for r in rows), default=0.0)
+    for r in rows:
+        r['bar'] = round(abs(r['pnl']) / max_abs * 100) if max_abs else 0
+
+
+def compute_session_stats(trades, start_equity) -> dict:
+    windows = zone_windows_tehran()
+    main_acc = {s['key']: _new_acc() for s in SESSIONS}   # شمارش شامل (هر سشن بازِ آن لحظه)
+    zone_acc = {}                                          # شمارش انحصاری (هر معامله یک ناحیه)
     hourly = [{'hour': h, 'trades': 0, 'pnl': Decimal('0')} for h in range(24)]
 
     for t in trades:
@@ -760,57 +860,39 @@ def compute_session_stats(trades, start_equity) -> dict:
         active = _active_sessions(when.astimezone(dt_timezone.utc))
         pnl = _dec(t.net_profit)
 
-        hourly_slot = hourly[timezone.localtime(when).hour]
-        hourly_slot['trades'] += 1
-        hourly_slot['pnl'] += pnl
+        slot = hourly[timezone.localtime(when).hour]
+        slot['trades'] += 1
+        slot['pnl'] += pnl
 
-        for key, _n, _i, needed, _m in SESSION_ROWS:
-            matched = (not active) if key == 'off' else (needed <= active)
-            if not matched:
-                continue
-            a = acc[key]
-            a['trades'] += 1
-            a['pnl'] += pnl
-            if t.result == 'WIN':
-                a['wins'] += 1
-                a['gw'] += pnl
-            elif t.result == 'LOSS':
-                a['losses'] += 1
-                a['gl'] += abs(pnl)
-            else:
-                a['be'] += 1
-            a['best'] = pnl if a['best'] is None else max(a['best'], pnl)
-            a['worst'] = pnl if a['worst'] is None else min(a['worst'], pnl)
+        for k in active:
+            _acc_add(main_acc[k], t.result, pnl)
+        _acc_add(zone_acc.setdefault(_zone_key(active), _new_acc()), t.result, pnl)
 
     total = len(trades)
     eq = float(start_equity) if start_equity else 0.0
-    rows, max_abs = [], 0.0
-    for key, name, icon, _needed, is_main in SESSION_ROWS:
-        a = acc[key]
-        n = a['trades']
-        pnl = float(a['pnl'])
-        max_abs = max(max_abs, abs(pnl))
-        if a['gl'] > 0:
-            pf = round(min(float(a['gw'] / a['gl']), RATIO_CAP), 2)
-        else:
-            pf = RATIO_CAP if a['gw'] > 0 else 0.0
-        window = next((s['label'] for s in SESSIONS if s['key'] == key), '')
-        rows.append({
-            'key': key, 'name': name, 'icon': icon, 'is_main': is_main, 'window': window,
-            'trades': n, 'wins': a['wins'], 'losses': a['losses'], 'be': a['be'],
-            'win_rate': round(a['wins'] / n * 100, 1) if n else 0.0,
-            'pnl': round(pnl, 2),
-            'pnl_pct': round(pnl / eq * 100, 2) if eq > 0 else 0.0,
-            'avg_pnl': round(pnl / n, 2) if n else 0.0,
-            'profit_factor': pf,
-            'best': float(round(a['best'], 2)) if a['best'] is not None else 0.0,
-            'worst': float(round(a['worst'], 2)) if a['worst'] is not None else 0.0,
-            'share': round(n / total * 100, 1) if total else 0.0,
-        })
-    for r in rows:
-        r['bar'] = round(abs(r['pnl']) / max_abs * 100) if max_abs else 0
 
-    main = [r for r in rows if r['is_main']]
+    # ---- چهار سشن اصلی (شامل) ----
+    main = []
+    for s in SESSIONS:
+        row = _finalize(main_acc[s['key']], total, eq)
+        row.update({'key': s['key'], 'name': s['name'], 'icon': s['icon'],
+                    'is_main': True, 'window': f"{session_tehran_window(s)} (تهران)"})
+        main.append(row)
+    _add_bars(main)
+
+    # ---- ناحیه‌های انحصاری (جمع = کل معاملات) ----
+    zkeys = set(windows) | set(zone_acc) | {'off'}
+    zones = []
+    for zk in zkeys:
+        name, icon, count = _zone_meta(zk)
+        row = _finalize(zone_acc.get(zk) or _new_acc(), total, eq)
+        row.update({'key': zk, 'name': name, 'icon': icon, 'count': count,
+                    'window': windows.get(zk, '—')})
+        zones.append(row)
+    # اول همپوشانی‌ها، بعد تک‌سشن‌ها، آخر خارج از سشن
+    zones.sort(key=lambda r: (r['count'] == 0, -r['count'], r['key']))
+    _add_bars(zones)
+
     traded = [r for r in main if r['trades'] > 0]
 
     max_h = max((abs(float(h['pnl'])) for h in hourly), default=0.0)
@@ -823,14 +905,16 @@ def compute_session_stats(trades, start_equity) -> dict:
 
     return {
         'main': main,
-        'overlaps': [r for r in rows if not r['is_main'] and r['key'] != 'off'],
-        'off': next(r for r in rows if r['key'] == 'off'),
+        'zones': zones,
+        'overlaps': [z for z in zones if z['count'] >= 2],
+        'off': next(z for z in zones if z['key'] == 'off'),
         'best': max(traded, key=lambda r: r['pnl']) if traded else None,
         'worst': min(traded, key=lambda r: r['pnl']) if traded else None,
         'most_active': max(traded, key=lambda r: r['trades']) if traded else None,
         'best_winrate': max(traded, key=lambda r: r['win_rate']) if traded else None,
         'hourly': hourly_out,
     }
+
 
 def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
                               req_month: int = None, user=None) -> dict:
