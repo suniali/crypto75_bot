@@ -1318,7 +1318,7 @@
                     <div>
                         <h2 class="text-lg font-bold text-white">🌍 تحلیل سشن‌های معاملاتی</h2>
                         <p class="mt-1 text-[11px] text-slate-500">
-                            سشن هر معامله بر اساس زمان ورود تعیین می‌شود. ساعت‌ها به وقت محلی بازار است و تغییر ساعت تابستانی خودکار اعمال می‌شود.
+                            سشن هر معامله بر اساس زمان ورود تعیین می‌شود. ساعت‌های نمایش‌داده‌شده به وقت تهران است و با تغییر ساعت تابستانی لندن و نیویورک (و سیدنی) خودکار جابه‌جا می‌شود.
                         </p>
                     </div>
                 </div>
@@ -1429,35 +1429,33 @@
 
                 <!-- همپوشانی‌ها و خارج از سشن -->
                 <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-                    <h3 class="mb-1 text-xs font-bold text-slate-300">🔥 همپوشانی سشن‌ها و ساعات خارج از سشن</h3>
-                    <p class="mb-3 text-[10px] text-slate-500">معاملات همپوشانی در هر دو سشن مربوط به خودشان هم شمرده شده‌اند، پس جمع کارت‌های بالا با کل معاملات برابر نیست.</p>
+                    <h3 class="mb-1 text-xs font-bold text-slate-300">🔥 تفکیک دقیق ساعات (سشن تنها، همپوشانی، خارج از سشن)</h3>
+                    <p class="mb-3 text-[10px] text-slate-500">
+                        در این جدول هر معامله فقط در یک ردیف شمرده می‌شود، پس جمع «سهم» ردیف‌ها ۱۰۰٪ است.
+                        ساعت‌ها به وقت تهران و بر اساس تغییر ساعت فعلی است.
+                    </p>
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-xs text-slate-300">
                             <thead class="border-b border-slate-800 text-[10px] text-slate-500">
                                 <tr>
-                                    <th class="p-2">بازه</th><th class="p-2">معاملات</th><th class="p-2">برد/باخت</th>
-                                    <th class="p-2">وین‌ریت</th><th class="p-2">PF</th><th class="p-2">سود خالص</th>
+                                    <th class="p-2">بازه</th><th class="p-2">ساعت (تهران)</th><th class="p-2">معاملات</th>
+                                    <th class="p-2">سهم</th><th class="p-2">برد/باخت</th><th class="p-2">وین‌ریت</th>
+                                    <th class="p-2">PF</th><th class="p-2">سود خالص</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-800 font-mono">
-                                {% for s in session_stats.overlaps %}
-                                <tr>
-                                    <td class="p-2 font-sans">{{ s.icon }} {{ s.name }}</td>
-                                    <td class="p-2">{{ s.trades }}</td>
-                                    <td class="p-2 dir-ltr text-right"><span class="text-emerald-400">{{ s.wins }}</span> / <span class="text-rose-400">{{ s.losses }}</span></td>
-                                    <td class="p-2">{{ s.win_rate }}%</td>
-                                    <td class="p-2">{{ s.profit_factor }}</td>
-                                    <td class="p-2 font-bold dir-ltr text-right {% if s.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ s.pnl|floatformat:2 }}</td>
+                                {% for z in session_stats.zones %}
+                                <tr class="{% if z.trades == 0 %}opacity-40{% endif %}">
+                                    <td class="p-2 font-sans">{{ z.icon }} {{ z.name }}</td>
+                                    <td class="p-2 text-[10px] text-slate-400 dir-ltr text-right">{{ z.window }}</td>
+                                    <td class="p-2">{{ z.trades }}</td>
+                                    <td class="p-2">{{ z.share }}%</td>
+                                    <td class="p-2 dir-ltr text-right"><span class="text-emerald-400">{{ z.wins }}</span> / <span class="text-rose-400">{{ z.losses }}</span></td>
+                                    <td class="p-2">{{ z.win_rate }}%</td>
+                                    <td class="p-2">{{ z.profit_factor }}</td>
+                                    <td class="p-2 font-bold dir-ltr text-right {% if z.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ z.pnl|floatformat:2 }}</td>
                                 </tr>
                                 {% endfor %}
-                                <tr>
-                                    <td class="p-2 font-sans">{{ session_stats.off.icon }} {{ session_stats.off.name }}</td>
-                                    <td class="p-2">{{ session_stats.off.trades }}</td>
-                                    <td class="p-2 dir-ltr text-right"><span class="text-emerald-400">{{ session_stats.off.wins }}</span> / <span class="text-rose-400">{{ session_stats.off.losses }}</span></td>
-                                    <td class="p-2">{{ session_stats.off.win_rate }}%</td>
-                                    <td class="p-2">{{ session_stats.off.profit_factor }}</td>
-                                    <td class="p-2 font-bold dir-ltr text-right {% if session_stats.off.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ session_stats.off.pnl|floatformat:2 }}</td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
