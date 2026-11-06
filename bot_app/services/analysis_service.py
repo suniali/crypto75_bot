@@ -9,10 +9,12 @@ import httpx
 from decimal import Decimal,ROUND_CEILING,ROUND_HALF_UP
 from datetime import timedelta
 from django.utils import timezone
+from datetime import timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from django.db.models import DecimalField, ExpressionWrapper, F, Sum
 from django.db.models.functions import Abs, Coalesce
 from collections import defaultdict
-from dateutil.relativedelta import relativedelta 
+from dateutil.relativedelta import relativedelta
 
 import numpy as np
 import pandas as pd
@@ -33,11 +35,11 @@ from bot_app.utils.ai_modules import AI_MODULES
 
 from bot_app.models import TradeJournal, TelegramUser
 
+logger = logging.getLogger(__name__)
+
 API_KEY = config('GEMINI_API_KEY', default='')
 MIN_RESERVE_HEARTS = 4   # حداقل قلب ذخیره در شروع مرحله
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
-
-logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------
 # Indicator & Technical Analysis Functions
@@ -705,8 +707,131 @@ def compute_drawdown(pnls, start_equity: Decimal) -> dict:
         'max_dd_pct': max_dd_pct,
         'total': running,
     }
- 
- 
+
+# ----------------------------------------------------------------------
+# سشن‌های معاملاتی: ساعت‌ها به وقت محلی بازار هستند، پس DST خودکار اعمال می‌شود
+# ----------------------------------------------------------------------
+SESSIONS = [
+    {'key': 'sydney',  'name': 'سیدنی',    'icon': '🦘', 'tz': 'Australia/Sydney',  'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ سیدنی'},
+    {'key': 'tokyo',   'name': 'توکیو',    'icon': '🗼', 'tz': 'Asia/Tokyo',        'open': 9, 'close': 18, 'label': '۰۹:۰۰–۱۸:۰۰ توکیو'},
+    {'key': 'london',  'name': 'لندن',     'icon': '🎡', 'tz': 'Europe/London',     'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ لندن'},
+    {'key': 'newyork', 'name': 'نیویورک',  'icon': '🗽', 'tz': 'America/New_York',  'open': 8, 'close': 17, 'label': '۰۸:۰۰–۱۷:۰۰ نیویورک'},
+]
+_SESSION_TZ = {s['key']: ZoneInfo(s['tz']) for s in SESSIONS}
+
+# هر ردیف: (کلید، نام، آیکون، سشن‌های لازم برای تطابق، آیا سشن اصلی است)
+SESSION_ROWS = [
+    ('sydney',         'سیدنی',            '🦘', {'sydney'},            True),
+    ('tokyo',          'توکیو',            '🗼', {'tokyo'},             True),
+    ('london',         'لندن',             '🎡', {'london'},            True),
+    ('newyork',        'نیویورک',          '🗽', {'newyork'},           True),
+    ('london_newyork', 'همپوشانی لندن/نیویورک', '🔥', {'london', 'newyork'}, False),
+    ('tokyo_london',   'همپوشانی توکیو/لندن',   '🔁', {'tokyo', 'london'},   False),
+    ('sydney_tokyo',   'همپوشانی سیدنی/توکیو',  '🔁', {'sydney', 'tokyo'},   False),
+    ('off',            'خارج از سشن‌ها',    '🌙', set(),                 False),
+]
+
+def _active_sessions(dt) -> set:
+    """سشن‌هایی که در لحظه dt باز بودند (آخر هفته‌ی محلی هر بازار بسته است)."""
+    active = set()
+    for s in SESSIONS:
+        local = dt.astimezone(_SESSION_TZ[s['key']])
+        if local.weekday() >= 5:
+            continue
+        if s['open'] <= local.hour < s['close']:
+            active.add(s['key'])
+    return active
+
+
+def compute_session_stats(trades, start_equity) -> dict:
+    acc = {
+        key: {'trades': 0, 'wins': 0, 'losses': 0, 'be': 0,
+              'gw': Decimal('0'), 'gl': Decimal('0'), 'pnl': Decimal('0'),
+              'best': None, 'worst': None}
+        for key, *_ in SESSION_ROWS
+    }
+    hourly = [{'hour': h, 'trades': 0, 'pnl': Decimal('0')} for h in range(24)]
+
+    for t in trades:
+        # سشن بر اساس زمان ورود؛ اگر نبود زمان خروج
+        when = t.entry_time or t.close_time
+        if timezone.is_naive(when):
+            when = timezone.make_aware(when)
+        active = _active_sessions(when.astimezone(dt_timezone.utc))
+        pnl = _dec(t.net_profit)
+
+        hourly_slot = hourly[timezone.localtime(when).hour]
+        hourly_slot['trades'] += 1
+        hourly_slot['pnl'] += pnl
+
+        for key, _n, _i, needed, _m in SESSION_ROWS:
+            matched = (not active) if key == 'off' else (needed <= active)
+            if not matched:
+                continue
+            a = acc[key]
+            a['trades'] += 1
+            a['pnl'] += pnl
+            if t.result == 'WIN':
+                a['wins'] += 1
+                a['gw'] += pnl
+            elif t.result == 'LOSS':
+                a['losses'] += 1
+                a['gl'] += abs(pnl)
+            else:
+                a['be'] += 1
+            a['best'] = pnl if a['best'] is None else max(a['best'], pnl)
+            a['worst'] = pnl if a['worst'] is None else min(a['worst'], pnl)
+
+    total = len(trades)
+    eq = float(start_equity) if start_equity else 0.0
+    rows, max_abs = [], 0.0
+    for key, name, icon, _needed, is_main in SESSION_ROWS:
+        a = acc[key]
+        n = a['trades']
+        pnl = float(a['pnl'])
+        max_abs = max(max_abs, abs(pnl))
+        if a['gl'] > 0:
+            pf = round(min(float(a['gw'] / a['gl']), RATIO_CAP), 2)
+        else:
+            pf = RATIO_CAP if a['gw'] > 0 else 0.0
+        window = next((s['label'] for s in SESSIONS if s['key'] == key), '')
+        rows.append({
+            'key': key, 'name': name, 'icon': icon, 'is_main': is_main, 'window': window,
+            'trades': n, 'wins': a['wins'], 'losses': a['losses'], 'be': a['be'],
+            'win_rate': round(a['wins'] / n * 100, 1) if n else 0.0,
+            'pnl': round(pnl, 2),
+            'pnl_pct': round(pnl / eq * 100, 2) if eq > 0 else 0.0,
+            'avg_pnl': round(pnl / n, 2) if n else 0.0,
+            'profit_factor': pf,
+            'best': float(round(a['best'], 2)) if a['best'] is not None else 0.0,
+            'worst': float(round(a['worst'], 2)) if a['worst'] is not None else 0.0,
+            'share': round(n / total * 100, 1) if total else 0.0,
+        })
+    for r in rows:
+        r['bar'] = round(abs(r['pnl']) / max_abs * 100) if max_abs else 0
+
+    main = [r for r in rows if r['is_main']]
+    traded = [r for r in main if r['trades'] > 0]
+
+    max_h = max((abs(float(h['pnl'])) for h in hourly), default=0.0)
+    hourly_out = [{
+        'hour': f"{h['hour']:02d}",
+        'trades': h['trades'],
+        'pnl': float(round(h['pnl'], 2)),
+        'bar': round(abs(float(h['pnl'])) / max_h * 100) if max_h else 0,
+    } for h in hourly]
+
+    return {
+        'main': main,
+        'overlaps': [r for r in rows if not r['is_main'] and r['key'] != 'off'],
+        'off': next(r for r in rows if r['key'] == 'off'),
+        'best': max(traded, key=lambda r: r['pnl']) if traded else None,
+        'worst': min(traded, key=lambda r: r['pnl']) if traded else None,
+        'most_active': max(traded, key=lambda r: r['trades']) if traded else None,
+        'best_winrate': max(traded, key=lambda r: r['win_rate']) if traded else None,
+        'hourly': hourly_out,
+    }
+
 def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
                               req_month: int = None, user=None) -> dict:
     now = timezone.localtime(timezone.now())
@@ -979,7 +1104,48 @@ def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
     day_pnl_values = [float(round(day_pnl[i], 2)) for i in range(7)]
     symbols_list = list(symbol_pnl.keys())
     symbols_pnl_values = [float(round(symbol_pnl[s], 2)) for s in symbols_list]
- 
+
+    # ------------------------------------------------------------------
+    # داده‌های اضافه برای سکشن «گزارش کامل»
+    # ------------------------------------------------------------------
+    best_day = worst_day = None
+    if any(day_pnl_values):
+        bi = max(range(7), key=lambda i: day_pnl_values[i])
+        wi = min(range(7), key=lambda i: day_pnl_values[i])
+        best_day = {'name': days_names[bi], 'pnl': day_pnl_values[bi]}
+        worst_day = {'name': days_names[wi], 'pnl': day_pnl_values[wi]}
+
+    symbol_ranking = sorted(
+        [{'symbol': s, 'pnl': v} for s, v in zip(symbols_list, symbols_pnl_values)],
+        key=lambda x: x['pnl'], reverse=True,
+    )
+    best_symbol = symbol_ranking[0] if symbol_ranking else None
+    worst_symbol = symbol_ranking[-1] if symbol_ranking else None
+
+    planned_vals = [x for x in planned_rr_list[1:] if x]
+    realized_vals = [x for x in realized_rr_list[1:] if x]
+    avg_planned_rr = round(sum(planned_vals) / len(planned_vals), 2) if planned_vals else 0.0
+    avg_realized_rr = round(sum(realized_vals) / len(realized_vals), 2) if realized_vals else 0.0
+
+    radar_names = ['ورود', 'ریسک', 'خروج', 'ثبات', 'ریتم']
+    radar_items = [{'name': n, 'value': v} for n, v in zip(radar_names, radar_data)]
+
+    report_extra = {
+        'best_day': best_day,
+        'worst_day': worst_day,
+        'best_symbol': best_symbol,
+        'worst_symbol': worst_symbol,
+        'symbol_ranking': symbol_ranking[:6],
+        'avg_planned_rr': avg_planned_rr,
+        'avg_realized_rr': avg_realized_rr,
+        'radar_items': radar_items,
+        'win_pct': win_rate,
+        'loss_pct': round(losses / total_trades * 100, 1) if total_trades else 0.0,
+        'be_pct': round(be_count / total_trades * 100, 1) if total_trades else 0.0,
+    }
+
+    session_stats = compute_session_stats(trades_ascending, start_equity)
+
     context = {
         'trades': processed_trades,
         'current_period': period,
@@ -1031,6 +1197,8 @@ def calculate_trading_metrics(period: str = 'weekly', req_year: int = None,
         'mental_discipline_score': mental_discipline_score,
         'discipline_label': discipline_label,
         'discipline_color': discipline_color,
+        'report_extra': report_extra,
+        'session_stats': session_stats,
     }
  
     if req_year and req_month:
