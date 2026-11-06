@@ -208,6 +208,28 @@ def build_full_report_sections(m: dict, title: str) -> list[str]:
             f"• قلب ذخیره لازم: <code>{m.get('required_hearts', '-')}</code>"
         )
 
+    ss = m.get('session_stats')
+    if ss and total:
+        lines = []
+        for s in ss['main']:
+            if s['trades']:
+                lines.append(
+                    f"{s['icon']} <b>{s['name']}</b>: <code>{s['trades']}</code> معامله | "
+                    f"وین‌ریت <code>{s['win_rate']}%</code> | "
+                    f"<code>{_money(s['pnl'])}</code> (<code>{s['pnl_pct']:+.2f}%</code>)"
+                )
+            else:
+                lines.append(f"{s['icon']} <b>{s['name']}</b>: بدون معامله")
+        lr = next((s for s in ss['overlaps'] if s['key'] == 'london_newyork' and s['trades']), None)
+        if lr:
+            lines.append(f"🔥 همپوشانی لندن/نیویورک: <code>{lr['trades']}</code> معامله | <code>{_money(lr['pnl'])}</code>")
+        if ss['off']['trades']:
+            lines.append(f"🌙 خارج از سشن: <code>{ss['off']['trades']}</code> معامله | <code>{_money(ss['off']['pnl'])}</code>")
+        if ss['best']:
+            lines.append(f"\n🏆 سودده‌ترین سشن: <b>{ss['best']['name']}</b>")
+            lines.append(f"⚠️ ضعیف‌ترین سشن: <b>{ss['worst']['name']}</b>")
+        sections.append("🌍 <b>عملکرد سشن‌ها</b>\n" + "\n".join(lines))
+        
     return sections
 
 
