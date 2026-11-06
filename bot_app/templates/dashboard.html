@@ -1264,6 +1264,226 @@
                 <h2 class="text-lg font-bold text-white mb-4">⚖️ مقایسه R:R برنامه‌ریزی‌شده در برابر R:R واقعی</h2>
                 <div class="h-64"><canvas id="rrCompareChart"></canvas></div>
             </div>
+
+            <!-- ردیف ۵: بهترین و بدترین روز / نماد -->
+            <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                <h3 class="mb-3 text-xs font-bold text-slate-300">🔀 تفکیک روز و نماد</h3>
+
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {% if report_extra.best_day %}
+                    <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
+                        <span class="block text-[10px] text-slate-500">📅 بهترین روز</span>
+                        <span class="block text-xs font-bold text-slate-200">{{ report_extra.best_day.name }}</span>
+                        <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_day.pnl|floatformat:2 }}</span>
+                    </div>
+                    <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
+                        <span class="block text-[10px] text-slate-500">📅 بدترین روز</span>
+                        <span class="block text-xs font-bold text-slate-200">{{ report_extra.worst_day.name }}</span>
+                        <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_day.pnl|floatformat:2 }}</span>
+                    </div>
+                    {% endif %}
+                    {% if report_extra.best_symbol %}
+                    <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
+                        <span class="block text-[10px] text-slate-500">🏆 بهترین نماد</span>
+                        <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.best_symbol.symbol }}</span>
+                        <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_symbol.pnl|floatformat:2 }}</span>
+                    </div>
+                    <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
+                        <span class="block text-[10px] text-slate-500">⚠️ ضعیف‌ترین نماد</span>
+                        <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.worst_symbol.symbol }}</span>
+                        <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_symbol.pnl|floatformat:2 }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if report_extra.symbol_ranking|length > 2 %}
+                <div class="mt-4 border-t border-slate-800 pt-3">
+                    <span class="mb-2 block text-[11px] text-slate-400">رتبه‌بندی نمادها</span>
+                    <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3">
+                        {% for item in report_extra.symbol_ranking %}
+                        <div class="flex items-center justify-between rounded-lg bg-slate-950/60 px-3 py-1.5 text-[11px]">
+                            <span class="font-mono text-slate-300">{{ forloop.counter }}. {{ item.symbol }}</span>
+                            <span class="font-mono font-bold dir-ltr {% if item.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ item.pnl|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- ۸. تحلیل سشن‌های معاملاتی -->
+            <section class="rounded-2xl border border-slate-800/80 bg-[#0f172a]/90 p-6 shadow-xl space-y-6">
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">🌍 تحلیل سشن‌های معاملاتی</h2>
+                        <p class="mt-1 text-[11px] text-slate-500">
+                            سشن هر معامله بر اساس زمان ورود تعیین می‌شود. ساعت‌ها به وقت محلی بازار است و تغییر ساعت تابستانی خودکار اعمال می‌شود.
+                        </p>
+                    </div>
+                </div>
+
+                {% if total_trades == 0 %}
+                    <p class="py-10 text-center text-sm text-slate-500">در این بازه معامله‌ای ثبت نشده است.</p>
+                {% else %}
+
+                <!-- هایلایت‌ها -->
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                    {% if session_stats.best %}
+                    <div class="rounded-xl border border-emerald-500/20 bg-slate-900/50 p-3.5">
+                        <span class="block text-[10px] text-slate-500">🏆 سودده‌ترین سشن</span>
+                        <span class="block text-sm font-bold text-white">{{ session_stats.best.icon }} {{ session_stats.best.name }}</span>
+                        <span class="font-mono text-xs font-black dir-ltr {% if session_stats.best.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ session_stats.best.pnl|floatformat:2 }}</span>
+                    </div>
+                    <div class="rounded-xl border border-rose-500/20 bg-slate-900/50 p-3.5">
+                        <span class="block text-[10px] text-slate-500">⚠️ ضعیف‌ترین سشن</span>
+                        <span class="block text-sm font-bold text-white">{{ session_stats.worst.icon }} {{ session_stats.worst.name }}</span>
+                        <span class="font-mono text-xs font-black dir-ltr {% if session_stats.worst.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ session_stats.worst.pnl|floatformat:2 }}</span>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3.5">
+                        <span class="block text-[10px] text-slate-500">⚡ فعال‌ترین سشن</span>
+                        <span class="block text-sm font-bold text-white">{{ session_stats.most_active.icon }} {{ session_stats.most_active.name }}</span>
+                        <span class="font-mono text-xs text-slate-300">{{ session_stats.most_active.trades }} معامله ({{ session_stats.most_active.share }}%)</span>
+                    </div>
+                    <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-3.5">
+                        <span class="block text-[10px] text-slate-500">🎯 بهترین وین‌ریت</span>
+                        <span class="block text-sm font-bold text-white">{{ session_stats.best_winrate.icon }} {{ session_stats.best_winrate.name }}</span>
+                        <span class="font-mono text-xs text-sky-400">{{ session_stats.best_winrate.win_rate }}%</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- کارت چهار سشن اصلی -->
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {% for s in session_stats.main %}
+                    <div class="rounded-xl border bg-slate-900/50 p-4
+                        {% if s.trades == 0 %}border-slate-800/60 opacity-60
+                        {% elif s.pnl > 0 %}border-emerald-500/30
+                        {% elif s.pnl < 0 %}border-rose-500/30
+                        {% else %}border-slate-800{% endif %}">
+
+                        <div class="flex items-start justify-between">
+                            <div>
+                                <h3 class="text-sm font-bold text-white">{{ s.icon }} {{ s.name }}</h3>
+                                <p class="text-[10px] text-slate-500">{{ s.window }}</p>
+                            </div>
+                            <span class="rounded-md bg-slate-950/70 px-2 py-0.5 font-mono text-[11px] font-bold text-sky-400">{{ s.trades }} معامله</span>
+                        </div>
+
+                        {% if s.trades == 0 %}
+                            <p class="py-6 text-center text-xs text-slate-500">در این سشن معامله‌ای نداشته‌ای.</p>
+                        {% else %}
+                        <div class="mt-3 flex items-baseline justify-between">
+                            <span class="font-mono text-xl font-black dir-ltr {% if s.pnl > 0 %}text-emerald-400{% elif s.pnl < 0 %}text-rose-400{% else %}text-slate-300{% endif %}">
+                                {% if s.pnl > 0 %}+{% endif %}{{ unit }}{{ s.pnl|floatformat:2 }}
+                            </span>
+                            <span class="font-mono text-[11px] dir-ltr {% if s.pnl_pct > 0 %}text-emerald-400{% elif s.pnl_pct < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
+                                {% if s.pnl_pct > 0 %}+{% endif %}{{ s.pnl_pct }}%
+                            </span>
+                        </div>
+
+                        <!-- وین‌ریت -->
+                        <div class="mt-3">
+                            <div class="mb-1 flex justify-between text-[11px] text-slate-400">
+                                <span>وین‌ریت</span>
+                                <span class="font-mono font-bold text-white">{{ s.win_rate }}%</span>
+                            </div>
+                            <div class="h-2 w-full overflow-hidden rounded-full bg-slate-900" dir="ltr">
+                                <div class="h-full rounded-full bg-sky-400" style="width: {{ s.win_rate }}%"></div>
+                            </div>
+                        </div>
+
+                        <div class="mt-3 grid grid-cols-3 gap-1.5 text-center font-mono text-[11px]">
+                            <div class="rounded-lg bg-slate-950/60 py-1"><span class="block font-sans text-[9px] text-slate-500">برد</span><span class="font-bold text-emerald-400">{{ s.wins }}</span></div>
+                            <div class="rounded-lg bg-slate-950/60 py-1"><span class="block font-sans text-[9px] text-slate-500">باخت</span><span class="font-bold text-rose-400">{{ s.losses }}</span></div>
+                            <div class="rounded-lg bg-slate-950/60 py-1"><span class="block font-sans text-[9px] text-slate-500">BE</span><span class="font-bold text-slate-300">{{ s.be }}</span></div>
+                        </div>
+
+                        <dl class="mt-3 space-y-1.5 border-t border-slate-800 pt-3 text-[11px]">
+                            <div class="flex justify-between"><dt class="text-slate-400">Profit Factor</dt><dd class="font-mono font-bold {% if s.profit_factor >= 1.2 %}text-emerald-400{% elif s.profit_factor >= 1 %}text-amber-400{% else %}text-rose-400{% endif %}">{{ s.profit_factor }}</dd></div>
+                            <div class="flex justify-between"><dt class="text-slate-400">میانگین هر معامله</dt><dd class="font-mono dir-ltr {% if s.avg_pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ s.avg_pnl|floatformat:2 }}</dd></div>
+                            <div class="flex justify-between"><dt class="text-slate-400">بهترین معامله</dt><dd class="font-mono text-emerald-400 dir-ltr">{{ unit }}{{ s.best|floatformat:2 }}</dd></div>
+                            <div class="flex justify-between"><dt class="text-slate-400">بدترین معامله</dt><dd class="font-mono text-rose-400 dir-ltr">{{ unit }}{{ s.worst|floatformat:2 }}</dd></div>
+                            <div class="flex justify-between"><dt class="text-slate-400">سهم از کل معاملات</dt><dd class="font-mono text-slate-200">{{ s.share }}%</dd></div>
+                        </dl>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- مقایسه سود سشن‌ها -->
+                <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                    <h3 class="mb-3 text-xs font-bold text-slate-300">📊 مقایسه سود و زیان سشن‌ها</h3>
+                    <div class="space-y-2">
+                        {% for s in session_stats.main %}
+                        <div class="flex items-center gap-3 text-[11px]">
+                            <span class="w-20 shrink-0 text-slate-300">{{ s.icon }} {{ s.name }}</span>
+                            <div class="h-3 flex-1 overflow-hidden rounded-full bg-slate-900" dir="ltr">
+                                <div class="h-full rounded-full {% if s.pnl >= 0 %}bg-emerald-400{% else %}bg-rose-500{% endif %}" style="width: {{ s.bar }}%"></div>
+                            </div>
+                            <span class="w-24 shrink-0 text-left font-mono font-bold dir-ltr {% if s.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ s.pnl|floatformat:2 }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- همپوشانی‌ها و خارج از سشن -->
+                <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                    <h3 class="mb-1 text-xs font-bold text-slate-300">🔥 همپوشانی سشن‌ها و ساعات خارج از سشن</h3>
+                    <p class="mb-3 text-[10px] text-slate-500">معاملات همپوشانی در هر دو سشن مربوط به خودشان هم شمرده شده‌اند، پس جمع کارت‌های بالا با کل معاملات برابر نیست.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-xs text-slate-300">
+                            <thead class="border-b border-slate-800 text-[10px] text-slate-500">
+                                <tr>
+                                    <th class="p-2">بازه</th><th class="p-2">معاملات</th><th class="p-2">برد/باخت</th>
+                                    <th class="p-2">وین‌ریت</th><th class="p-2">PF</th><th class="p-2">سود خالص</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 font-mono">
+                                {% for s in session_stats.overlaps %}
+                                <tr>
+                                    <td class="p-2 font-sans">{{ s.icon }} {{ s.name }}</td>
+                                    <td class="p-2">{{ s.trades }}</td>
+                                    <td class="p-2 dir-ltr text-right"><span class="text-emerald-400">{{ s.wins }}</span> / <span class="text-rose-400">{{ s.losses }}</span></td>
+                                    <td class="p-2">{{ s.win_rate }}%</td>
+                                    <td class="p-2">{{ s.profit_factor }}</td>
+                                    <td class="p-2 font-bold dir-ltr text-right {% if s.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ s.pnl|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                                <tr>
+                                    <td class="p-2 font-sans">{{ session_stats.off.icon }} {{ session_stats.off.name }}</td>
+                                    <td class="p-2">{{ session_stats.off.trades }}</td>
+                                    <td class="p-2 dir-ltr text-right"><span class="text-emerald-400">{{ session_stats.off.wins }}</span> / <span class="text-rose-400">{{ session_stats.off.losses }}</span></td>
+                                    <td class="p-2">{{ session_stats.off.win_rate }}%</td>
+                                    <td class="p-2">{{ session_stats.off.profit_factor }}</td>
+                                    <td class="p-2 font-bold dir-ltr text-right {% if session_stats.off.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ session_stats.off.pnl|floatformat:2 }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- توزیع ساعتی -->
+                <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                    <h3 class="mb-1 text-xs font-bold text-slate-300">🕐 عملکرد بر اساس ساعت شبانه‌روز (به وقت محلی خودت)</h3>
+                    <p class="mb-3 text-[10px] text-slate-500">ارتفاع هر ستون قدر مطلق سود یا زیان آن ساعت است. عدد بالای هر ستون تعداد معاملات است.</p>
+                    <div class="flex h-32 items-end gap-1" dir="ltr">
+                        {% for h in session_stats.hourly %}
+                        <div class="flex h-full flex-1 flex-col items-center justify-end"
+                            title="{{ h.hour }}:00 | {{ h.trades }} معامله | {{ unit }}{{ h.pnl }}">
+                            {% if h.trades %}<span class="mb-0.5 font-mono text-[8px] text-slate-400">{{ h.trades }}</span>{% endif %}
+                            <div class="w-full rounded-t {% if h.pnl >= 0 %}bg-emerald-400{% else %}bg-rose-500{% endif %}"
+                                style="height: {% if h.trades %}{% if h.bar < 4 %}4{% else %}{{ h.bar }}{% endif %}{% else %}0{% endif %}%"></div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-1 flex gap-1 font-mono text-[8px] text-slate-500" dir="ltr">
+                        {% for h in session_stats.hourly %}<span class="flex-1 text-center">{{ h.hour }}</span>{% endfor %}
+                    </div>
+                </div>
+
+                {% endif %}
+            </section>
         </div>
 
         <!-- پنل ۲: تقویم -->
