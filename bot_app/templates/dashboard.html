@@ -1266,51 +1266,52 @@
             </div>
 
             <!-- ردیف ۵: بهترین و بدترین روز / نماد -->
-            <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-                <h3 class="mb-3 text-xs font-bold text-slate-300">🔀 تفکیک روز و نماد</h3>
+            {% if current_period != 'daily' %}
+                <div class="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
+                    <h3 class="mb-3 text-xs font-bold text-slate-300">🔀 تفکیک روز و نماد</h3>
 
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    {% if report_extra.best_day %}
-                    <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
-                        <span class="block text-[10px] text-slate-500">📅 بهترین روز</span>
-                        <span class="block text-xs font-bold text-slate-200">{{ report_extra.best_day.name }}</span>
-                        <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_day.pnl|floatformat:2 }}</span>
-                    </div>
-                    <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
-                        <span class="block text-[10px] text-slate-500">📅 بدترین روز</span>
-                        <span class="block text-xs font-bold text-slate-200">{{ report_extra.worst_day.name }}</span>
-                        <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_day.pnl|floatformat:2 }}</span>
-                    </div>
-                    {% endif %}
-                    {% if report_extra.best_symbol %}
-                    <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
-                        <span class="block text-[10px] text-slate-500">🏆 بهترین نماد</span>
-                        <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.best_symbol.symbol }}</span>
-                        <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_symbol.pnl|floatformat:2 }}</span>
-                    </div>
-                    <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
-                        <span class="block text-[10px] text-slate-500">⚠️ ضعیف‌ترین نماد</span>
-                        <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.worst_symbol.symbol }}</span>
-                        <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_symbol.pnl|floatformat:2 }}</span>
-                    </div>
-                    {% endif %}
-                </div>
-
-                {% if report_extra.symbol_ranking|length > 2 %}
-                <div class="mt-4 border-t border-slate-800 pt-3">
-                    <span class="mb-2 block text-[11px] text-slate-400">رتبه‌بندی نمادها</span>
-                    <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3">
-                        {% for item in report_extra.symbol_ranking %}
-                        <div class="flex items-center justify-between rounded-lg bg-slate-950/60 px-3 py-1.5 text-[11px]">
-                            <span class="font-mono text-slate-300">{{ forloop.counter }}. {{ item.symbol }}</span>
-                            <span class="font-mono font-bold dir-ltr {% if item.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ item.pnl|floatformat:2 }}</span>
+                    <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                        {% if report_extra.best_day %}
+                        <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
+                            <span class="block text-[10px] text-slate-500">📅 بهترین روز</span>
+                            <span class="block text-xs font-bold text-slate-200">{{ report_extra.best_day.name }}</span>
+                            <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_day.pnl|floatformat:2 }}</span>
                         </div>
-                        {% endfor %}
+                        <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
+                            <span class="block text-[10px] text-slate-500">📅 بدترین روز</span>
+                            <span class="block text-xs font-bold text-slate-200">{{ report_extra.worst_day.name }}</span>
+                            <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_day.pnl|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                        {% if report_extra.best_symbol %}
+                        <div class="rounded-lg border border-emerald-500/20 bg-slate-950/60 p-3">
+                            <span class="block text-[10px] text-slate-500">🏆 بهترین نماد</span>
+                            <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.best_symbol.symbol }}</span>
+                            <span class="font-mono text-xs font-black text-emerald-400 dir-ltr">{{ unit }}{{ report_extra.best_symbol.pnl|floatformat:2 }}</span>
+                        </div>
+                        <div class="rounded-lg border border-rose-500/20 bg-slate-950/60 p-3">
+                            <span class="block text-[10px] text-slate-500">⚠️ ضعیف‌ترین نماد</span>
+                            <span class="block text-xs font-bold text-slate-200 font-mono">{{ report_extra.worst_symbol.symbol }}</span>
+                            <span class="font-mono text-xs font-black text-rose-400 dir-ltr">{{ unit }}{{ report_extra.worst_symbol.pnl|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
                     </div>
-                </div>
-                {% endif %}
-            </div>
 
+                    {% if report_extra.symbol_ranking|length > 2 %}
+                    <div class="mt-4 border-t border-slate-800 pt-3">
+                        <span class="mb-2 block text-[11px] text-slate-400">رتبه‌بندی نمادها</span>
+                        <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3">
+                            {% for item in report_extra.symbol_ranking %}
+                            <div class="flex items-center justify-between rounded-lg bg-slate-950/60 px-3 py-1.5 text-[11px]">
+                                <span class="font-mono text-slate-300">{{ forloop.counter }}. {{ item.symbol }}</span>
+                                <span class="font-mono font-bold dir-ltr {% if item.pnl >= 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">{{ unit }}{{ item.pnl|floatformat:2 }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
             <!-- ۸. تحلیل سشن‌های معاملاتی -->
             <section class="rounded-2xl border border-slate-800/80 bg-[#0f172a]/90 p-6 shadow-xl space-y-6">
 
