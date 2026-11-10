@@ -431,7 +431,6 @@ def generate_report_charts(trades: list) -> dict:
 # ------------------------------------------------------------------
 # Calculate Tradeing Functions
 # ------------------------------------------------------------------
-# ---------- تنظیمات ----------
 MIN_HEARTS_STRONG = 4        # قلب لازم برای تریدر قوی
 MAX_HEARTS_WEAK = 10         # قلب لازم برای تریدر ضعیف
 START_REQUIRED_HEARTS = 7    # نقطه‌ی شروع (خنثی)
@@ -442,6 +441,11 @@ GROWTH_CAP = Decimal('1.5')  # حداکثر رشد ریسک نسبت به مرح
 TARGET_HEARTS_PER_LEVEL = 4  # سود هر مرحله بر حسب قلب
 PAYOUT_EVERY = 4             # هر چند مرحله برداشت
 PAYOUT_RATIO = Decimal('0.10')
+DEFENSE_LOSS_HEARTS_PER_STEP = 3        # هر ۳ قلب ضرر = یک پله کاهش
+DEFENSE_STEP_DOWN = Decimal('0.25')     # هر پله ۲۵٪ از ریسک کم می‌کند
+DEFENSE_MIN_FACTOR = Decimal('0.25')    # کف: ۲۵٪ ریسک پایه
+LOSS_STREAK_PER_STEP = 3         # هر ۳ ضرر متوالی = یک پله کاهش
+WIN_STREAK_PER_STEP_BACK = 2     # هر ۲ برد متوالی = یک پله برگشت
 
 
 def _clamp01(x):
@@ -524,6 +528,64 @@ def risk_from_reserve(reserve, base_risk, required_hearts, prev_risk=None):
     risk = max(risk, base_risk)
     return risk.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
+def streak_defense_steps(trades):
+    """
+    تاریخچه را به ترتیب زمانی بازپخش می‌کند و تعداد پله‌های کاهش ناشی از
+    ضرر متوالی را برمی‌گرداند.
+    """
+    max_steps = int((Decimal('1') - DEFENSE_MIN_FACTOR) / DEFENSE_STEP_DOWN)
+    steps = loss_run = win_run = 0
+    for t in trades:
+        p = Decimal(str(t.net_profit))
+        if p < 0:
+            loss_run += 1
+            win_run = 0
+            if loss_run % LOSS_STREAK_PER_STEP == 0:
+                steps = min(steps + 1, max_steps)
+        elif p > 0:
+            win_run += 1
+            loss_run = 0
+            if win_run % WIN_STREAK_PER_STEP_BACK == 0:
+                steps = max(steps - 1, 0)
+    return steps
+
+def current_loss_streak(trades):
+    """تعداد ضرر متوالی در انتهای تاریخچه (برای نمایش)"""
+    n = 0
+    for t in reversed(trades):
+        p = Decimal(str(t.net_profit))
+        if p < 0:
+            n += 1
+        elif p > 0:
+            break
+    return n
+
+def defensive_risk(base_risk, level_risk, total_net_profit, streak_steps=0):
+    """
+    ریسک دفاعی: بیشینه‌ی دو قانون
+      ۱) ضرر خالص حساب (زیر صفر)
+      ۲) ضرر متوالی
+    Returns: (ریسک جدید، تعداد پله‌ی کاهش، دلیل: '' / 'loss' / 'streak')
+    """
+    max_steps = int((Decimal('1') - DEFENSE_MIN_FACTOR) / DEFENSE_STEP_DOWN)
+
+    loss_steps = 0
+    if total_net_profit < 0:
+        loss_hearts = abs(total_net_profit) / base_risk
+        loss_steps = int(loss_hearts / Decimal(DEFENSE_LOSS_HEARTS_PER_STEP))
+
+    steps = min(max(loss_steps, streak_steps), max_steps)
+    factor = Decimal('1') - DEFENSE_STEP_DOWN * steps
+    risk = max((level_risk * factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP),
+               Decimal('0.01'))
+
+    if steps == 0:
+        reason = ''
+    elif loss_steps >= streak_steps:
+        reason = 'loss'
+    else:
+        reason = 'streak'
+    return risk, steps, reason
 
 def get_user_progression_plan(user):
     all_trades = list(
@@ -540,6 +602,8 @@ def get_user_progression_plan(user):
     required_hearts, quality_score = smoothed_required_hearts(all_trades, base_risk)
 
     total_net_profit = sum((Decimal(str(t.net_profit)) for t in all_trades), Decimal('0.0'))
+    streak_steps = streak_defense_steps(all_trades)
+    loss_streak = current_loss_streak(all_trades)
 
     # ۲) ساخت جدول مراحل
     levels = []
@@ -584,13 +648,16 @@ def get_user_progression_plan(user):
         calculated_drawdown = (abs(total_net_profit) / first_stage_target) * Decimal('100')
         completion_percentage = min(100, max(1, int(calculated_drawdown)))
 
-        profit_per_heart = current_level['risk_per_trade']
-        if profit_per_heart > 0:
-            required_recovery_hearts = int(
-                (abs(total_net_profit) / profit_per_heart).to_integral_value(rounding=ROUND_CEILING)
-            )
-        else:
-            required_recovery_hearts = 1
+         # ریسک دفاعی (زیر ریسک پایه)
+        normal_risk = current_level['risk_per_trade']
+        current_risk, defense_steps, defense_reason = defensive_risk(
+            base_risk, normal_risk, total_net_profit, streak_steps
+        )
+
+       # قلب‌های جبران بر اساس ریسک دفاعی فعلی
+        required_recovery_hearts = int(
+            (abs(total_net_profit) / current_risk).to_integral_value(rounding=ROUND_CEILING)
+        )
 
         trend_status = f"حساب در ضرر (-{abs(total_net_profit):.1f}{CURENCY_UNIT}): نیازمند جبران ⚠️"
         trend_color = "text-rose-400"
@@ -605,6 +672,10 @@ def get_user_progression_plan(user):
                 break
 
         current_level = levels[active_level_idx]
+        normal_risk = current_level['risk_per_trade']
+        current_risk, defense_steps, defense_reason = defensive_risk(
+            base_risk, normal_risk, total_net_profit, streak_steps
+        )
         next_4_levels = levels[active_level_idx: active_level_idx + 4]
 
         prev_cumulative = (levels[active_level_idx - 1]['cumulative_profit']
@@ -636,7 +707,13 @@ def get_user_progression_plan(user):
 
     return {
         'current_level_num': current_level['level_num'],
-        'current_risk': current_level['risk_per_trade'],
+        'current_risk': current_risk,
+        'normal_risk': normal_risk,               # ریسک عادی همین سطح، بدون دفاع
+        'defense_steps': defense_steps,
+        'defense_reason': defense_reason,         # '' / 'loss' / 'streak'
+        'is_defensive': defense_steps > 0,
+        'loss_streak': loss_streak,
+        'WIN_STREAK_PER_STEP_BACK': WIN_STREAK_PER_STEP_BACK,
         'completion_percentage': completion_percentage,
         'is_in_loss': is_in_loss,
         'earned_hearts_in_level': earned_hearts_in_level,
