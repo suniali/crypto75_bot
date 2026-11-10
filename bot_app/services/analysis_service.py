@@ -715,7 +715,7 @@ TEHRAN_TZ = ZoneInfo('Asia/Tehran')
 
 # open/close = (ساعت, دقیقه) به وقت محلی خود بازار؛ DST را zoneinfo خودکار اعمال می‌کند
 SESSIONS = [
-    {'key': 'sydney',  'name': 'سیدنی',   'icon': '🦘', 'tz': 'Australia/Sydney', 'open': (7, 30), 'close': (16, 0)},
+    {'key': 'sydney',  'name': 'سیدنی',   'icon': '🦘', 'tz': 'Australia/Sydney', 'open': (7, 0), 'close': (16, 0)},
     {'key': 'tokyo',   'name': 'توکیو',   'icon': '🗼', 'tz': 'Asia/Tokyo',       'open': (9, 0),  'close': (18, 0)},
     {'key': 'london',  'name': 'لندن',    'icon': '🎡', 'tz': 'Europe/London',    'open': (8, 0),  'close': (17, 0)},
     {'key': 'newyork', 'name': 'نیویورک', 'icon': '🗽', 'tz': 'America/New_York', 'open': (8, 0),  'close': (17, 0)},
@@ -761,7 +761,7 @@ def session_tehran_window(s) -> str:
     today = timezone.now().astimezone(tz)
     o = today.replace(hour=s['open'][0], minute=s['open'][1], second=0, microsecond=0)
     c = today.replace(hour=s['close'][0], minute=s['close'][1], second=0, microsecond=0)
-    return f"{o.astimezone(TEHRAN_TZ):%H:%M} تا {c.astimezone(TEHRAN_TZ):%H:%M}"
+    return f"{c.astimezone(TEHRAN_TZ):%H:%M} تا {o.astimezone(TEHRAN_TZ):%H:%M}"
 
 
 def zone_windows_tehran() -> dict:
