@@ -148,6 +148,7 @@
   ```bash
   TELEGRAM_BOT_TOKEN=your_bot_token_here
   SECRET_KEY=your_django_secret_key
+  ALLOWED_HOSTS=127.0.0.1,localhost,YOUR_IP_ADDRESS
   GEMINI_API_KEY=your_gemini_api_key
   MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
   DASHBOARD_PORT=8000
