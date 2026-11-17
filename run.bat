@@ -1,6 +1,9 @@
 @echo off
 echo Starting Django Server and Telegram Bot in Windows Terminal...
 
+:: update app
+call git pull origin master
+
 :: ایجاد محیط مجازی پایتون
 call python -m venv .venv
 
