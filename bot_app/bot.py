@@ -126,26 +126,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("User %s (chat_id: %s) started the bot.", user_name, chat_id)
 
     try:
-        await get_or_create_user(chat_id,user_name)
+        await get_or_create_user(chat_id, user_name)
         logger.info("✅ User %s marked as is_blocked=False in Database.", chat_id)
     except Exception as e:
         logger.error("Failed to update is_blocked in DB for user %s: %s", chat_id, e)
 
-    # کاراکتر \u200f جهت مرتب‌سازی درست متون فارسی و انگلیسی در تلگرام
+    safe_name = user_name.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`")
+
     welcome_text = (
-        f"\u200fسلام {user_name} عزیز! 👋✨\n"
-        f"به **دستیار هوشمند و پایشگر تخصصی ترید** خوش آمدید.\n\n"
-        "🎯 **با من چه کارهایی می‌توانید انجام دهید؟**\n\n"
-        "⚡ **مدیریت و اجرای لایو:**\n"
-        "├ ثبت سفارشات، ریسک‌فری، خروج پله‌ای و ویرایش سریع SL/TP\n"
-        "└ پایش ۵ ثانیه‌ای پوزیشن‌ها و ارسال هشدار خودکار خروج (SL/TP)\n\n"
-        "🔔 **پایش بازار و سیگنال:**\n"
-        "├ هشدارهای قیمتی لحظه‌ای (فارکس و کریپتو) و مدیریت واچ‌لیست\n"
-        "└ تحلیل RSI، الگوهای کندلی و ساختار بازار با **Gemini AI**\n\n"
-        "📝 **ژورنال‌نویسی و گزارش‌گیری:**\n"
-        "├ خواندن خودکار مشخصات معامله از روی اسکرین‌شات چارت (Vision AI)\n"
-        "└ صدور گزارش PDF وال‌استریت (Equity Curve، Sharpe Ratio و...)\n\n"
-        "👇 *برای شروع یکی از گزینه‌های زیر را انتخاب کنید:*"
+        f"\u200f⚡ *سلام {safe_name}، به شبکه خوش اومدی*\n"
+        "\u200f🟢 _اتصال برقرار شد. سیستم آنلاین است._\n\n"
+        "\u200f▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️\n\n"
+        "\u200f🎯 *معامله و مدیریت پوزیشن*\n"
+        "\u200fثبت سفارش با ویزارد، ریسک‌فری، خروج پله‌ای،\n"
+        "\u200fویرایش SL/TP و بستن پوزیشن‌ها با یک کلیک\n\n"
+        "\u200f📡 *رادار بازار*\n"
+        "\u200fهشدار قیمت لحظه‌ای و واچ‌لیست اختصاصی\n"
+        "\u200fبرای کریپتو و فارکس، همراه با تحلیل Gemini AI\n\n"
+        "\u200f📸 *ژورنال هوشمند*\n"
+        "\u200fاسکرین‌شات چارت رو بفرست، معامله خودکار استخراج میشه\n\n"
+        "\u200f📊 *گزارش حرفه‌ای*\n"
+        "\u200fخروجی PDF با Equity Curve و Sharpe Ratio\n\n"
+        "\u200f▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️▫️\n\n"
+        "\u200f👇 *یک گزینه رو انتخاب کن و شروع کنیم*"
     )
 
     await update.message.reply_text(
@@ -153,7 +156,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=MAIN_KEYBOARD
     )
-
 
 async def handle_user_stop_or_block(user_id: int, context: ContextTypes.DEFAULT_TYPE = None):
     """
