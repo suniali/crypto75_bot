@@ -447,24 +447,66 @@ DEFENSE_MIN_FACTOR = Decimal('0.25')    # کف: ۲۵٪ ریسک پایه
 LOSS_STREAK_PER_STEP = 3         # هر ۳ ضرر متوالی = یک پله کاهش
 WIN_STREAK_PER_STEP_BACK = 2     # هر ۲ برد متوالی = یک پله برگشت
 
+def classify_trade(t):
+    """برمی‌گرداند: 'win' / 'loss' / 'be' بر اساس فیلد result"""
+    result = str(t.result or '').upper()
+    if result == 'WIN':
+        return 'win'
+    if result == 'LOSS':
+        return 'loss'
+    if result == 'BE':
+        return 'be'
+    # مقدار غیرمنتظره: بر اساس علامت سود خالص
+    p = t.net_profit
+    return 'win' if p > 0 else 'loss' if p < 0 else 'be'
 
 def _clamp01(x):
     return max(Decimal('0'), min(Decimal('1'), x))
 
+def streak_defense_steps(trades):
+    max_steps = int((Decimal('1') - DEFENSE_MIN_FACTOR) / DEFENSE_STEP_DOWN)
+    steps = loss_run = win_run = 0
+    for t in trades:
+        kind = classify_trade(t)
+        if kind == 'loss':
+            loss_run += 1
+            win_run = 0
+            if loss_run % LOSS_STREAK_PER_STEP == 0:
+                steps = min(steps + 1, max_steps)
+        elif kind == 'win':
+            win_run += 1
+            loss_run = 0
+            if win_run % WIN_STREAK_PER_STEP_BACK == 0:
+                steps = max(steps - 1, 0)
+        # 'be': هیچ اثری ندارد
+    return steps
+
+def current_loss_streak(trades):
+    n = 0
+    for t in reversed(trades):
+        kind = classify_trade(t)
+        if kind == 'loss':
+            n += 1
+        elif kind == 'win':
+            break
+    return n
 
 def trader_quality_score(trades, base_risk):
     """امتیاز کیفیت تریدر بین 0 تا 1. ترتیب trades باید زمانی باشد."""
-    n = len(trades)
-    if n < MIN_TRADES_FOR_SCORE:
+    kinds = [classify_trade(t) for t in trades]
+    profits = [Decimal(str(t.net_profit)) for t in trades]
+
+    n_wins = kinds.count('win')
+    n_losses = kinds.count('loss')
+    decisive = n_wins + n_losses              # بریک‌ایون‌ها حساب نمی‌شوند
+    if decisive < MIN_TRADES_FOR_SCORE:
         return Decimal('0.5')
 
-    profits = [Decimal(str(t.net_profit)) for t in trades]
-    wins = [p for p in profits if p > 0]
-    gross_win = sum(wins, Decimal('0'))
-    gross_loss = -sum((p for p in profits if p < 0), Decimal('0'))
+    gross_win = sum((p for p, k in zip(profits, kinds) if k == 'win'), Decimal('0'))
+    gross_loss = -sum((p for p, k in zip(profits, kinds) if k == 'loss'), Decimal('0'))
 
     # ۱) وین‌ریت: 40% -> 0 ، 70% -> 1
-    win_rate = Decimal(len(wins)) / Decimal(n)
+    win_rate = Decimal(n_wins) / Decimal(decisive)
     wr_score = _clamp01((win_rate - Decimal('0.40')) / Decimal('0.30'))
 
     # ۲) پروفیت‌فاکتور: 1.0 -> 0 ، 2.0 -> 1
@@ -473,7 +515,7 @@ def trader_quality_score(trades, base_risk):
     else:
         pf_score = _clamp01(gross_win / gross_loss - Decimal('1'))
 
-    # ۳) ثبات: حداکثر افت سرمایه بر حسب قلب (0 قلب -> 1 ، 10 قلب -> 0)
+    # ۳) ثبات: حداکثر افت سرمایه (همه‌ی معاملات، چون پول واقعی است)
     equity = peak = max_dd = Decimal('0')
     for p in profits:
         equity += p
@@ -528,37 +570,6 @@ def risk_from_reserve(reserve, base_risk, required_hearts, prev_risk=None):
     risk = max(risk, base_risk)
     return risk.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
-def streak_defense_steps(trades):
-    """
-    تاریخچه را به ترتیب زمانی بازپخش می‌کند و تعداد پله‌های کاهش ناشی از
-    ضرر متوالی را برمی‌گرداند.
-    """
-    max_steps = int((Decimal('1') - DEFENSE_MIN_FACTOR) / DEFENSE_STEP_DOWN)
-    steps = loss_run = win_run = 0
-    for t in trades:
-        p = Decimal(str(t.net_profit))
-        if p < 0:
-            loss_run += 1
-            win_run = 0
-            if loss_run % LOSS_STREAK_PER_STEP == 0:
-                steps = min(steps + 1, max_steps)
-        elif p > 0:
-            win_run += 1
-            loss_run = 0
-            if win_run % WIN_STREAK_PER_STEP_BACK == 0:
-                steps = max(steps - 1, 0)
-    return steps
-
-def current_loss_streak(trades):
-    """تعداد ضرر متوالی در انتهای تاریخچه (برای نمایش)"""
-    n = 0
-    for t in reversed(trades):
-        p = Decimal(str(t.net_profit))
-        if p < 0:
-            n += 1
-        elif p > 0:
-            break
-    return n
 
 def defensive_risk(base_risk, level_risk, total_net_profit, streak_steps=0):
     """
@@ -592,7 +603,7 @@ def get_user_progression_plan(user):
         TradeJournal.active_objects
         .filter(user=user)
         .exclude(result='PENDING')
-        .order_by('exit_time') 
+        .order_by('exit_time', 'id')
     )
 
     base_risk = (user.initial_balance / Decimal("100")
