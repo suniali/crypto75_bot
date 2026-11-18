@@ -104,6 +104,11 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+# تنظیمات احراز هویت و هدایت کاربران
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'  # بعد از لاگین موفق به صفحه اصلی (داشبورد) هدایت می‌شود
+LOGOUT_REDIRECT_URL = '/accounts/login/'
+
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.1/topics/i18n/

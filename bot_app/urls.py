@@ -1,4 +1,5 @@
 from django.urls import path
+from django.contrib.auth import views as auth_views
 from .views import (
     journal_dashboard,
     update_trade_note_api,
@@ -10,6 +11,8 @@ from .views import (
 )
 
 urlpatterns = [
+    path('accounts/login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('accounts/logout/', auth_views.LogoutView.as_view(next_page='login'), name='logout'),
     path('', journal_dashboard, name='dashboard'),
     path('api/journal/update-note',update_trade_note_api, name='update_trade_note'),
     path('api/take-backup/', py_backup_view, name='take_backup'),

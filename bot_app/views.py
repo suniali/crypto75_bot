@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.shortcuts import render
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 
 from .models import TradeJournal
@@ -32,6 +33,7 @@ def generate_trades_hash(processed_trades) -> str:
     return hasher.hexdigest()
 
 
+@login_required
 def api_get_ai_analysis(request):
     period = request.GET.get('period', 'weekly')
     ai_response = None
@@ -73,7 +75,7 @@ def api_get_ai_analysis(request):
     
     return JsonResponse({'status': 'success', 'analysis': ai_response})
 
-
+@login_required
 def journal_dashboard(request):
     """
     Dashboard view for trade journal analytics, filtering, and pagination.
@@ -113,11 +115,15 @@ def journal_dashboard(request):
     return render(request, 'dashboard.html', context)
 
 
+@login_required
 @require_POST
 def update_trade_note_api(request):
     """
     API endpoint to update trade notes and psychological reviews.
     """
+    if request.method != "POST":
+            return JsonResponse({"status": "error", "message": "متد غیرمجاز"}, status=400)
+    
     import json
     try:
         data = json.loads(request.body)
@@ -146,14 +152,17 @@ def update_trade_note_api(request):
         logger.error(f"❌ Error processing trade note update: {e}", exc_info=True)
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
+@login_required
 @require_POST
 def py_backup_view(request):
     return backup_database()
 
 
+@login_required
 def list_backups_view(request):
    return get_backups()
 
+@login_required
 @require_POST
 def restore_backup_view(request):
     if request.method != "POST":
@@ -166,7 +175,7 @@ def restore_backup_view(request):
 
     return restore_backup(filename)
 
-
+@login_required
 def day_trades_api_view(request):
     date_str = request.GET.get('date')  # فرمت: YYYY-MM-DD
     if not date_str:

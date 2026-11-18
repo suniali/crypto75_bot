@@ -720,6 +720,22 @@
                     </div>
                 </div>
             </div>
+
+            <form action="{% url 'logout' %}" method="post" class="inline-block">
+                {% csrf_token %}
+                <button type="submit" title="قطع اتصال (خروج)" aria-label="خروج از حساب"
+                    class="group relative p-2.5 bg-[#0b0d17] border border-fuchsia-500/40 hover:border-fuchsia-400 text-fuchsia-400 hover:text-white transition-all duration-300 shadow-[0_0_10px_rgba(255,0,128,0.15)] hover:shadow-[0_0_18px_rgba(255,0,128,0.65)] cursor-pointer"
+                    style="clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);">
+                    
+                    <!-- آیکون SVG پاور / قطع اتصال سایبرپانکی -->
+                    <svg class="w-5 h-5 transition-transform duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_6px_rgba(255,0,128,0.9)]" 
+                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square" stroke-linejoin="miter">
+                        <path d="M12 2v9" class="text-cyan-400 group-hover:text-fuchsia-300 transition-colors" />
+                        <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                    </svg>
+
+                </button>
+            </form>
         </header>
         <!-- پنل ۱: داشبورد (کارت قلب‌ها، KPIها، بخش میانی، نمودارها، R:R) -->
         <div id="standard-panel" class="max-w-7xl mx-auto space-y-8">
