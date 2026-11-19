@@ -3,11 +3,10 @@ import asyncio
 import logging
 import httpx
 
-from bot_app.models import UserAlert
+from bot_app.models import AlertCondition, UserAlert
 from bot_app.services.alert_service import deactivate_alert
-from bot_app.services.mt5_service import get_forex_price
 from bot_app.services.chart_service import create_heikin_ashi_chart
-from bot_app.services.api_service import get_crypto_price, fetch_recent_klines
+from bot_app.services.api_service import get_price, fetch_recent_klines
 
 logger = logging.getLogger(__name__)
 
@@ -15,13 +14,12 @@ logger = logging.getLogger(__name__)
 # Logic & Processing Worker
 # ------------------------------------------------------------------
 
-def check_target_reached(current_price: float, target_price: float, alert_type: str, is_forex: bool = False) -> bool:
-    if alert_type == "ABOVE":
+def check_target_reached(current_price: float, target_price: float, condition: str) -> bool:
+    if condition == AlertCondition.ABOVE:
         return current_price >= target_price
-    elif alert_type == "BELOW":
+    if condition == AlertCondition.BELOW:
         return current_price <= target_price
-
-    return current_price == target_price
+    return False
 
 
 async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> tuple[str, io.BytesIO | None] | None:
@@ -37,22 +35,30 @@ async def process_alert(client: httpx.AsyncClient, alert: UserAlert) -> tuple[st
 
             current_price = None
             for attempt in range(2):
-                current_price = await asyncio.to_thread(get_forex_price, alert.symbol)
+                current_price = await get_price(client, alert.symbol,is_forex=True)
                 if current_price is not None:
                     break
                 await asyncio.sleep(0.5)
         else:
-            current_price = await get_crypto_price(client, alert.symbol)
+            current_price = await get_price(client, alert.symbol)
 
         if current_price is None:
             logger.warning("Could not retrieve current price for %s (Alert ID #%s)", alert.symbol, alert.id)
             return None
 
         target_price = float(alert.target_price)
-        alert_type = getattr(alert, "alert_type", "BOTH")
-
+        # آلرت قدیمی یا بدون جهت: جهت را از موقعیت فعلی قیمت تعیین کن
+        if not alert.condition:
+            if current_price == target_price:
+                alert.condition = AlertCondition.ABOVE   # دقیقاً روی هدف است؛ همین حالا فعال شود
+            else:
+                alert.condition = AlertCondition.ABOVE if target_price > current_price else AlertCondition.BELOW
+                alert.created_price = current_price
+                await alert.asave(update_fields=['condition', 'created_price'])
+                return None   # این بار فقط جهت ثبت شد
+            
         # ۲. بررسی شرایط رسیدن به تارگت
-        if check_target_reached(current_price, target_price, alert_type, alert.is_forex):
+        if check_target_reached(current_price, target_price, alert.condition):
             logger.info("Target price reached for %s! Current: %s | Target: %s", alert.symbol, current_price, target_price)
 
             # ۳. غیرفعال‌سازی آلرت در دیتابیس

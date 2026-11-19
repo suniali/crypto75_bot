@@ -4,7 +4,7 @@ from logging.handlers import RotatingFileHandler
 import httpx
 import pandas as pd
 
-from bot_app.services.mt5_service import get_rates_data
+from bot_app.services.mt5_service import get_rates_data,get_forex_price
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,12 @@ async def get_crypto_price(client: httpx.AsyncClient, symbol: str) -> float | No
         logger.error("Error fetching crypto price for (%s): %s", symbol, e)
     return None
 
+async def get_price(client: httpx.AsyncClient, symbol: str, is_forex: bool = False) -> float | None:
+    """دریافت قیمت لحظه‌ای برای فارکس یا کریپتو"""
+    if is_forex:
+        return await asyncio.to_thread(get_forex_price, symbol)
+    else:
+        return await get_crypto_price(client, symbol)
 
 async def fetch_recent_klines(
         client: httpx.AsyncClient,

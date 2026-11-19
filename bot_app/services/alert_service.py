@@ -1,7 +1,7 @@
 import logging
 from asgiref.sync import sync_to_async
 from django.db import IntegrityError
-from bot_app.models import TelegramUser,UserAlert,MarketType
+from bot_app.models import AlertCondition, TelegramUser,UserAlert,MarketType
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +38,22 @@ def create_user_alert(
     user: TelegramUser,
     symbol: str,
     target_price: float,
-    market_type: str = MarketType.CRYPTO
+    market_type: str = MarketType.CRYPTO,
+    current_price=None
 ) -> tuple[UserAlert | None, bool]:
     """
     ثبت آلرت جدید برای کاربر با هندل کردن UniqueConstraint
     خروجی: (آلرت ایجاد شده، وضعیت موفقیت)
     """
+    condition = ''
+    if current_price is not None:
+        condition = (AlertCondition.ABOVE if float(target_price) > float(current_price)
+                     else AlertCondition.BELOW)
+
     try:
         alert = UserAlert.objects.create(
-            user=user,
-            symbol=symbol,
-            target_price=target_price,
-            market_type=market_type,
+            user=user, symbol=symbol, target_price=target_price, market_type=market_type,
+            condition=condition, created_price=current_price,
             is_active=True
         )
         return alert, True

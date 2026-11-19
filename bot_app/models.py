@@ -35,12 +35,20 @@ class TelegramUser(models.Model):
 # ==========================================
 # 3. مدل هشدارهای قیمت (UserAlert)
 # ==========================================
+class AlertCondition(models.TextChoices):
+    ABOVE = 'ABOVE', 'عبور رو به بالا'
+    BELOW = 'BELOW', 'عبور رو به پایین'
+
 class UserAlert(models.Model):
     user = models.ForeignKey(TelegramUser, on_delete=models.CASCADE, related_name='alerts', verbose_name="کاربر")
     symbol = models.CharField(max_length=20, verbose_name="نماد معاملاتی")
     target_price = models.DecimalField(max_digits=20, decimal_places=8, verbose_name="قیمت هدف")
     market_type = models.CharField(max_length=10, choices=MarketType.choices, default=MarketType.CRYPTO,
                                    verbose_name="نوع مارکت")
+    condition = models.CharField(max_length=5, choices=AlertCondition.choices,
+                                 blank=True, default='', verbose_name="جهت هشدار")
+    created_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True,
+                                        verbose_name="قیمت هنگام ثبت")
     is_active = models.BooleanField(default=True, verbose_name="فعال")
     is_triggered = models.BooleanField(default=False, verbose_name="فعال‌شده / هشدار داده‌شده")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="تاریخ ثبت")

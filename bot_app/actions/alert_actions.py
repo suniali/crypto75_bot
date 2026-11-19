@@ -16,7 +16,7 @@ from bot_app.services.alert_service import (
 from bot_app.services.mt5_service import get_market_watch_symbols,check_symbol_info
 from bot_app.services.user_service import get_or_create_user
 from bot_app.services.chart_service import create_pending_alert_chart
-from bot_app.services.api_service import fetch_recent_klines
+from bot_app.services.api_service import fetch_recent_klines,get_price
 from bot_app.services.telegram_service import security_check
 
 from bot_app.models import MarketType
@@ -326,50 +326,51 @@ async def add_alert_price_received(
     )
     market_type = MarketType.FOREX if is_forex else MarketType.CRYPTO
 
-    alert, created = await create_user_alert(
-        user=user_obj,
-        symbol=symbol,
-        target_price=target_price,
-        market_type=market_type,
-    )
+    async with httpx.AsyncClient() as client:
+        current_price = await get_price(client, symbol, is_forex=is_forex)
+        alert, created = await create_user_alert(
+            user=user_obj, 
+            symbol=symbol, 
+            target_price=target_price, 
+            market_type=market_type,
+            current_price=current_price)
 
-    # اگر آلرت تکراری بود و ثبت نشد
-    if not created:
-        if last_msg_id:
-            try:
-                await context.bot.delete_message(
-                    chat_id=chat_id, message_id=last_msg_id
-                )
-            except Exception:
-                pass
+        # اگر آلرت تکراری بود و ثبت نشد
+        if not created:
+            if last_msg_id:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=chat_id, message_id=last_msg_id
+                    )
+                except Exception:
+                    pass
 
-        await update.message.reply_text(
-            f"⚠️ **شما قبلاً یک هشدار فعال با همین قیمت (`{target_price}`) برای نماد `{symbol}` ثبت کرده‌اید.**",
-            parse_mode="Markdown",
+            await update.message.reply_text(
+                f"⚠️ **شما قبلاً یک هشدار فعال با همین قیمت (`{target_price}`) برای نماد `{symbol}` ثبت کرده‌اید.**",
+                parse_mode="Markdown",
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+
+        logger.info(
+            "Alert created successfully: %s at %s for chat_id %s",
+            symbol,
+            target_price,
+            chat_id,
         )
-        context.user_data.clear()
-        return ConversationHandler.END
 
-    logger.info(
-        "Alert created successfully: %s at %s for chat_id %s",
-        symbol,
-        target_price,
-        chat_id,
-    )
+        # ۳. ساخت متن کپشن پیام نهایی
+        msg_text = (
+            f"⏳ **هشدار جدید ثبت شد (در انتظار فعال‌سازی)**\n\n"
+            f"📌 **نماد:** `{symbol}`\n"
+            f"🎯 **قیمت هدف:** `{target_price}`\n"
+            f"🌐 **بازار:** {'فارکس' if is_forex else 'ارز دیجیتال'}\n\n"
+            f"🔹 *خط نقطه‌چین فیروزه‌ای روی چارت نشان‌دهنده تارگت جدید شماست.*"
+        )
 
-    # ۳. ساخت متن کپشن پیام نهایی
-    msg_text = (
-        f"⏳ **هشدار جدید ثبت شد (در انتظار فعال‌سازی)**\n\n"
-        f"📌 **نماد:** `{symbol}`\n"
-        f"🎯 **قیمت هدف:** `{target_price}`\n"
-        f"🌐 **بازار:** {'فارکس' if is_forex else 'ارز دیجیتال'}\n\n"
-        f"🔹 *خط نقطه‌چین فیروزه‌ای روی چارت نشان‌دهنده تارگت جدید شماست.*"
-    )
-
-    # ۴. دریافت داده‌های کندل و تولید چارت
-    chart_buf = None
-    try:
-        async with httpx.AsyncClient() as client:
+        # ۴. دریافت داده‌های کندل و تولید چارت
+        chart_buf = None
+        try:
             df_klines = await fetch_recent_klines(
                 client=client,
                 symbol=symbol,
@@ -381,38 +382,38 @@ async def add_alert_price_received(
                 chart_buf = create_pending_alert_chart(
                     df_klines, target_price, symbol
                 )
-    except Exception as e:
-        logger.exception(
-            "Failed to generate chart for new alert %s: %s", symbol, e
-        )
-
-    # ۵. پاک کردن پیام موقت «در حال پردازش»
-    if last_msg_id:
-        try:
-            await context.bot.delete_message(
-                chat_id=chat_id, message_id=last_msg_id
+        except Exception as e:
+            logger.exception(
+                "Failed to generate chart for new alert %s: %s", symbol, e
             )
-        except Exception:
-            pass
 
-    # ۶. ارسال پاسخ نهایی
-    if chart_buf:
-        await update.message.reply_photo(
-            photo=chart_buf,
-            caption=msg_text,
-            reply_markup=MAIN_KEYBOARD,
-            parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text(
-            msg_text,
-            reply_markup=MAIN_KEYBOARD,
-            parse_mode="Markdown"
-        )
+        # ۵. پاک کردن پیام موقت «در حال پردازش»
+        if last_msg_id:
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id, message_id=last_msg_id
+                )
+            except Exception:
+                pass
 
-    # پاکسازی داده‌های موقت کاربر
-    context.user_data.clear()
-    return ConversationHandler.END
+        # ۶. ارسال پاسخ نهایی
+        if chart_buf:
+            await update.message.reply_photo(
+                photo=chart_buf,
+                caption=msg_text,
+                reply_markup=MAIN_KEYBOARD,
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                msg_text,
+                reply_markup=MAIN_KEYBOARD,
+                parse_mode="Markdown"
+            )
+
+        # پاکسازی داده‌های موقت کاربر
+        context.user_data.clear()
+        return ConversationHandler.END
 
 async def cancel_alert_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await security_check(update, context):
