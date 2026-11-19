@@ -28,6 +28,28 @@ from bot_app.models import TelegramUser
 logger = logging.getLogger(__name__)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 
+def build_position_keyboard(ticket: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
+        ],
+        [
+            InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
+            InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
+            InlineKeyboardButton("✂️ خروج 75%", callback_data=f"action_close75_{ticket}"),
+        ],
+        [
+            InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
+            InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
+        ],
+        [
+            InlineKeyboardButton("❌ بستن کامل پوزیشن", callback_data=f"close_pos_{ticket}"),
+        ],
+        [
+            InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list"),
+        ],
+    ])
+
 async def auto_refresh_positions_job(context: ContextTypes.DEFAULT_TYPE):
     """آپدیت خودکار پیام لیست پوزیشن‌ها هر چند ثانیه یک‌بار"""
     job = context.job
@@ -185,30 +207,14 @@ async def auto_refresh_single_position_job(context: ContextTypes.DEFAULT_TYPE):
             f"📊 <b>سود/زیان لحظه‌ای:</b> {profit_emoji} <b><code>{CURENCY_UNIT}{pos['profit']:,.2f}</code></b>"
         )
 
-        keyboard = [
-            [
-                InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
-                InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
-                InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
-            ],
-            [
-                InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
-                InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
-            ],
-            [
-                InlineKeyboardButton("❌ بستن کامل پوزیشن", callback_data=f"close_pos_{ticket}"),
-            ],
-            [
-                InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list"),
-            ],
-        ]
+        reply_markup=build_position_keyboard(ticket)
 
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
                 text=caption,
-                reply_markup=InlineKeyboardMarkup(keyboard),
+                reply_markup=reply_markup,
                 parse_mode="HTML",
             )
             logger.debug("Successfully updated single position message for ticket %s", ticket)
@@ -392,26 +398,9 @@ async def position_detail_callback(update: Update, context: ContextTypes.DEFAULT
         )
 
     # دکمه بروزرسانی دستی حذف شد چون لایو اضافه گردیده است
-    keyboard = [
-        [
-            InlineKeyboardButton("🛡 فری‌ریسک (Break-Even)", callback_data=f"action_be_{ticket}"),
-            InlineKeyboardButton("✂️ خروج 25%", callback_data=f"action_close25_{ticket}"),
-            InlineKeyboardButton("✂️ خروج 50%", callback_data=f"action_close50_{ticket}"),
+    reply_markup=build_position_keyboard(ticket)
 
-        ],
-        [
-            InlineKeyboardButton("⚙️ تغییر SL / TP", callback_data=f"action_editsltp_{ticket}"),
-            InlineKeyboardButton("📉 خروج جزئی دلخواه", callback_data=f"action_partial_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("❌ بستن کامل پوزیشن", callback_data=f"close_pos_{ticket}"),
-        ],
-        [
-            InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list"),
-        ],
-    ]
-
-    msg = await query.edit_message_text(caption, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+    msg = await query.edit_message_text(caption, reply_markup=reply_markup, parse_mode="HTML")
 
     # ۳. راه اندازی آپدیت لایو اختصاصی برای این تک پوزیشن (هر ۳ ثانیه)
     if context.job_queue:
@@ -455,6 +444,11 @@ async def cancel_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ⚠️ بسیار مهم: پایان دادن به وضعیت ConversationHandler
     return ConversationHandler.END
+
+PARTIAL_EXITS = {"close25": 25, "close50": 50, "close75": 75}
+
+def _exit_volume(total: float, pct: int) -> float:
+    return round(total * pct / 100, 2)
 
 async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await security_check(update, context):
@@ -529,8 +523,9 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
         )
         return ConversationHandler.END
 
-    # ------------------ ۳. خروج ۲۵٪ حجم ------------------
-    elif action == "close25":
+    # ------------------ خروج درصدی (۲۵ / ۵۰ / ۷۵) ------------------
+    elif action in PARTIAL_EXITS:
+        pct = PARTIAL_EXITS[action]
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
@@ -538,26 +533,31 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
             return ConversationHandler.END
 
-        sm_vol = round(pos['volume'] / 3, 2)  # فرمول اصلی شما برگردانده شد
-        if sm_vol < 0.01:
-            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج ۲۵٪ بسیار کوچک است (کمتر از 0.01).**", parse_mode="Markdown")
+        vol = _exit_volume(pos['volume'], pct)
+        remaining = round(pos['volume'] - vol, 2)
+
+        if vol < 0.01 or remaining < 0.01:
+            await query.edit_message_text(
+                f"⚠️ **حجم پوزیشن (`{pos['volume']}` لات) برای خروج {pct}٪ خیلی کم است.**\n"
+                f"حداقل حجم قابل معامله 0.01 لات است؛ در صورت نیاز از «بستن کامل» استفاده کن.",
+                parse_mode="Markdown")
             return ConversationHandler.END
 
-        confirm_keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ بله، خروج ۲۵٪", callback_data=f"action_confirmclose25_{ticket}"),
-                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
-            ]
-        ])
+        confirm_keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(f"✅ بله، خروج {pct}٪", callback_data=f"action_confirm{action}_{ticket}"),
+            InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}"),
+        ]])
         await query.edit_message_text(
-            f"✂️ **تأییدیه خروج ۲۵٪ از پوزیشن `{ticket}`**\n\n"
-            f"حجم کل: `{pos['volume']}` لات\nحجم خروج: `{sm_vol}` لات\n\nآیا از بستن این میزان حجم اطمینان دارید؟",
-            reply_markup=confirm_keyboard,
-            parse_mode="Markdown"
-        )
+            f"✂️ **تأییدیه خروج {pct}٪ از پوزیشن `{ticket}`**\n\n"
+            f"حجم کل: `{pos['volume']}` لات\n"
+            f"حجم خروج: `{vol}` لات\n"
+            f"حجم باقی‌مانده: `{remaining}` لات\n\n"
+            f"آیا از بستن این میزان حجم اطمینان دارید؟",
+            reply_markup=confirm_keyboard, parse_mode="Markdown")
         return ConversationHandler.END
 
-    elif action == "confirmclose25":
+    elif action.startswith("confirm") and action[len("confirm"):] in PARTIAL_EXITS:
+        pct = PARTIAL_EXITS[action[len("confirm"):]]
         success, positions = await asyncio.to_thread(get_open_positions)
         pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
 
@@ -565,64 +565,17 @@ async def handle_position_actions(update: Update, context: ContextTypes.DEFAULT_
             await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
             return ConversationHandler.END
 
-        sm_vol = round(pos['volume'] / 3, 2)  # فرمول اصلی شما برگردانده شد
-        await query.edit_message_text(f"⏳ در حال بستن `{sm_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
-        _, msg = await asyncio.to_thread(close_position, ticket, sm_vol)
+        vol = _exit_volume(pos['volume'], pct)
         await query.edit_message_text(
-            f"{msg}",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
-            parse_mode="Markdown"
-        )
-        return ConversationHandler.END
-
-    # ------------------ ۴. خروج ۵۰٪ حجم ------------------
-    elif action == "close50":
-        success, positions = await asyncio.to_thread(get_open_positions)
-        pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
-
-        if not pos:
-            await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return ConversationHandler.END
-
-        half_vol = round(pos['volume'] / 2, 2)
-        if half_vol < 0.01:
-            await query.edit_message_text("⚠️ **حجم پوزیشن برای خروج ۵۰٪ بسیار کوچک است.**", parse_mode="Markdown")
-            return ConversationHandler.END
-
-        confirm_keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ بله، خروج ۵۰٪", callback_data=f"action_confirmclose50_{ticket}"),
-                InlineKeyboardButton("❌ انصراف", callback_data=f"pos_detail_{ticket}")
-            ]
-        ])
-        await query.edit_message_text(
-            f"✂️ **تأییدیه خروج ۵۰٪ از پوزیشن `{ticket}`**\n\n"
-            f"حجم کل: `{pos['volume']}` لات\nحجم خروج: `{half_vol}` لات\n\nآیا از بستن این میزان حجم اطمینان دارید؟",
-            reply_markup=confirm_keyboard,
-            parse_mode="Markdown"
-        )
-        return ConversationHandler.END
-
-    elif action == "confirmclose50":
-        success, positions = await asyncio.to_thread(get_open_positions)
-        pos = next((p for p in positions if p['ticket'] == ticket), None) if success and positions else None
-
-        if not pos:
-            await query.edit_message_text("❌ پوزیشن یافت نشد یا قبلاً بسته شده است.", parse_mode="Markdown")
-            return ConversationHandler.END
-
-        half_vol = round(pos['volume'] / 2, 2)
-        await query.edit_message_text(f"⏳ در حال بستن `{half_vol}` لات از پوزیشن `{ticket}`...", parse_mode="Markdown")
-        _, msg = await asyncio.to_thread(close_position, ticket, half_vol)
+            f"⏳ در حال بستن `{vol}` لات ({pct}٪) از پوزیشن `{ticket}`...", parse_mode="Markdown")
+        _, msg = await asyncio.to_thread(close_position, ticket, vol)
         await query.edit_message_text(
             f"{msg}",
             reply_markup=InlineKeyboardMarkup(
                 [[InlineKeyboardButton("🔙 بازگشت به لیست", callback_data="refresh_positions_list")]]),
-            parse_mode="Markdown"
-        )
+            parse_mode="Markdown")
         return ConversationHandler.END
-
+    
     # ------------------ ۵. تغییر SL / TP ------------------
     elif action == "editsltp":
         context.user_data["action_ticket"] = ticket
