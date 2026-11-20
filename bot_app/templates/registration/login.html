@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JARVIS // ACCESS TERMINAL</title>
+    <title>JARVIS // CYBERNETIC HUD</title>
     <script src="{% static 'vendor/js/tailwind.js' %}"></script>
     <style>
         @font-face {
@@ -14,105 +14,317 @@
         }
         @font-face {
             font-family: 'Vazirmatn';
+            src: url('{% static "vendor/fonts/Vazirmatn-Medium.woff2" %}') format('woff2');
+            font-weight: 500;
+        }
+        @font-face {
+            font-family: 'Vazirmatn';
             src: url('{% static "vendor/fonts/Vazirmatn-Bold.woff2" %}') format('woff2');
             font-weight: 700;
         }
+
         body {
             font-family: 'Vazirmatn', sans-serif;
-            background-color: #05050a;
-            background-image: 
-                linear-gradient(rgba(0, 243, 255, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
-            background-size: 35px 35px;
+            background-color: #020308;
+            background-image:
+                radial-gradient(circle at 15% 15%, rgba(0, 243, 255, 0.20), transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(255, 0, 127, 0.20), transparent 42%),
+                linear-gradient(to right, rgba(0, 243, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 0, 127, 0.04) 1px, transparent 1px);
+            background-size: 100% 100%, 100% 100%, 26px 26px, 26px 26px;
         }
-        /* برش گوشه‌های پنل به سبک سایبرپانک */
-        .cyber-card {
-            clip-path: polygon(
-                0 20px, 20px 0, 
-                100% 0, 100% calc(100% - 20px), 
-                calc(100% - 20px) 100%, 0 100%
+
+        .cyber-deck-glow {
+            box-shadow:
+                0 0 0 1px rgba(0, 243, 255, 0.35),
+                0 0 45px rgba(0, 243, 255, 0.16),
+                0 0 70px rgba(255, 0, 127, 0.12),
+                0 35px 95px rgba(0, 0, 0, 0.95);
+        }
+
+        @keyframes scanBeam {
+            0% { transform: translateY(-100%); opacity: 0; }
+            15% { opacity: 0.75; }
+            85% { opacity: 0.75; }
+            100% { transform: translateY(560px); opacity: 0; }
+        }
+        .scan-beam {
+            height: 75px;
+            background: linear-gradient(
+                to bottom,
+                transparent,
+                rgba(0, 243, 255, 0.11) 50%,
+                rgba(255, 0, 127, 0.08) 75%,
+                transparent
             );
+            animation: scanBeam 5.5s linear infinite;
+            pointer-events: none;
         }
-        .cyber-btn {
-            clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+
+        @keyframes titleGlitch {
+            0%, 91%, 100% {
+                text-shadow: -2px 0 rgba(255, 0, 127, 0.75), 2px 0 rgba(0, 243, 255, 0.75);
+                transform: translate(0, 0);
+            }
+            93% {
+                text-shadow: -4px 0 rgba(255, 0, 127, 0.95), 4px 0 rgba(0, 243, 255, 0.95);
+                transform: translate(-1.5px, 0);
+            }
+            95% {
+                text-shadow: 4px 0 rgba(255, 0, 127, 0.95), -4px 0 rgba(0, 243, 255, 0.95);
+                transform: translate(1.5px, 0);
+            }
         }
-        .neon-cyan {
-            box-shadow: 0 0 15px rgba(0, 243, 255, 0.3), inset 0 0 10px rgba(0, 243, 255, 0.15);
+        .cyber-title-glitch {
+            animation: titleGlitch 4.5s infinite;
         }
-        .neon-pink-text {
-            text-shadow: 0 0 8px rgba(255, 0, 128, 0.7);
+
+        @keyframes barPulse {
+            0%, 100% { transform: scaleY(0.35); }
+            50% { transform: scaleY(1); }
         }
-        .neon-cyan-text {
-            text-shadow: 0 0 10px rgba(0, 243, 255, 0.8);
+        .pulse-bar {
+            transform-origin: bottom;
+            animation: barPulse 1.1s ease-in-out infinite;
+        }
+        .pulse-bar:nth-child(2) { animation-delay: 0.15s; }
+        .pulse-bar:nth-child(3) { animation-delay: 0.3s; }
+        .pulse-bar:nth-child(4) { animation-delay: 0.1s; }
+        .pulse-bar:nth-child(5) { animation-delay: 0.25s; }
+        .pulse-bar:nth-child(6) { animation-delay: 0.4s; }
+
+        @keyframes waveScroll {
+            0% { stroke-dashoffset: 0; }
+            100% { stroke-dashoffset: -84; }
+        }
+        .cyber-trace {
+            stroke-dasharray: 10 5;
+            animation: waveScroll 3.2s linear infinite;
         }
     </style>
 </head>
-<body class="text-cyan-50 flex items-center justify-center min-h-screen relative overflow-hidden">
+<body class="text-cyan-50 min-h-screen flex items-center justify-center p-4 sm:p-6 overflow-x-hidden selection:bg-pink-500/35 selection:text-white">
 
-    <!-- هاله‌های نوری پس‌زمینه -->
-    <div class="absolute -top-24 -right-24 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-fuchsia-600/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="w-full max-w-[900px] bg-[#050812]/95 backdrop-blur-2xl rounded-3xl cyber-deck-glow overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-cyan-400/30 relative">
 
-    <!-- قاب بیرونی با حاشیه نئونی -->
-    <div class="w-full max-w-md p-[1px] bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-cyan-400 cyber-card shadow-2xl mx-4">
-        <div class="bg-[#0b0d17]/95 backdrop-blur-xl p-8 cyber-card relative">
-            
-            <!-- نوار وضعیت بالای ترمینال -->
-            <div class="flex justify-between items-center text-[10px] tracking-widest text-cyan-400/70 font-mono mb-6 border-b border-cyan-500/20 pb-2">
-                <span>SYS.STATUS // ONLINE</span>
-                <span class="text-fuchsia-400 animate-pulse">● SECURE NODE</span>
+        <!-- خط اسکنر نئونی -->
+        <div class="scan-beam absolute inset-x-0 top-0 z-20"></div>
+
+        <!-- ستون راست: ساعت ایران، تاریخ میلادی و چارت متحرک (6 ستون) -->
+        <div class="lg:col-span-6 p-7 sm:p-9 bg-gradient-to-b from-[#091022] via-[#060915] to-[#12071a] border-b lg:border-b-0 lg:border-l border-cyan-400/20 flex flex-col justify-between relative z-10">
+
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-[#00f3ff] shadow-[0_0_12px_#00f3ff] animate-ping"></span>
+                    <span class="font-mono text-[11px] tracking-widest text-[#00f3ff] uppercase" dir="ltr">GRID // LIVE</span>
+                </div>
+
+                <div class="flex items-end gap-1 h-4" aria-hidden="true">
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#00f3ff]"></span>
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#facc15]"></span>
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#ff007f]"></span>
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#00f3ff]"></span>
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#ff007f]"></span>
+                    <span class="pulse-bar w-1 h-full rounded-full bg-[#facc15]"></span>
+                </div>
             </div>
 
-            <!-- لوگو و عنوان -->
-            <div class="text-center mb-8">
-                <h1 class="text-3xl font-extrabold tracking-wider text-cyan-400 neon-cyan-text font-mono">
-                    JARVIS <span class="text-fuchsia-500 neon-pink-text">OS</span>
+            <!-- ساعت ایران و تاریخ میلادی -->
+            <div class="my-6">
+                <div class="text-[11px] font-mono text-[#ff007f] tracking-widest uppercase" dir="ltr">TEHRAN // IRST</div>
+                <div id="iran-clock" class="text-3xl sm:text-4xl font-mono font-extrabold text-white tracking-wider mt-1 drop-shadow-[0_0_16px_rgba(0,243,255,0.5)]" dir="ltr">
+                    --:--:--
+                </div>
+                <div id="iran-gregorian-date" class="font-mono text-sm font-semibold text-[#00f3ff] mt-1.5 tracking-wide" dir="ltr">
+                    --- --, ----
+                </div>
+            </div>
+
+            <!-- چارت زنده‌ی متحرک سایبرپانکی -->
+            <div class="p-4 rounded-2xl bg-[#03050c]/95 border border-cyan-400/25 shadow-[inset_0_0_20px_rgba(0,243,255,0.05)]">
+                <div class="flex items-center justify-between text-[11px] font-mono mb-2" dir="ltr">
+                    <span class="text-[#00f3ff] font-bold">CYBER // <span class="text-[#ff007f]">PULSE_FEED</span></span>
+                    <span id="live-delta" class="px-2 py-0.5 rounded bg-[#ff007f]/15 border border-[#ff007f]/35 text-[#facc15]">+0.00%</span>
+                </div>
+
+                <svg viewBox="0 0 320 92" class="w-full h-24 overflow-visible">
+                    <defs>
+                        <linearGradient id="cyberFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#00f3ff" stop-opacity="0.38"/>
+                            <stop offset="55%" stop-color="#ff007f" stop-opacity="0.14"/>
+                            <stop offset="100%" stop-color="#00f3ff" stop-opacity="0"/>
+                        </linearGradient>
+                        <linearGradient id="cyberStroke" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#00f3ff"/>
+                            <stop offset="50%" stop-color="#facc15"/>
+                            <stop offset="100%" stop-color="#ff007f"/>
+                        </linearGradient>
+                    </defs>
+
+                    <line x1="0" y1="20" x2="320" y2="20" stroke="#111b33" stroke-width="1"/>
+                    <line x1="0" y1="48" x2="320" y2="48" stroke="#111b33" stroke-width="1"/>
+                    <line x1="0" y1="76" x2="320" y2="76" stroke="#111b33" stroke-width="1"/>
+
+                    <g stroke-width="1.35">
+                        <line x1="34" y1="46" x2="34" y2="78" stroke="#00f3ff"/><rect x="30" y="52" width="8" height="16" rx="1" fill="#00f3ff" fill-opacity="0.3"/>
+                        <line x1="84" y1="36" x2="84" y2="70" stroke="#ff007f"/><rect x="80" y="43" width="8" height="15" rx="1" fill="#ff007f" fill-opacity="0.3"/>
+                        <line x1="136" y1="24" x2="136" y2="62" stroke="#00f3ff"/><rect x="132" y="31" width="8" height="19" rx="1" fill="#00f3ff" fill-opacity="0.35"/>
+                        <line x1="188" y1="32" x2="188" y2="66" stroke="#ff007f"/><rect x="184" y="39" width="8" height="16" rx="1" fill="#ff007f" fill-opacity="0.3"/>
+                        <line x1="242" y1="14" x2="242" y2="52" stroke="#facc15"/><rect x="238" y="21" width="8" height="20" rx="1" fill="#facc15" fill-opacity="0.35"/>
+                    </g>
+
+                    <path d="M 6 70 C 58 62, 105 38, 158 36 C 212 34, 255 20, 304 24 L 304 84 L 6 84 Z" fill="url(#cyberFill)"/>
+                    <path d="M 6 70 C 58 62, 105 38, 158 36 C 212 34, 255 20, 304 24" fill="none" stroke="url(#cyberStroke)" stroke-width="2.4" class="cyber-trace"/>
+
+                    <line id="hud-price-line" x1="175" y1="24" x2="316" y2="24" stroke="#ff007f" stroke-width="1.1" stroke-dasharray="3 3"/>
+                    <circle id="hud-price-halo" cx="304" cy="24" r="8" fill="#ff007f" fill-opacity="0.3"/>
+                    <circle id="hud-price-dot" cx="304" cy="24" r="4.2" fill="#00f3ff" stroke="#ffffff" stroke-width="1.5"/>
+                </svg>
+            </div>
+
+            <div class="mt-5 pt-3 border-t border-cyan-400/15 flex items-center justify-between text-[11px] font-mono text-slate-400" dir="ltr">
+                <span>JARVIS // CYBER_CORE</span>
+                <span class="text-[#ff007f]">SECURE_LINK</span>
+            </div>
+        </div>
+
+        <!-- ستون چپ: فرم احراز هویت (6 ستون) -->
+        <div class="lg:col-span-6 p-7 sm:p-10 flex flex-col justify-center relative z-10">
+            <div class="mb-6">
+                <span class="inline-block font-mono text-[10px] tracking-widest text-[#facc15] uppercase mb-1.5" dir="ltr">ACCESS // TERMINAL</span>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-white cyber-title-glitch font-mono" dir="ltr">
+                    JARVIS<span class="text-[#00f3ff]">_</span><span class="text-[#ff007f]">LOGIN</span>
                 </h1>
-                <p class="text-xs text-gray-400 mt-2 tracking-wide">احراز هویت دسترسی به هسته معاملاتی</p>
+                <p class="text-xs text-slate-300/80 mt-2">احراز هویت اپراتور برای ورود به سیستم معاملاتی</p>
             </div>
 
-            <!-- نمایش خطا -->
             {% if form.errors %}
-                <div class="mb-5 p-3 bg-fuchsia-950/60 border-r-4 border-fuchsia-500 text-fuchsia-200 text-xs flex items-center gap-2">
-                    <span class="font-mono font-bold text-fuchsia-400">[ERR]</span>
-                    <span>شناسه کاربری یا کد امنیتی نامعتبر است.</span>
+                <div class="mb-4 px-3.5 py-2.5 rounded-xl bg-[#ff007f]/15 border border-[#ff007f]/50 text-pink-200 text-xs font-medium">
+                    نام کاربری یا رمز عبور اشتباه است.
                 </div>
             {% endif %}
 
-            <!-- فرم ورود -->
-            <form method="post" class="space-y-5">
+            <form method="post" class="space-y-4">
                 {% csrf_token %}
-                
+                {% if next %}
+                    <input type="hidden" name="next" value="{{ next }}">
+                {% endif %}
+
                 <div>
-                    <label class="block text-xs font-semibold text-cyan-300 mb-2 tracking-wide">
-                        شناسه اپراتور <span class="text-fuchsia-500 font-mono text-[10px]">// USER_ID</span>
+                    <label for="id_username" class="block text-xs font-semibold text-[#00f3ff] mb-1.5">
+                        نام کاربری
                     </label>
-                    <input type="text" name="username" required autocomplete="off"
-                        class="w-full px-4 py-3 bg-[#06080f] border border-cyan-500/30 focus:border-cyan-400 focus:shadow-[0_0_12px_rgba(0,243,255,0.25)] rounded-none text-cyan-100 placeholder-gray-600 focus:outline-none transition duration-200 font-mono text-sm">
+                    <input
+                        id="id_username"
+                        type="text"
+                        name="username"
+                        required
+                        autofocus
+                        autocomplete="username"
+                        dir="ltr"
+                        placeholder="admin"
+                        class="w-full px-4 py-3 rounded-xl bg-[#03050b] border border-cyan-400/30 text-white placeholder-slate-700 font-mono text-sm focus:outline-none focus:border-[#00f3ff] focus:ring-2 focus:ring-[#00f3ff]/25 transition"
+                    >
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold text-cyan-300 mb-2 tracking-wide">
-                        کلید رمزنگاری <span class="text-fuchsia-500 font-mono text-[10px]">// PASSCODE</span>
+                    <label for="id_password" class="block text-xs font-semibold text-[#00f3ff] mb-1.5">
+                        رمز عبور
                     </label>
-                    <input type="password" name="password" required
-                        class="w-full px-4 py-3 bg-[#06080f] border border-cyan-500/30 focus:border-fuchsia-500 focus:shadow-[0_0_12px_rgba(255,0,128,0.25)] rounded-none text-cyan-100 placeholder-gray-600 focus:outline-none transition duration-200 font-mono text-sm">
+                    <div class="relative">
+                        <input
+                            id="id_password"
+                            type="password"
+                            name="password"
+                            required
+                            autocomplete="current-password"
+                            dir="ltr"
+                            placeholder="••••••••••••"
+                            class="w-full pl-11 pr-4 py-3 rounded-xl bg-[#03050b] border border-cyan-400/30 text-white placeholder-slate-700 font-mono text-sm focus:outline-none focus:border-[#ff007f] focus:ring-2 focus:ring-[#ff007f]/25 transition"
+                        >
+                        <button type="button" id="toggle-pass" tabindex="-1" aria-label="نمایش رمز"
+                            class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#00f3ff] transition p-1 cursor-pointer">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="pt-2">
-                    <button type="submit" 
-                        class="w-full py-3.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-fuchsia-600 hover:to-cyan-500 text-gray-950 hover:text-white font-extrabold text-sm tracking-wider cyber-btn transition-all duration-300 shadow-[0_0_20px_rgba(0,243,255,0.4)] hover:shadow-[0_0_25px_rgba(255,0,128,0.6)] cursor-pointer">
-                        اتصال به سیستم // INITIALIZE
-                    </button>
-                </div>
+                <button
+                    type="submit"
+                    class="w-full mt-2 py-3 px-5 rounded-xl bg-gradient-to-r from-[#00f3ff] via-[#facc15] to-[#ff007f] hover:brightness-110 active:scale-[0.99] text-slate-950 font-extrabold text-sm transition cursor-pointer shadow-[0_0_25px_rgba(0,243,255,0.35),0_0_25px_rgba(255,0,127,0.25)]"
+                >
+                    ورود به ترمینال
+                </button>
             </form>
-
-            <!-- فوتر تزئینی -->
-            <div class="mt-6 text-center text-[10px] font-mono text-gray-600">
-                ENCRYPTED CONNECTION • MT5 CORE v1.2
-            </div>
         </div>
     </div>
 
+    <script>
+        // ساعت ایران و تاریخ میلادی به وقت تهران
+        function updateIranTimeAndGregorianDate() {
+            const now = new Date();
+            const clockEl = document.getElementById('iran-clock');
+            const dateEl = document.getElementById('iran-gregorian-date');
+
+            if (clockEl) {
+                clockEl.textContent = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Asia/Tehran',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                }).format(now);
+            }
+
+            if (dateEl) {
+                dateEl.textContent = new Intl.DateTimeFormat('en-US', {
+                    timeZone: 'Asia/Tehran',
+                    weekday: 'short',
+                    month: 'short',
+                    day: '2-digit',
+                    year: 'numeric'
+                }).format(now);
+            }
+        }
+        updateIranTimeAndGregorianDate();
+        setInterval(updateIranTimeAndGregorianDate, 1000);
+
+        // حرکت نقطه قیمت، هاله و خط افقی
+        const dot = document.getElementById('hud-price-dot');
+        const halo = document.getElementById('hud-price-halo');
+        const line = document.getElementById('hud-price-line');
+        const deltaEl = document.getElementById('live-delta');
+        let t = 0;
+
+        setInterval(() => {
+            t += 0.4;
+            const y = 24 + Math.sin(t) * 10;
+            const pct = (Math.sin(t) * 2.1).toFixed(2);
+            if (dot) dot.setAttribute('cy', y.toFixed(1));
+            if (halo) halo.setAttribute('cy', y.toFixed(1));
+            if (line) {
+                line.setAttribute('y1', y.toFixed(1));
+                line.setAttribute('y2', y.toFixed(1));
+            }
+            if (deltaEl) {
+                const sign = pct >= 0 ? '+' : '';
+                deltaEl.textContent = `${sign}${pct}%`;
+            }
+        }, 500);
+
+        // نمایش/مخفی کردن رمز عبور
+        const toggleBtn = document.getElementById('toggle-pass');
+        const passInput = document.getElementById('id_password');
+        if (toggleBtn && passInput) {
+            toggleBtn.addEventListener('click', () => {
+                const isPass = passInput.type === 'password';
+                passInput.type = isPass ? 'text' : 'password';
+                toggleBtn.classList.toggle('text-[#ff007f]', isPass);
+            });
+        }
+    </script>
 </body>
 </html>
