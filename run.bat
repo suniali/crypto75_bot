@@ -35,6 +35,13 @@ if errorlevel 1 (
     goto :error_exit
 )
 
+echo [INFO] Applying collectstatic...
+python manage.py collectstatic --noinput
+if errorlevel 1 (
+    echo [ERROR] Static files collection failed!
+    goto :error_exit
+)
+
 echo [INFO] Checking for superuser...
 set HAS_SUPERUSER=0
 for /f "delims=" %%i in ('python -c "import django, os; os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings'); django.setup(); from django.contrib.auth.models import User; print(1 if User.objects.filter(is_superuser=True).exists() else 0)"') do set HAS_SUPERUSER=%%i
