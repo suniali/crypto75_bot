@@ -599,7 +599,7 @@
                                 JARVIS JOURNAL
                             </h1>
                             <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm">
-                                v2027.4
+                                {{version}}
                             </span>
                         </div>
                         <p class="text-[11px] text-slate-400 font-medium mt-0.5">سیستم مدیریت ریسک و تحلیل عصبی ژورنال</p>
@@ -724,7 +724,7 @@
             <form action="{% url 'logout' %}" method="post" class="inline-block">
                 {% csrf_token %}
                 <button type="submit" title="قطع اتصال (خروج)" aria-label="خروج از حساب"
-                    class="group relative rounded-2xl p-2.5 bg-[#0b0d17] border border-fuchsia-500/40 hover:border-fuchsia-400 text-fuchsia-400 hover:text-white transition-all duration-300 shadow-[0_0_10px_rgba(255,0,128,0.15)] hover:shadow-[0_0_18px_rgba(255,0,128,0.65)] cursor-pointer"
+                    class="group p-2.5 rounded-xl bg-[#050812] border border-cyan-400/30 hover:border-[#ff007f] text-[#00f3ff] hover:text-[#ff007f] transition-all duration-200 cursor-pointer shadow-[0_0_15px_rgba(0,243,255,0.12)] hover:shadow-[0_0_20px_rgba(255,0,127,0.35)]"
                     style="clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);">
                     
                     <!-- آیکون SVG پاور / قطع اتصال سایبرپانکی -->

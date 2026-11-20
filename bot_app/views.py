@@ -22,6 +22,7 @@ CACHE_DIR = Path("ai_analysis_cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
+VERSION=config("VERSION", default="1.0.0")
 
 def generate_trades_hash(processed_trades) -> str:
     """تولید یک اثر انگشت (Hash) یکتا بر اساس شناسه، زمان و وضعیت تریدها"""
@@ -110,7 +111,11 @@ def journal_dashboard(request):
     except EmptyPage:
         metrics['trades'] = paginator.page(paginator.num_pages)
 
-    context = {**metrics,'ai_analysis_data': ai_analysis_data,'unit':CURENCY_UNIT}
+    context = {
+        **metrics,
+        'ai_analysis_data': ai_analysis_data,
+        'unit':CURENCY_UNIT,
+        'version': VERSION,}
 
     return render(request, 'dashboard.html', context)
 

@@ -146,6 +146,7 @@
 
 2. فایل .env را در کنار manage.py بسازید و مقادیر زیر را قرار دهید:
   ```bash
+  VERSION=2027.2.6
   TELEGRAM_BOT_TOKEN=your_bot_token_here
   SECRET_KEY=your_django_secret_key
   ALLOWED_HOSTS=127.0.0.1,localhost,YOUR_IP_ADDRESS
