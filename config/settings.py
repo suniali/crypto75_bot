@@ -29,6 +29,24 @@ DEBUG = False
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://localhost:8443",
+    "https://127.0.0.1:8000",
+]
+
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# Optional, good practice on HTTPS
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Keep False if frontend JS reads csrftoken cookie
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# Needed if Caddy/reverse proxy terminates TLS and forwards X-Forwarded-Proto
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+
 # Application definition
 
 INSTALLED_APPS = [
