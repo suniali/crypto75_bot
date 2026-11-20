@@ -10,12 +10,14 @@ __pycache__/
 *.sqlite3-journal
 *.db
 *.pkl
+*.age
 
 # Media & Static local files
 /media/
 /staticfiles/
 /static_collected/
 /ai_analysis_cache/
+/backups/
 
 # Environment variables & secrets
 .env
