@@ -146,13 +146,14 @@
 
 2. فایل .env را در کنار manage.py بسازید و مقادیر زیر را قرار دهید:
   ```bash
-  VERSION=2027.2.6
+  VERSION=2027.2.7
   TELEGRAM_BOT_TOKEN=your_bot_token_here
   SECRET_KEY=your_django_secret_key
   ALLOWED_HOSTS=127.0.0.1,localhost,YOUR_IP_ADDRESS
   GEMINI_API_KEY=your_gemini_api_key
   MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
   DASHBOARD_PORT=8000
+  HTTPS_PORT=8443
   CURENCY_UNIT=$
   ```
   ## چگونه SECRET_KEY اختصاصی بسازیم؟
