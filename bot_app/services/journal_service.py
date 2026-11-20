@@ -9,6 +9,8 @@ from typing import Dict, Any, Tuple
 from asgiref.sync import sync_to_async
 from django.core.files.base import ContentFile
 
+from bot_app.services.analysis_service import get_user_progression_plan
+
 from bot_app.models import TradeJournal, TelegramUser, MarketType
 
 logger = logging.getLogger(__name__)
@@ -312,9 +314,10 @@ def finalize_closed_trade_in_db(chat_id: int, deal: dict, chart_buf=None):
         commission = deal.get("commission", 0.0)
         swap = deal.get("swap", 0.0)
 
-        be_threshold = user_obj.initial_balance * Decimal('0.01')  # ۱٪ از موجودی اولیه به عنوان آستانه BE
+        user_plan = get_user_progression_plan(user_obj)
+        be_threshold = user_plan.get("current_risk", 0.0) if user_plan else 0.0
 
-        if 0 <= net_profit <= be_threshold:
+        if 0 <= net_profit <= be_threshold: 
             result = 'BE'
         elif net_profit >= be_threshold:
             result = 'WIN'
