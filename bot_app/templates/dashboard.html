@@ -70,8 +70,8 @@
         /* اسکرول بار مدرن و باریک */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #0b0f19; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+        ::-webkit-scrollbar-thumb { background: #0d1830; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00f3ff; }
 
         /* افکت درخشش متن‌های مهم */
         .neon-text-sky {
@@ -325,6 +325,215 @@
             letter-spacing: .12em; font-variant-numeric: tabular-nums;
         }
         
+
+        /* ================================================================
+           CYBER DECK THEME — هم‌راستا با صفحه ورود (JARVIS // CYBERNETIC HUD)
+           فقط لایه‌ی ظاهری؛ داده‌ها، متغیرها و منطق دست‌نخورده‌اند.
+        ================================================================ */
+        :root{
+            --cy-cyan:#00f3ff;
+            --cy-pink:#ff007f;
+            --cy-amber:#facc15;
+            --cy-mint:#2bffd0;
+            --cy-ink:#020308;
+            --cy-deck:#050812;
+            --cy-line:rgba(0,243,255,.22);
+        }
+
+        body{
+            background-color:var(--cy-ink) !important;
+            background-image:
+                radial-gradient(circle at 15% 12%, rgba(0,243,255,.16), transparent 42%),
+                radial-gradient(circle at 85% 88%, rgba(255,0,127,.15), transparent 45%),
+                linear-gradient(to right, rgba(0,243,255,.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,0,127,.038) 1px, transparent 1px) !important;
+            background-size:100% 100%, 100% 100%, 26px 26px, 26px 26px !important;
+            background-attachment:fixed !important;
+            color:#d9f7ff !important;
+        }
+
+        /* خط اسکنر نئونی سراسری (مثل پنل ورود) */
+        body::before{
+            content:"";
+            position:fixed; left:0; right:0; top:0; height:140px;
+            z-index:0; pointer-events:none;
+            background:linear-gradient(to bottom, transparent, rgba(0,243,255,.05) 55%, rgba(255,0,127,.035) 78%, transparent);
+            animation:cyberScan 11s linear infinite;
+        }
+        @keyframes cyberScan{
+            0%{ transform:translateY(-140px); opacity:0; }
+            14%{ opacity:1; }
+            86%{ opacity:1; }
+            100%{ transform:translateY(100vh); opacity:0; }
+        }
+
+        /* برند هدر با گلیچ نئونی */
+        .cyber-brand{
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size:1.3rem; font-weight:800; letter-spacing:.07em;
+            color:#ffffff; line-height:1.25;
+            text-shadow:-2px 0 rgba(255,0,127,.75), 2px 0 rgba(0,243,255,.75), 0 0 22px rgba(0,243,255,.35);
+        }
+        .cyber-brand-cyan{ color:var(--cy-cyan); text-shadow:0 0 14px rgba(0,243,255,.9); }
+        .cyber-title-glitch{ animation:cyberGlitch 6s infinite; }
+        @keyframes cyberGlitch{
+            0%, 91%, 100%{
+                transform:translate(0,0);
+                text-shadow:-2px 0 rgba(255,0,127,.75), 2px 0 rgba(0,243,255,.75), 0 0 22px rgba(0,243,255,.35);
+            }
+            93%{ transform:translate(-1.5px,0); text-shadow:-4px 0 rgba(255,0,127,.95), 4px 0 rgba(0,243,255,.95); }
+            95%{ transform:translate(1.5px,0); text-shadow:4px 0 rgba(255,0,127,.95), -4px 0 rgba(0,243,255,.95); }
+        }
+
+        /* کارت‌های اصلی ← پنل‌های سایبری */
+        .glass-card{
+            position:relative;
+            background:linear-gradient(180deg, rgba(5,8,18,.96) 0%, rgba(9,13,26,.92) 100%) !important;
+            border:1px solid var(--cy-line) !important;
+            border-radius:1.5rem !important;
+            box-shadow:0 0 0 1px rgba(0,243,255,.07), 0 0 34px rgba(0,243,255,.06), 0 26px 70px rgba(0,0,0,.85);
+            backdrop-filter:blur(18px);
+            -webkit-backdrop-filter:blur(18px);
+        }
+        .glass-card::after{
+            content:""; position:absolute; top:0; left:8%; right:8%; height:1px; border-radius:2px;
+            background:linear-gradient(90deg, transparent, var(--cy-cyan), var(--cy-pink), transparent);
+            opacity:.55; pointer-events:none;
+        }
+        .glass-card:hover{
+            transform:translateY(-3px);
+            border-color:rgba(255,0,127,.35) !important;
+            box-shadow:0 0 0 1px rgba(0,243,255,.22), 0 0 46px rgba(0,243,255,.14), 0 0 64px rgba(255,0,127,.10), 0 30px 76px rgba(0,0,0,.9);
+        }
+
+        /* هدر به سبک "کنسول" صفحه ورود */
+        header.glass-card{
+            border-color:rgba(0,243,255,.34) !important;
+            box-shadow:0 0 0 1px rgba(0,243,255,.18), 0 0 46px rgba(0,243,255,.16), 0 0 74px rgba(255,0,127,.10), 0 30px 90px rgba(0,0,0,.9) !important;
+        }
+        header.glass-card::after{ left:0; right:0; height:2px; opacity:.9; }
+
+        /* سطوح داخلی پنل‌ها */
+        [class*="bg-[#0f172a]"]{
+            background:linear-gradient(180deg, rgba(5,8,18,.96), rgba(9,13,26,.9)) !important;
+            border-color:var(--cy-line) !important;
+        }
+        [class*="bg-slate-950"]{ background-color:rgba(3,6,14,.92) !important; }
+        [class*="bg-slate-900"]{ background-color:rgba(5,10,22,.88) !important; }
+        [class*="bg-slate-800"]{ background-color:rgba(9,17,34,.85) !important; }
+        [class*="bg-gray-800"]{ background-color:rgba(0,243,255,.06) !important; }
+        [class*="bg-sky-950"]{ background-color:rgba(0,243,255,.07) !important; }
+        [class*="bg-rose-950"]{ background-color:rgba(255,0,127,.07) !important; }
+        [class*="bg-cyan-950"]{ background-color:rgba(0,243,255,.10) !important; }
+
+        /* حاشیه‌های نئونی */
+        [class*="border-slate-800"],
+        [class*="border-slate-700"],
+        [class*="border-gray-800"]{ border-color:rgba(0,243,255,.18) !important; }
+        [class*="divide-slate-800"] > :not([hidden]) ~ :not([hidden]),
+        [class*="divide-gray-800"] > :not([hidden]) ~ :not([hidden]){ border-color:rgba(0,243,255,.13) !important; }
+        [class*="border-sky-500"], [class*="border-cyan-500"]{ border-color:rgba(0,243,255,.5) !important; }
+        [class*="border-emerald-500"]{ border-color:rgba(43,255,208,.4) !important; }
+        [class*="border-rose-500"]{ border-color:rgba(255,0,127,.45) !important; }
+        [class*="border-purple-500"], [class*="border-fuchsia-500"], [class*="border-indigo-500"]{ border-color:rgba(255,92,200,.45) !important; }
+        [class*="border-amber-500"]{ border-color:rgba(250,204,21,.4) !important; }
+
+        /* رنگ متن‌ها */
+        [class*="text-sky-3"], [class*="text-sky-4"], [class*="text-blue-4"],
+        [class*="text-cyan-3"], [class*="text-cyan-4"]{ color:var(--cy-cyan) !important; }
+        [class*="text-emerald-4"]{ color:var(--cy-mint) !important; }
+        [class*="text-rose-4"], [class*="text-rose-5"], [class*="text-red-4"]{ color:#ff3d92 !important; }
+        [class*="text-indigo-3"], [class*="text-indigo-4"], [class*="text-purple-4"],
+        [class*="text-fuchsia-3"], [class*="text-fuchsia-4"]{ color:#ff5cc8 !important; }
+        [class*="text-amber-4"]{ color:var(--cy-amber) !important; }
+        [class*="text-slate-200"], [class*="text-slate-300"]{ color:#cfe9f5 !important; }
+        [class*="text-slate-400"], [class*="text-gray-400"]{ color:#8fa9c0 !important; }
+        [class*="text-slate-500"], [class*="text-gray-500"]{ color:#6d84a0 !important; }
+
+        /* پرکننده‌های رنگی سالید */
+        [class~="bg-sky-400"], [class~="bg-blue-400"], [class~="bg-sky-500"], [class~="bg-cyan-400"], [class~="bg-cyan-500"]{ background-color:var(--cy-cyan) !important; }
+        [class~="bg-emerald-400"], [class~="bg-emerald-500"]{ background-color:var(--cy-mint) !important; }
+        [class~="bg-rose-400"], [class~="bg-rose-500"]{ background-color:var(--cy-pink) !important; }
+        [class~="bg-amber-400"], [class~="bg-amber-500"]{ background-color:var(--cy-amber) !important; }
+        [class~="bg-indigo-500"], [class~="bg-indigo-600"]{ background-color:#ff5cc8 !important; }
+
+        /* گرادیان‌های آکسان */
+        [class*="from-purple-600"]{ background-image:linear-gradient(90deg, #00f3ff, #ff007f) !important; }
+        [class*="from-sky-500"]{ background-image:linear-gradient(90deg, #00f3ff, #2bffd0) !important; }
+
+        /* اسلایدر تب‌ها */
+        #slider-indicator{
+            background-image:linear-gradient(90deg, #00f3ff 0%, #facc15 52%, #ff007f 100%) !important;
+            box-shadow:0 0 18px rgba(0,243,255,.5), 0 0 32px rgba(255,0,127,.3) !important;
+        }
+
+        /* دکمه‌های بازه زمانی (1D/1W/...) */
+        #period-pills a{ transition:all .25s ease; }
+        #period-pills a[class~="bg-cyan-500"]{
+            background-image:linear-gradient(90deg, #00f3ff, #facc15) !important;
+            color:#02030a !important;
+            box-shadow:0 0 16px rgba(0,243,255,.45) !important;
+        }
+
+        /* منوی دیتابیس */
+        #dbDropdownMenu{
+            background:rgba(4,7,16,.98) !important;
+            border-color:rgba(0,243,255,.35) !important;
+            box-shadow:0 0 0 1px rgba(0,243,255,.15), 0 24px 60px rgba(0,0,0,.95), 0 0 40px rgba(0,243,255,.12) !important;
+        }
+
+        /* مودال‌ها */
+        #tradeModal > div,
+        #restoreModal > div,
+        #dayTradesModal > div{
+            background:linear-gradient(180deg, rgba(5,8,18,.99), rgba(7,11,24,.99)) !important;
+            border:1px solid rgba(0,243,255,.34) !important;
+            border-radius:1.5rem !important;
+            box-shadow:0 0 0 1px rgba(0,243,255,.16), 0 0 60px rgba(0,243,255,.18), 0 0 90px rgba(255,0,127,.12), 0 40px 100px rgba(0,0,0,.95) !important;
+        }
+
+        /* جدول ژورنال */
+        .trade-row:hover{ background-color:rgba(0,243,255,.06) !important; }
+        table thead{ letter-spacing:.06em; }
+
+        /* HUD شناور بالای صفحه */
+        .jv{ --jv-cyan:#00f3ff; --jv-pink:#ff007f; --jv-green:#facc15; }
+        .jv-aura{
+            background:radial-gradient(ellipse at 50% 35%, rgba(0,243,255,.22), rgba(255,0,127,.10) 55%, transparent 72%) !important;
+        }
+        .jv-island{
+            background-color:#03050b !important;
+            box-shadow:0 3px 14px rgba(0,0,0,.7), 0 0 22px rgba(0,243,255,.10) !important;
+        }
+        .jv.is-open .jv-island,
+        .jv-island:hover{
+            background-color:rgba(5,10,22,.97) !important;
+            box-shadow:0 6px 24px rgba(0,243,255,.18) !important;
+        }
+        .jv-card{ border-color:rgba(0,243,255,.28) !important; }
+        .jv-panel{
+            border-color:rgba(0,243,255,.32) !important;
+            background:linear-gradient(160deg, rgba(0,40,64,.45), rgba(4,8,16,.5)) !important;
+        }
+        .jv-gauge .bar{ filter:drop-shadow(0 0 6px rgba(0,243,255,.8)); }
+
+        /* خروجی مارک‌داون هوش مصنوعی */
+        #ai-response-box h1,
+        #ai-response-box h2,
+        #ai-response-box h3{ color:var(--cy-cyan) !important; text-shadow:0 0 10px rgba(0,243,255,.45); }
+        #ai-response-box h3{ border-right-color:var(--cy-pink) !important; }
+        #ai-response-box strong{ color:var(--cy-amber) !important; }
+        #ai-response-box p{ color:#c3ddeb !important; }
+        #ai-response-box hr{ border-color:rgba(0,243,255,.2) !important; }
+
+        /* نوار اسکرول نئونی */
+        ::-webkit-scrollbar-track{ background:var(--cy-ink); }
+        ::-webkit-scrollbar-thumb{ background:linear-gradient(180deg, #00f3ff, #ff007f); border-radius:4px; }
+        ::-webkit-scrollbar-thumb:hover{ background:#00f3ff; }
+
+        .neon-text-sky{ text-shadow:0 0 15px rgba(0,243,255,.55); }
+        .neon-text-emerald{ text-shadow:0 0 15px rgba(43,255,208,.55); }
+
     </style>
 </head>
 <!-- ================= Modal 2027 Glassmorphism ================= -->
@@ -596,8 +805,8 @@
                     </div>
                     <div>
                         <div class="flex items-center gap-2">
-                            <h1 class="text-xl font-black tracking-tight bg-gradient-to-r from-cyan-400 via-teal-200 to-purple-400 bg-clip-text text-transparent drop-shadow-sm">
-                                JARVIS JOURNAL
+                            <h1 dir="ltr" class="cyber-brand cyber-title-glitch">
+                                JARVIS<span class="cyber-brand-cyan">_</span>JOURNAL
                             </h1>
                             <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 shadow-sm">
                                 {{version}}
@@ -630,7 +839,7 @@
 
                     <!-- تقویم -->
                     <button type="button" onclick="switchDashboardTab('calendar')" id="btn-calendar"
-                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400  flex items-center justify-center gap-2 cursor-pointer select-none">
                         <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <rect x="3" y="4" width="18" height="18" rx="2.5"/>
                             <path d="M16 2v4M8 2v4M3 10h18"/>
@@ -641,7 +850,7 @@
 
                     <!-- معاملات -->
                     <button type="button" onclick="switchDashboardTab('trades')" id="btn-trades"
-                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400  flex items-center justify-center gap-2 cursor-pointer select-none">
                         <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M9 5v4"/>
                             <rect x="7" y="9" width="4" height="6" rx="1"/>
@@ -656,7 +865,7 @@
 
                     <!-- هوش مصنوعی -->
                     <button type="button" onclick="switchDashboardTab('ai')" id="btn-ai"
-                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400 hover:text-cyan-300 flex items-center justify-center gap-2 cursor-pointer select-none">
+                            class="tab-btn group relative z-10 w-1/4 py-2.5 text-xs font-bold font-mono transition-all duration-300 text-slate-400  flex items-center justify-center gap-2 cursor-pointer select-none">
                         <svg class="w-[18px] h-[18px] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/>
                             <path d="M20 3v4M22 5h-4M4 17v2M5 18H3"/>
@@ -669,7 +878,7 @@
             <!-- ================= فیلترهای زمانی و دکمه دیتابیس ================= -->
             <div class="flex flex-wrap items-center justify-between xl:justify-end gap-3 w-full xl:w-auto">
                 <!-- فیلترهای زمانی (Pills) -->
-                <div class="flex flex-wrap items-center gap-1 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs shadow-inner">
+                <div id="period-pills" class="flex flex-wrap items-center gap-1 bg-slate-950/90 p-1 rounded-2xl border border-slate-800 text-xs shadow-inner">
                     <a href="?period=daily" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'daily' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1D</a>
                     <a href="?period=weekly" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'weekly' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1W</a>
                     <a href="?period=monthly" class="px-2.5 py-1.5 rounded-xl font-bold font-mono transition-all {% if current_period == 'monthly' %}bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(0,240,255,0.4)]{% else %}text-slate-400 hover:text-white hover:bg-slate-900/80{% endif %}">1M</a>
@@ -955,7 +1164,7 @@
 
                         <!-- 🎯 حلقه دایره‌ای واقعی و پویا -->
                         <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg"
-                            style="background: conic-gradient({% if total_net_profit >= 0 %}#34d399{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                            style="background: conic-gradient({% if total_net_profit >= 0 %}#00f3ff{% else %}#ff007f{% endif %} {{ gauge_angle }}deg, #0d1830 0deg);">
                             
                             <!-- هسته داخلی دایره -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
@@ -983,7 +1192,7 @@
                         
                         <!-- 🎯 نمودار حلقه‌ای پویا بر اساس وین‌ریت واقعی -->
                         <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-sky-500/10"
-                            style="background: conic-gradient(#38bdf8 {{ win_rate_angle }}deg, #1e293b 0deg);">
+                            style="background: conic-gradient(#00f3ff {{ win_rate_angle }}deg, #0d1830 0deg);">
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
@@ -1024,7 +1233,7 @@
                         
                         <!-- 🎯 حلقه دایره‌ای پویای Profit Factor -->
                         <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if profit_factor >= 1.2 %}shadow-sky-500/10{% else %}shadow-amber-500/10{% endif %}"
-                            style="background: conic-gradient({% if profit_factor >= 1.2 %}#38bdf8{% else %}#fbbf24{% endif %} {{ pf_angle }}deg, #1e293b 0deg);">
+                            style="background: conic-gradient({% if profit_factor >= 1.2 %}#00f3ff{% else %}#fbbf24{% endif %} {{ pf_angle }}deg, #0d1830 0deg);">
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
@@ -1063,7 +1272,7 @@
                         
                         <!-- 🎯 حلقه دایره‌ای پویای Drawdown -->
                         <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg shadow-rose-500/10"
-                            style="background: conic-gradient(#f43f5e {{ dd_angle }}deg, #1e293b 0deg);">
+                            style="background: conic-gradient(#ff007f {{ dd_angle }}deg, #0d1830 0deg);">
                             
                             <!-- هسته داخلی توخالی (Doughnut) -->
                             <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
@@ -1107,7 +1316,7 @@
                             
                             <!-- 🎯 حلقه دایره‌ای پویای درصد رشد (Gain) -->
                             <div class="relative w-16 h-16 rounded-full flex items-center justify-center p-[3px] shadow-lg {% if gain_percent >= 0 %}shadow-sky-500/10{% else %}shadow-rose-500/10{% endif %}"
-                                style="background: conic-gradient({% if gain_percent >= 0 %}#38bdf8{% else %}#f43f5e{% endif %} {{ gauge_angle }}deg, #1e293b 0deg);">
+                                style="background: conic-gradient({% if gain_percent >= 0 %}#00f3ff{% else %}#ff007f{% endif %} {{ gauge_angle }}deg, #0d1830 0deg);">
                                 
                                 <!-- هسته داخلی توخالی (Doughnut) -->
                                 <div class="w-full h-full bg-[#0f172a] rounded-full flex items-center justify-center">
@@ -1984,8 +2193,8 @@
         // ۱. نمودار رشد حساب (Equity Curve)
         const ctxPnL = document.getElementById('pnlChart').getContext('2d');
         const gradient = ctxPnL.createLinearGradient(0, 0, 0, 300);
-        gradient.addColorStop(0, 'rgba(16, 185, 129, 0.4)');
-        gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+        gradient.addColorStop(0, 'rgba(0, 243, 255, 0.32)');
+        gradient.addColorStop(1, 'rgba(0, 243, 255, 0.0)');
 
         new Chart(ctxPnL, {
             type: 'line',
@@ -2001,8 +2210,8 @@
                     pointHoverRadius: 6,
                     // اضافه شدن قابلیت تغییر رنگ هوشمند خط و پس‌زمینه بر اساس مثبت یا منفی بودن
                     segment: {
-                        borderColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? '#ef4444' : '#10b981',
-                        backgroundColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? 'rgba(239, 68, 68, 0.15)' : gradient
+                        borderColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? '#ff007f' : '#00f3ff',
+                        backgroundColor: ctx => ctx.p0.parsed.y < 0 || ctx.p1.parsed.y < 0 ? 'rgba(255, 0, 127, 0.16)' : gradient
                     }
                 }]
             },
@@ -2030,9 +2239,9 @@
                 labels: ['برد (Win)', 'باخت (Loss)', 'یربه‌یر (BE)'],
                 datasets: [{
                     data: winLossData,
-                    backgroundColor: ['#38bdf8', '#f43f5e', '#64748b'], // آبی نئونی، قرمز مدرن، خاکستری
+                    backgroundColor: ['#00f3ff', '#ff007f', '#3b4a63'], // آبی نئونی، قرمز مدرن، خاکستری
                     borderWidth: 2,
-                    borderColor: '#0f172a',
+                    borderColor: '#050812',
                     spacing: 8 // فاصله بیشتر بین برش‌ها برای حالت گیمیفاید
                 }]
             },
@@ -2062,10 +2271,10 @@
                 datasets: [{
                     label: 'افت حساب (%)',
                     data: drawdownData,
-                    borderColor: '#f43f5e',
+                    borderColor: '#ff007f',
                     borderWidth: 1.5,
                     fill: true,
-                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                    backgroundColor: 'rgba(255, 0, 127, 0.14)',
                     tension: 0.2,
                     pointRadius: 0
                 }]
@@ -2095,7 +2304,7 @@
                 labels: daysNames,
                 datasets: [{
                     data: dayPnlData,
-                    backgroundColor: dayPnlData.map(v => v >= 0 ? '#10b981' : '#f43f5e'),
+                    backgroundColor: dayPnlData.map(v => v >= 0 ? '#00f3ff' : '#ff007f'),
                     borderRadius: 4
                 }]
             },
@@ -2117,7 +2326,7 @@
                 labels: symbolsData,
                 datasets: [{
                     data: symbolPnlData,
-                    backgroundColor: symbolPnlData.map(v => v >= 0 ? '#10b981' : '#f43f5e'),
+                    backgroundColor: symbolPnlData.map(v => v >= 0 ? '#00f3ff' : '#ff007f'),
                     borderRadius: 4
                 }]
             },
@@ -2141,8 +2350,8 @@
             data: {
                 labels: rrPlanned.map((_, i) => `#${i + 1}`),
                 datasets: [
-                    { label: 'برنامه‌ریزی', data: rrPlanned, backgroundColor: '#4b5563' },
-                    { label: 'واقعی', data: rrRealized, backgroundColor: '#818cf8' }
+                    { label: 'برنامه‌ریزی', data: rrPlanned, backgroundColor: '#2b3852' },
+                    { label: 'واقعی', data: rrRealized, backgroundColor: '#facc15' }
                 ]
             },
             options: {
@@ -2552,22 +2761,22 @@
         // اسکریپت رندر نمودار رادار WaveScore
         const overallScore = Number("{{ radar_score_overall }}") || 0;
     
-        let radarBorderColor = '#818cf8'; // پیش‌فرض (آبی ملایم)
-        let radarBgColor = 'rgba(99, 102, 241, 0.25)';
-        let pointColor = '#6366f1';
+        let radarBorderColor = '#facc15'; // پیش‌فرض (کهربایی)
+        let radarBgColor = 'rgba(250, 204, 21, 0.18)';
+        let pointColor = '#facc15';
 
         if (overallScore >= 75) {
-            radarBorderColor = '#34d399'; // سبز ایمن
-            radarBgColor = 'rgba(52, 211, 153, 0.25)';
-            pointColor = '#10b981';
+            radarBorderColor = '#00f3ff'; // سایان ایمن
+            radarBgColor = 'rgba(0, 243, 255, 0.20)';
+            pointColor = '#00f3ff';
         } else if (overallScore >= 50) {
-            radarBorderColor = '#38bdf8'; // آبی پرو (نرمال)
-            radarBgColor = 'rgba(56, 189, 248, 0.25)';
-            pointColor = '#0ea5e9';
+            radarBorderColor = '#facc15'; // کهربایی (نرمال)
+            radarBgColor = 'rgba(250, 204, 21, 0.18)';
+            pointColor = '#facc15';
         } else {
-            radarBorderColor = '#f43f5e'; // قرمز هشدار
-            radarBgColor = 'rgba(244, 63, 94, 0.25)';
-            pointColor = '#e11d48';
+            radarBorderColor = '#ff007f'; // صورتی هشدار
+            radarBgColor = 'rgba(255, 0, 127, 0.18)';
+            pointColor = '#ff007f';
         }
 
         const radarCtx = document.getElementById('radarChart').getContext('2d');
