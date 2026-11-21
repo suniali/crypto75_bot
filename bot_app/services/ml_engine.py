@@ -1,15 +1,13 @@
 import os
-import logging
-from sklearn.metrics import accuracy_score, classification_report
+import joblib
+import numpy as np
+from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 import xgboost as xgb
-import joblib  # برای ذخیره و بارگذاری مدل روی دیسک
 
-logger = logging.getLogger(__name__)
 
 class TradingAIEngine:
-
-    def __init__(self, symbol, timeframe='5M'):
+    def __init__(self, symbol: str, timeframe: str = 'H1'):
         self.symbol = symbol
         self.timeframe = timeframe
         self.model_path = f'trading_xgb_model_{symbol}_{timeframe}.pkl'
@@ -21,72 +19,68 @@ class TradingAIEngine:
             'body_size',
             'candle_range',
             'trend_direction',
+            'div_signal',
+            'div_strength',
+            'ob_proximity',
         ]
 
-        # اگر از قبل مدلی ذخیره شده باشد، آن را بارگذاری می‌کنیم
         if os.path.exists(self.model_path):
-            self.model = joblib.load(self.model_path)
+            try:
+                self.model = joblib.load(self.model_path)
+            except Exception:
+                self.model = None
 
-    def train(self, df):
-        """آموزش مدل با استفاده از دیتافریم حاوی ویژگی‌ها و برچسب‌ها"""
-        # جدا کردن ویژگی‌ها (Features) و برچسب هدف (Label)
-        X = df[self.feature_columns]
-        y = df['target_label']  # 1 برای موفقیت/سود، 0 برای شکست
+    def train(self, df, min_accuracy: float = 0.52) -> dict:
+        """آموزش آفلاین مدل با گیت کیفیت پیش از ذخیره"""
+        missing = [c for c in self.feature_columns if c not in df.columns]
+        if missing:
+            return {'saved': False, 'reason': f'ستون‌های ناموجود: {missing}'}
 
-        # تقسیم داده‌ها به بخش آموزش (80%) و تست (20%)
+        X = df[self.feature_columns].astype(float)
+        y = df['target_label'].astype(int)
+
+        if len(df) < 150 or y.nunique() < 2:
+            return {'saved': False, 'reason': 'تعداد نمونه‌ها یا تنوع برچسب‌ها برای آموزش کافی نیست.'}
+
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=0.2, random_state=42, shuffle=False
         )
 
-        # ساخت مدل XGBoost Classifier
-        self.model = xgb.XGBClassifier(
-            n_estimators=100,
-            learning_rate=0.05,
+        model = xgb.XGBClassifier(
+            n_estimators=150,
+            learning_rate=0.04,
             max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
             random_state=42,
             eval_metric='logloss',
         )
 
-        # آموزش مدل
-        self.model.fit(X_train, y_train)
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        acc = float(accuracy_score(y_test, preds))
 
-        # ارزیابی عملکرد روی داده‌های تست
-        y_pred = self.model.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
+        saved = False
+        if acc >= min_accuracy:
+            self.model = model
+            joblib.dump(self.model, self.model_path)
+            saved = True
 
-        # ذخیره مدل روی هارد دیسک
-        joblib.dump(self.model, self.model_path)
-        return acc
+        return {
+            'saved': saved,
+            'test_accuracy': round(acc, 4),
+            'train_samples': len(X_train),
+            'test_samples': len(X_test),
+        }
 
-    def predict_signal(self, latest_features_dict):
-        """پیش‌بینی شرایط بازار برای معاملات دو طرفه (Long و Short)
-
-        خروجی: (سیگنال: 'BUY', 'SELL' یا 'HOLD'، درصد اطمینان مدل)
+    def score_setup(self, features_dict: dict) -> float:
+        """
+        محاسبه احتمال موفقیت ستاپ (بین 0.0 تا 1.0).
+        اگر مدل هنوز آموزش نداده باشد، امتیاز خنثی 0.50 برمی‌گرداند.
         """
         if not self.model:
-            return "HOLD", 0.0
+            return 0.50
 
-        # آماده‌سازی داده
-        input_data = [[latest_features_dict[col] for col in self.feature_columns]]
-
-        # گرفتن احتمالات برای هر سه کلاس [کلاس 0: خنثی، کلاس 1: خرید، کلاس 2: فروش]
-        probabilities = self.model.predict_proba(input_data)[0]
-
-        # پیش‌بینی نهایی مدل (0، 1 یا 2)
-        predicted_class = self.model.predict(input_data)[0]
-
-        # کانفیدنسیِ واقعیِ همان تصمیمی که مدل گرفته است
-        confidence = probabilities[predicted_class]
-
-        # آستانه اطمینان مجاز (مثلاً 65 درصد)
-        threshold = 0.65
-
-        # تعیین نوع سیگنال بر اساس کلاس پیش‌بینی شده
-        if predicted_class == 1 and confidence >= threshold:
-            return "BUY", float(confidence)  # صعودی / لانگ
-
-        elif predicted_class == 2 and confidence >= threshold:
-            return "SELL", float(confidence)  # نزولی / شورت
-
-        else:
-            return "HOLD", float(confidence)  # اطمینان پایین یا بازار خنثی -> ورود ممنوع
+        row = [[float(features_dict.get(col, 0.0)) for col in self.feature_columns]]
+        probs = self.model.predict_proba(row)[0]
+        return float(probs[1]) if len(probs) > 1 else float(probs[0])
