@@ -5,6 +5,71 @@ cd /d "%~dp0"
 echo [INFO] Starting Django Server, Caddy HTTPS Proxy and Telegram Bot environment...
 
 :: ---------------------------------------------------------
+:: 0. بررسی و نصب Python، Git و Windows Terminal (در صورت نبودن)
+:: ---------------------------------------------------------
+where winget >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] 'winget' not found. Automatic installation of missing prerequisites requires App Installer / winget.
+)
+
+:: بررسی و نصب آخرین نسخه Python
+where python >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] 'Python' not found. Attempting installation of latest Python via winget...
+    where winget >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] winget is not available. Please install Python manually from python.org and add it to PATH.
+        goto :error_exit
+    )
+    winget install --id Python.Python.3.13 -e --accept-source-agreements --accept-package-agreements
+    if errorlevel 1 (
+        echo [ERROR] Failed to install Python via winget.
+        goto :error_exit
+    )
+    set "PATH=%PATH%;%LocalAppData%\Programs\Python\Python313;%LocalAppData%\Programs\Python\Python313\Scripts"
+) else (
+    echo [INFO] 'Python' is already installed.
+)
+
+:: بررسی و نصب آخرین نسخه Git
+where git >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] 'Git' not found. Attempting installation of latest Git via winget...
+    where winget >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] winget is not available. Please install Git manually from git-scm.com and add it to PATH.
+        goto :error_exit
+    )
+    winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
+    if errorlevel 1 (
+        echo [ERROR] Failed to install Git via winget.
+        goto :error_exit
+    )
+    set "PATH=%PATH%;%ProgramFiles%\Git\cmd;%ProgramFiles(x86)%\Git\cmd"
+) else (
+    echo [INFO] 'Git' is already installed.
+)
+
+:: بررسی و نصب آخرین نسخه Windows Terminal
+where wt >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] 'Windows Terminal' not found. Attempting installation of latest Windows Terminal via winget...
+    where winget >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] winget is not available. Please install Windows Terminal from Microsoft Store.
+        goto :error_exit
+    )
+    winget install --id Microsoft.WindowsTerminal -e --accept-source-agreements --accept-package-agreements
+    if errorlevel 1 (
+        echo [ERROR] Failed to install Windows Terminal via winget.
+        goto :error_exit
+    )
+    set "PATH=%PATH%;%LocalAppData%\Microsoft\WindowsApps"
+) else (
+    echo [INFO] 'Windows Terminal' is already installed.
+)
+
+:: ---------------------------------------------------------
 :: 1. بررسی و نصب age در صورت نبودن (بار اول)
 :: ---------------------------------------------------------
 where age >nul 2>&1
