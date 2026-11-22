@@ -53,14 +53,13 @@ from bot_app.services.user_service import set_users_blocked_status,get_or_create
 
 
 from bot_app.actions.watchlist_actions import (
-    ADD_WATCHLIST_MARKET,ADD_WATCHLIST_SYMBOL,ADD_WATCHLIST_TIMEFRAME,
+    ADD_WATCHLIST_MARKET,ADD_WATCHLIST_SYMBOL,
     show_watchlist_command,
     delete_watchlist_handler,
     confirm_delete_watchlist_handler,
     start_add_watchlist,
     add_watchlist_get_market_step,
     add_watchlist_get_symbol_step,
-    add_watchlist_get_timeframe_step,
     cancel_watch_list_callback,
 )
 from bot_app.actions.alert_actions import (
@@ -270,10 +269,6 @@ if __name__ == "__main__":
                 CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
                 CallbackQueryHandler(add_watchlist_get_symbol_step, pattern="^sym_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_watchlist_get_symbol_step),
-            ],
-            ADD_WATCHLIST_TIMEFRAME: [
-                CallbackQueryHandler(cancel_watch_list_callback, pattern="^cancel_watchlist$"),
-                CallbackQueryHandler(add_watchlist_get_timeframe_step, pattern="^(1m|5m|15m|30m|1h|4h|1d)$"),
             ],
         },
         fallbacks=[

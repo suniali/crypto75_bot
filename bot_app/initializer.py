@@ -47,7 +47,7 @@ async def on_startup(app):
         watchlist = await get_all_watchlist()
 
         for item in watchlist:
-            start_ai_analysis_job(item.symbol,item.time_frame)
+            start_ai_analysis_job(item.symbol)
 
 
     except Exception as e:

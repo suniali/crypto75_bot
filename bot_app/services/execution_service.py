@@ -1,17 +1,15 @@
-
+import logging
 from decimal import Decimal
-import pandas as pd
-
-from bot_app.models import TradeDecisionLog
-from bot_app.services.ml_engine import TradingAIEngine
-from bot_app.services.ml_features import extract_features_for_ml
-from bot_app.services.order_block_rsi_strategy import evaluate_ob_rsi_strategy
+from bot_app.models import TradeDecisionLog, MarketCandle,TelegramUser
+from bot_app.services.analysis_service import get_user_progression_plan
 from bot_app.services.mt5_service import get_broker_contract_size
+from bot_app.services.market_data_service import prepare_and_update_candles
+from .nds_strategy_service import NDS_BARS, evaluate_nds_strategy, sanitize, norm_tf, HTF_FOR
 
+logger=logger = logging.getLogger(__name__)
 
-def calculate_dynamic_lot_size(
-    symbol, account_balance, risk_percentage, current_price, stop_loss
-):
+def calculate_dynamic_lot_size(symbol, account_balance, risk_percentage, current_price, stop_loss):
+    # (کدهای شما بدون تغییر)
     contract_size_float, point, digits = get_broker_contract_size(symbol)
     if not contract_size_float:
         contract_size_float = 100.0 if 'XAU' in symbol.upper() else 100000.0
@@ -27,115 +25,80 @@ def calculate_dynamic_lot_size(
     return max(0.01, round(float(calculated_volume), 2))
 
 
-def evaluate_market_and_execute(
-    symbol, time_frame, candles_qs, account_balance, risk_percentage=1.0, min_confidence=0.60
-):
-    # ۱. تبدیل کندل‌ها به DataFrame با ترتیب صعودی زمانی (قدیمی -> جدید)
+def evaluate_market_and_execute(symbol, time_frame:str = 'M1'):
+    # 1. استانداردسازی تایم‌فریم و پیدا کردن HTF از کانفیگ NDS
+    ltf = norm_tf(time_frame)
+    htf = HTF_FOR.get(ltf)
+    
+    if not htf:
+        return {'status': 'error', 'reason': f'تایم‌فریم {ltf} در استراتژی NDS پشتیبانی نمی‌شود.'}
+
+    # 2. دریافت و آپدیت کندل‌های LTF و HTF از متاتریدر
+    logger.info(f'🔄 Updating candles for {symbol} | LTF: {ltf} | HTF: {htf}')
+    success = prepare_and_update_candles(
+        symbol=symbol, 
+        time_frame=ltf, # تابع خودش HTF را از HTF_FOR پیدا می‌کند
+        full_limit=1500, 
+        short_limit=50
+    )
+    if not success:
+        return {'status': 'error', 'reason': 'خطا در دریافت داده‌ها از متاتریدر. لطفاً وضعیت اتصال را بررسی کنید.'}
+
+    # 3. دریافت کندل‌ها از دیتابیس (حالا که مطمئنیم آپدیت هستند)
     rows = list(
-        candles_qs.values(
-            'open_price',
-            'high_price',
-            'low_price',
-            'close_price',
-            'volume',
-            'open_time',
-        )
+        MarketCandle.objects.filter(symbol=symbol, timeframe=ltf)
+        .order_by('-open_time')
+        .values('open_price', 'high_price', 'low_price', 'close_price', 'volume', 'open_time')[:NDS_BARS]
     )
-    rows.sort(key=lambda r: r['open_time'])
-    df = pd.DataFrame(rows)
+    
+    # 4. ارزیابی استراتژی
+    res = evaluate_nds_strategy(rows, symbol, ltf)
+    action = res['signal']
+    
+    if action == 'HOLD':
+        return {'status': 'skipped', 'reason': res['reason']}
 
-    if len(df) < 100:
-        return {
-            'status': 'skipped',
-            'reason': 'داده‌های تاریخی برای تحلیل کافی نیست.',
-        }
 
-    # ۲. ارزیابی استراتژی اردربلاک معتبر + واگرایی RSI (صعودی و نزولی)
-    strategy_res = evaluate_ob_rsi_strategy(df, sl_atr_mult=1.5, rr_ratio=2.0)
-    action = strategy_res.get('signal', 'HOLD')
+    # بررسی اینکه آیا این ستاپ قبلا ثبت شده است
+    if TradeDecisionLog.objects.filter(symbol=symbol, features_snapshot__nds_key=res['nds_key']).exists():
+        return {'status': 'skipped', 'reason': 'این ستاپ قبلاً ارزیابی شده است.'}
 
-    # ۳. استخراج ویژگی‌ها و امتیازدهی مدل ML (در صورت وجود مدل آموزش‌دیده)
-    processed_df = extract_features_for_ml(df)
-    latest_row = processed_df.iloc[-1].to_dict() if not processed_df.empty else {}
-
-    ai_engine = TradingAIEngine(symbol=symbol, timeframe=time_frame)
-    ml_prob = ai_engine.score_setup(latest_row) if ai_engine.model is not None else 0.50
-
-    base_score = float(strategy_res.get('setup_score', 0.0))
-    if action in ['BUY', 'SELL']:
-        final_confidence = round(((base_score * 0.65) + (ml_prob * 0.35)), 4) if ai_engine.model is not None else base_score
-    else:
-        final_confidence = 0.0
-
-    is_approved = (action in ['BUY', 'SELL']) and (final_confidence >= min_confidence)
-
-    snapshot = {
-        **{k: (float(v) if isinstance(v, (int, float, Decimal)) else str(v)) for k, v in latest_row.items()},
-        'setup_type': strategy_res.get('setup_type'),
-        'setup_score': base_score,
-        'ml_probability': round(float(ml_prob), 4),
-        'divergence': strategy_res.get('divergence'),
-        'ob_low': strategy_res.get('ob_low'),
-        'ob_high': strategy_res.get('ob_high'),
-    }
-
-    decision_log = TradeDecisionLog.objects.create(
-        symbol=symbol,
-        action=action if is_approved else 'HOLD',
-        ai_confidence=final_confidence,
-        features_snapshot=snapshot,
-    )
-
-    if not is_approved:
-        reason = strategy_res.get('reason') if action == 'HOLD' else f'امتیاز نهایی ({final_confidence:.2f}) کمتر از حد مجاز ({min_confidence:.2f}) است.'
-        return {
-            'status': 'rejected',
-            'confidence': final_confidence,
-            'reason': reason,
-        }
-
-    current_price = float(strategy_res['entry_price'])
-    stop_loss = float(strategy_res['stop_loss'])
-    take_profit = float(strategy_res['take_profit'])
-
-    price_risk_per_unit = abs(Decimal(str(current_price)) - Decimal(str(stop_loss)))
-    if price_risk_per_unit == 0:
-        return {
-            'status': 'error',
-            'reason': 'محاسبه فاصله حد ضرر با خطا مواجه شد.',
-        }
-
-    calculated_volume = calculate_dynamic_lot_size(
-        symbol=symbol,
-        account_balance=account_balance,
-        risk_percentage=risk_percentage,
-        current_price=current_price,
-        stop_loss=stop_loss,
-    )
-    risk_amount_usd = float(round(Decimal(str(account_balance)) * Decimal(str(risk_percentage / 100.0)), 2))
-
-    snapshot.update({
-        'entry_price': current_price,
-        'stop_loss': stop_loss,
-        'take_profit': take_profit,
-        'calculated_volume': calculated_volume,
-        'risk_amount_usd': risk_amount_usd,
-        'risk_percentage': risk_percentage,
+    user = TelegramUser.objects.filter(is_blocked=False).first()
+    user_plan = get_user_progression_plan(user)
+    account_balance = user.initial_balance
+    current_risk = user_plan.get('current_risk')
+    risk_percentage = (current_risk * 100) / account_balance
+    # در سیستم جدید، AI فقط فیلتر تقارن کالمن را انجام می‌دهد. اگر به اینجا رسید یعنی تایید شده است.
+    snapshot = sanitize({
+        'strategy': 'NDS_KALMAN', 
+        'nds_key': res['nds_key'], 
+        'nds_explanation': res['nds_explanation'],
+        'setup_type': res['setup_type'], 
+        'risk_percentage': risk_percentage, 
+        **res['nds_features'],
     })
-    decision_log.features_snapshot = snapshot
-    decision_log.save(update_fields=['features_snapshot'])
+    
+    log = TradeDecisionLog.objects.create(
+        symbol=symbol, 
+        action=action,
+        ai_confidence=1.0, # چون فیلتر تقارن رد شده بود، 1.0 است
+        features_snapshot=snapshot
+    )
 
-    return {
-        'status': 'approved_signal',
-        'log_id': decision_log.id,
-        'symbol': symbol,
-        'action': action,
-        'setup_type': strategy_res.get('setup_type'),
-        'ai_confidence': round(final_confidence * 100, 2),
-        'entry_price': current_price,
-        'stop_loss': stop_loss,
-        'take_profit': take_profit,
-        'calculated_volume': calculated_volume,
-        'risk_amount_usd': risk_amount_usd,
-        'features': snapshot,
-    }
+    entry, sl, tp = res['entry_price'], res['stop_loss'], res['take_profit']
+    if abs(entry - sl) == 0:
+        return {'status': 'error', 'reason': 'فاصله حد ضرر صفر است.'}
+        
+    volume = calculate_dynamic_lot_size(symbol, account_balance, risk_percentage, entry, sl)
+    risk_usd = float(round(Decimal(str(account_balance)) * Decimal(str(risk_percentage / 100.0)), 2))
+    
+    snapshot.update({'entry_price': entry, 'stop_loss': sl, 'take_profit': tp,
+                     'calculated_volume': volume, 'risk_amount_usd': risk_usd})
+    log.features_snapshot = snapshot
+    log.save(update_fields=['features_snapshot'])
+
+    return {'status': 'approved_signal', 'log_id': log.id, 'symbol': symbol, 'action': action,
+            'setup_type': res['setup_type'], 'ai_confidence': 100.0,
+            'entry_price': entry, 'stop_loss': sl, 'take_profit': tp,
+            'take_profit_1': res['take_profit_1'], 'take_profit_2': res['take_profit_2'],
+            'calculated_volume': volume, 'risk_amount_usd': risk_usd, 'features': snapshot}

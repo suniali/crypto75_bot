@@ -8,8 +8,20 @@ logger = logging.getLogger(__name__)
 
 @sync_to_async
 def get_all_watchlist() -> list[Watchlist]:
-    """دریافت تمام آیتم‌های لیست زیرنظر"""
-    return list(Watchlist.objects.all().select_related('user'))
+    queryset = (
+        Watchlist.objects.select_related("user")
+        .order_by("-id")  # اگر اولین رکورد هر symbol را می‌خواهید، از "id" استفاده کنید
+    )
+
+    seen_symbols = set()
+    unique_watchlists = []
+
+    for item in queryset:
+        if item.symbol not in seen_symbols:
+            seen_symbols.add(item.symbol)
+            unique_watchlists.append(item)
+
+    return unique_watchlists
 
 @sync_to_async
 def save_watchlist_item(user: TelegramUser, symbol: str, timeframe: str, market_type: str) -> bool:

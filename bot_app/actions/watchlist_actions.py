@@ -120,18 +120,18 @@ async def delete_watchlist_handler(update: Update, context: ContextTypes.DEFAULT
     if query:
         await query.answer()
     
-    _, _, symbol, timeframe, market_type = query.data.split('_')
+    _, _, symbol, market_type = query.data.split('_')
     
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ بله، مطمئنم", callback_data=f"confirm_del_watchlist_{symbol}_{timeframe}_{market_type}"),
+            InlineKeyboardButton("✅ بله، مطمئنم", callback_data=f"confirm_del_watchlist_{symbol}_{market_type}"),
             InlineKeyboardButton("❌ انصراف", callback_data="showWatchlist"),
         ]
     ])
     symbol = symbol.replace("+", "_")  # اصلاح نماد برای نمایش درست در متن هشدار
     text = (
         "⚠️ **هشدار: آیا اطمینان دارید؟**\n\n"
-        f"با تایید این گزینه نماد `{symbol}` ({timeframe}) از واچ‌لیست حذف خواهد شد!"
+        f"با تایید این گزینه نماد `{symbol}` از واچ‌لیست حذف خواهد شد!"
     )
 
     await query.edit_message_text(text, reply_markup=keyboard, parse_mode="Markdown")
@@ -146,16 +146,16 @@ async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes
     # پاسخ لحظه‌ای به دکمه برای از بین بردن تأخیر ظاهری
     await query.answer("در حال پردازش...", show_alert=False)
 
-    _, _, _, symbol, timeframe, market_type = query.data.split("_")
+    _, _, _, symbol, market_type = query.data.split("_")
     symbol = symbol.replace("+", "_")  # اصلاح نماد برای نمایش درست در متن هشدار
-    logger.info("Deleting item from watchlist: %s (%s, %s)", symbol, timeframe, market_type)
+    logger.info("Deleting item from watchlist: %s (%s)", symbol, market_type)
 
     # متوقف ساختن تسک پایش پس‌زمینه
-    stop_ai_analysis_job(symbol,timeframe)
+    stop_ai_analysis_job(symbol)
 
     # اجرای غیربلاک‌کننده حذف از دیتابیس
 
-    res_msg = await delete_from_watchlist(symbol,timeframe, market_type)
+    res_msg = await delete_from_watchlist(symbol,'M1' ,market_type)
 
     back_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🔙 بازگشت به منو", callback_data="showWatchlist")]])
 
@@ -177,10 +177,9 @@ async def confirm_delete_watchlist_handler(update: Update, context: ContextTypes
 # ------------------------------------------------------------------
 # #. Watchlist Conversation steps
 # ------------------------------------------------------------------
-ADD_WATCHLIST_MARKET, ADD_WATCHLIST_SYMBOL, ADD_WATCHLIST_TIMEFRAME = (
+ADD_WATCHLIST_MARKET, ADD_WATCHLIST_SYMBOL = (
     "ADD_WATCHLIST_MARKET",
     "ADD_WATCHLIST_SYMBOL",
-    "ADD_WATCHLIST_TIMEFRAME"
 )
 
 
@@ -268,40 +267,10 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
         symbol = update.message.text.strip()
         message_func = update.message.reply_text
 
-    context.user_data['symbol'] = symbol
     market_type = context.user_data.get('market_type', 'UNKNOWN')
     logger.info("AddWatchlist step 2 - Symbol entered: %s", symbol)
 
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("1m", callback_data="1m"),InlineKeyboardButton("5m", callback_data="5m"),],
-        [InlineKeyboardButton("15m", callback_data="15m"),InlineKeyboardButton("30m", callback_data="30m"), InlineKeyboardButton("1h", callback_data="1h")],
-        [InlineKeyboardButton("4h", callback_data="4h"), InlineKeyboardButton("1d", callback_data="1d")],
-        [InlineKeyboardButton("❌ انصراف", callback_data="cancel_watchlist")],
-    ])
-
-    msg_text = (
-        f"🏷 **بازار:** `{market_type}`\n"
-        f"📌 **نماد:** `{symbol}`\n\n"
-        "⏱ **مرحله ۳ از ۳:** تایم‌فریم را انتخاب کنید:"
-    )
-
-    await message_func(msg_text, parse_mode="Markdown", reply_markup=keyboard)
-    return ADD_WATCHLIST_TIMEFRAME
-
-
-# مرحله ۴: ذخیره تایم‌فریم و ثبت نهایی در واچ‌لیست
-async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await security_check(update, context):
-        return
-    
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text("⏳ **در حال ثبت در واچ لیست...**", parse_mode="Markdown")
-
-    timeframe = query.data
-    symbol = context.user_data['symbol']
-    market_type = context.user_data['market_type']
+    await query.edit_message_text("⏳ **در حال ثبت در واچ لیست...**", parse_mode="Markdown") 
 
     # دریافت اطلاعات کاربر تلگرام
     chat_id = update.effective_chat.id
@@ -314,31 +283,31 @@ async def add_watchlist_get_timeframe_step(update: Update, context: ContextTypes
         first_name=user_info.first_name
     )
 
-    logger.info("AddWatchlist step 3 - Finished. User: %s %s %s %s", chat_id, market_type, symbol, timeframe)
+    logger.info("AddWatchlist step 3 - Finished. User: %s %s %s", chat_id, market_type, symbol)
 
     # ۲. ذخیره در دیتابیس
     created = await save_watchlist_item(
         user=user_obj,
         symbol=symbol,
-        timeframe=timeframe,
+        timeframe='M1',
         market_type=market_type
     )
 
     if not created:
         await query.edit_message_text(
-            f"⚠️ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` قبلاً در واچ‌لیست شما ثبت شده است.",
+            f"⚠️ نماد `{symbol}` ({market_type}) قبلاً در واچ‌لیست شما ثبت شده است.",
             parse_mode="Markdown"
         )
         context.user_data.clear()
         return ConversationHandler.END
 
     # ۳. شروع تسک جدید (در صورت ثبت موفق)
-    worker_key = f"{chat_id}_{symbol}_{timeframe}_{market_type}"  # بهتره chat_id هم کلید ورکر اضافه بشه تا مجزا باشه
-    start_ai_analysis_job(symbol=symbol,time_frame=timeframe)
+    worker_key = f"{chat_id}_{symbol}_{market_type}"  # بهتره chat_id هم کلید ورکر اضافه بشه تا مجزا باشه
+    start_ai_analysis_job(symbol=symbol)
     logger.info("Created new worker task for key: %s", worker_key)
 
     await query.edit_message_text(
-        f"✨ نماد `{symbol}` ({market_type}) در تایم‌فریم `{timeframe}` به واچ‌لیست شما اضافه و پایش آن فعال گردید.",
+        f"✨ نماد `{symbol}` ({market_type}) به واچ‌لیست شما اضافه و پایش آن فعال گردید.",
         parse_mode="Markdown"
     )
 
