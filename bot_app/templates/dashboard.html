@@ -3118,27 +3118,34 @@
                 }
             }, { once: true });
 
-            // 🔊 تابع تولید صدا
+            // 🔊 تابع تولید صدای هشدار (نسخه بلندتر و سه‌بوقی)
             function playAlertSound() {
                 if (audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
                 try {
-                    const playBeep = (freq, startTime, duration) => {
+                    const playBeep = (freq, startTime, duration, volume) => {
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
-                        osc.type = 'sine';
+                        osc.type = 'sine'; // اگر صدای تیزتر می‌خواهید، 'square' یا 'triangle' بگذارید
                         osc.frequency.value = freq;
-                        gain.gain.setValueAtTime(0.15, startTime); // صدای کمی بلندتر
+                        
+                        // 🔴 افزایش شدید بلندی صدا (از 0.15 به 0.8)
+                        gain.gain.setValueAtTime(volume, startTime); 
                         gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                        
                         osc.connect(gain);
                         gain.connect(audioCtx.destination);
                         osc.start(startTime);
                         osc.stop(startTime + duration);
                     };
+                    
                     const now = audioCtx.currentTime;
-                    playBeep(880, now, 0.2);       // بوق اول
-                    playBeep(1046.50, now + 0.2, 0.4); // بوق دوم
+                    // الگوی سه‌بوقی زنگ خطر (Ding - Ding - Ding)
+                    playBeep(880.00, now, 0.25, 0.8);        // بوق اول (A5)
+                    playBeep(1046.50, now + 0.3, 0.25, 0.8); // بوق دوم (C6)
+                    playBeep(1318.51, now + 0.6, 0.5, 0.8);  // بوق سوم و طولانی‌تر (E6)
+                    
                 } catch (e) {
                     console.error("Audio Error:", e);
                 }
