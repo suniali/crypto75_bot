@@ -2173,15 +2173,20 @@
 
     <!-- 🟢 نوتیفیکیشن شناور سیگنال -->
     <div id="signalToast" class="fixed bottom-5 right-5 z-[100] transform translate-y-20 opacity-0 transition-all duration-500 ease-out">
-        <div class="bg-[#050812] border border-[#00f3ff] rounded-xl p-4 shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-center gap-4 min-w-[320px]">
-            <div class="w-12 h-12 rounded-full flex items-center justify-center bg-cyan-900/50 text-cyan-400 shrink-0">
+        <div class="bg-[#050812] border border-[#00f3ff] rounded-xl p-4 shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-start gap-4 min-w-[320px] relative">
+            <!-- دکمه بستن دستی -->
+            <button onclick="document.getElementById('signalToast').classList.add('translate-y-20', 'opacity-0'); document.getElementById('signalToast').classList.remove('translate-y-0', 'opacity-100');" class="absolute top-2 left-2 text-slate-500 hover:text-white transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+
+            <div class="w-12 h-12 rounded-full flex items-center justify-center bg-cyan-900/50 text-cyan-400 shrink-0 mt-1">
                 <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                 </svg>
             </div>
             <div>
-                <h4 id="toastTitle" class="text-sm font-bold text-white">سیگنال جدید!</h4>
-                <p id="toastDesc" class="text-xs text-slate-400 font-mono mt-1">...</p>
+                <h4 id="toastTitle" class="text-sm font-bold text-white pl-4">سیگنال جدید!</h4>
+                <p id="toastDesc" class="text-xs text-slate-400 font-mono mt-1 pl-4">...</p>
             </div>
         </div>
     </div>
@@ -3070,97 +3075,100 @@
         
         // 🟢 نوتیفیکیشن شناور سیگنال
         document.addEventListener("DOMContentLoaded", function() {
-        let lastSignalId = null;
+            let lastSignalId = null;
+            let toastTimeout;
+            
+            // ساخت AudioContext
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        // 🔊 تولید صدای هشدار با Web Audio API (بدون نیاز به فایل mp3)
-        function playAlertSound() {
-            try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // 🔓 باز کردن قفل صدا با اولین کلیک
+            document.addEventListener('click', function unlockAudio() {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().then(() => {
+                        console.log("🔊 Audio Unlocked! Sound is ready.");
+                    });
+                }
+            }, { once: true });
+
+            // 🔊 تابع تولید صدا
+            function playAlertSound() {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                try {
+                    const playBeep = (freq, startTime, duration) => {
+                        const osc = audioCtx.createOscillator();
+                        const gain = audioCtx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.15, startTime); // صدای کمی بلندتر
+                        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start(startTime);
+                        osc.stop(startTime + duration);
+                    };
+                    const now = audioCtx.currentTime;
+                    playBeep(880, now, 0.2);       // بوق اول
+                    playBeep(1046.50, now + 0.2, 0.4); // بوق دوم
+                } catch (e) {
+                    console.error("Audio Error:", e);
+                }
+            }
+
+            // 🎨 نمایش Toast
+            function showToast(signal) {
+                const toast = document.getElementById('signalToast');
+                const title = document.getElementById('toastTitle');
+                const desc = document.getElementById('toastDesc');
                 
-                // بوق اول (فرکانس 880 هرتز)
-                const osc1 = audioCtx.createOscillator();
-                const gain1 = audioCtx.createGain();
-                osc1.type = 'sine';
-                osc1.frequency.setValueAtTime(880, audioCtx.currentTime); 
-                gain1.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gain1.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-                osc1.connect(gain1);
-                gain1.connect(audioCtx.destination);
-                osc1.start();
-                osc1.stop(audioCtx.currentTime + 0.3);
-
-                // بوق دوم (فرکانس بالاتر، با تاخیر کوتاه)
-                setTimeout(() => {
-                    const osc2 = audioCtx.createOscillator();
-                    const gain2 = audioCtx.createGain();
-                    osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(1046.50, audioCtx.currentTime); 
-                    gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                    gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                    osc2.connect(gain2);
-                    gain2.connect(audioCtx.destination);
-                    osc2.start();
-                    osc2.stop(audioCtx.currentTime + 0.4);
-                }, 200);
-
-            } catch (e) {
-                console.error("Audio Context not allowed by browser yet.", e);
+                const actionColor = signal.action === 'BUY' ? 'text-emerald-400' : 'text-rose-400';
+                title.innerHTML = `سیگنال <span class="${actionColor}">${signal.action}</span> برای ${signal.symbol}`;
+                desc.innerText = `ورود: ${signal.entry_price} | حجم: ${signal.calculated_volume} لات`;
+                
+                // نمایش
+                toast.classList.remove('translate-y-20', 'opacity-0');
+                toast.classList.add('translate-y-0', 'opacity-100');
+                
+                // پخش صدا
+                playAlertSound();
+                
+                // پاک کردن تایمر قبلی (اگر سیگنال‌ها پشت سر هم بیایند)
+                if (toastTimeout) clearTimeout(toastTimeout);
+                
+                // مخفی کردن خودکار بعد از 15 ثانیه
+                toastTimeout = setTimeout(() => {
+                    toast.classList.remove('translate-y-0', 'opacity-100');
+                    toast.classList.add('translate-y-20', 'opacity-0');
+                }, 15000);
             }
-        }
 
-        // 🎨 نمایش نوتیفیکیشن روی صفحه
-        function showToast(signal) {
-            const toast = document.getElementById('signalToast');
-            const title = document.getElementById('toastTitle');
-            const desc = document.getElementById('toastDesc');
-            
-            const actionColor = signal.action === 'BUY' ? 'text-emerald-400' : 'text-rose-400';
-            
-            title.innerHTML = `سیگنال <span class="${actionColor}">${signal.action}</span> برای ${signal.symbol}`;
-            desc.innerText = `ورود: ${signal.entry_price} | حجم: ${signal.calculated_volume} لات`;
-            
-            // نمایش
-            toast.classList.remove('translate-y-20', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-            
-            // پخش صدا
-            playAlertSound();
-            
-            // مخفی کردن بعد از ۷ ثانیه
-            setTimeout(() => {
-                toast.classList.remove('translate-y-0', 'opacity-100');
-                toast.classList.add('translate-y-20', 'opacity-0');
-            }, 7000);
-        }
-
-        // 🔄 بررسی سیگنال‌های جدید هر ۵ ثانیه
-        function checkForNewSignals() {
-            let url = "{% url 'api_check_signals' %}";
-            if (lastSignalId !== null) {
-                url += "?last_seen_id=" + lastSignalId;
+            // 🔄 بررسی سیگنال‌های جدید
+            function checkForNewSignals() {
+                let url = "{% url 'api_check_signals' %}";
+                if (lastSignalId !== null) {
+                    url += "?last_seen_id=" + lastSignalId;
+                }
+                
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === 'init') {
+                            lastSignalId = data.last_id;
+                        } else if (data.status === 'success' && data.new_signals.length > 0) {
+                            data.new_signals.forEach(sig => {
+                                showToast(sig);
+                                lastSignalId = Math.max(lastSignalId, sig.id);
+                            });
+                        }
+                    })
+                    .catch(err => console.error("Error checking signals:", err));
             }
-            
-            fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'init') {
-                        lastSignalId = data.last_id; // همگام‌سازی اولیه
-                    } else if (data.status === 'success' && data.new_signals.length > 0) {
-                        data.new_signals.forEach(sig => {
-                            showToast(sig);
-                            lastSignalId = Math.max(lastSignalId, sig.id);
-                        });
-                    }
-                })
-                .catch(err => console.error("Error checking signals:", err));
-        }
 
-        // شروع بررسی بعد از ۲ ثانیه از لود شدن صفحه
-        setTimeout(checkForNewSignals, 2000);
-        
-        // تکرار هر ۵ ثانیه
-        setInterval(checkForNewSignals, 5000);
-    });
+            // شروع
+            setTimeout(checkForNewSignals, 2000);
+            setInterval(checkForNewSignals, 5000);
+        });
     </script>
 </body>
 </html>
