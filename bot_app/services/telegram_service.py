@@ -1,24 +1,26 @@
 import asyncio
 import logging
 import html
-import time
 
 from decouple import config
 
-from telegram import Bot,Update
+from telegram import Bot, Update
 from telegram.ext import ContextTypes
 from telegram.request import HTTPXRequest
 
 from bot_app.utils.keyboard_helper import MAIN_KEYBOARD
-
 from bot_app.models import TelegramUser
 
 logger = logging.getLogger(__name__)
 
-# اگر رباتت پروکسی نیاز داره یا request سفارشی داری تنظیم می‌کنی
-request_config = HTTPXRequest(connection_pool_size=8, read_timeout=30.0)
+# کاهش تایم‌اوت‌ها برای اینکه در صورت قطعی شبکه، سریع شکست بخورد و برود سراغ Retry
+request_config = HTTPXRequest(connection_pool_size=8, read_timeout=10.0, connect_timeout=10.0)
 bot = Bot(token=config('TELEGRAM_BOT_TOKEN'), request=request_config)
 
+
+# ==========================================
+# بخش ۱: توابع امنیتی (برای ربات تلگرام)
+# ==========================================
 async def security_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await TelegramUser.objects.filter(is_blocked=False).afirst()
     if not user or update.effective_user.id != user.chat_id:
@@ -29,6 +31,10 @@ async def security_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return False
     return True
 
+
+# ==========================================
+# بخش ۲: ساخت متن پیام
+# ==========================================
 def build_nds_message(signal_data: dict) -> str:
     """متن HTML سیگنال NDS: توضیح کامل «چرا» + حجم پیشنهادی."""
     f = signal_data.get('features') or {}
@@ -43,32 +49,41 @@ def build_nds_message(signal_data: dict) -> str:
     ])
 
 
-def _send_to_owner(message: str, reply_markup=None):
-    async def _send():
-        async with bot:
-            await asyncio.sleep(1)
-            user = await TelegramUser.objects.filter(is_blocked=False).afirst()
-            if user:
-                await bot.send_message(
-                    chat_id=user.chat_id,
-                    text=message,
-                    parse_mode='HTML',
-                    reply_markup=reply_markup,
-                )
-                logger.info('✅ Telegram message sent successfully!')
-            else:
-                logger.warning('⚠️ Telegram message not sent! No active user found.')
-
+# ==========================================
+# بخش ۳: موتور ارسال با قابلیت Retry (Outbox)
+# ==========================================
+async def _try_send_async(message: str, reply_markup=None) -> tuple:
+    """برمی‌گرداند: (موفقیت، message_id، متن خطا)"""
     try:
-        asyncio.run(_send())
+        # نکته: در نسخه‌های جدید python-telegram-bot استفاده از async with bot ضروری نیست
+        # مگر اینکه ربات را در حال خاموش کردن باشد. اما برای امنیت نگه می‌داریم.
+        user = await TelegramUser.objects.filter(is_blocked=False).afirst()
+        if not user:
+            return False, None, "No active user found"
+            
+        msg = await bot.send_message(
+            chat_id=user.chat_id,
+            text=message,
+            parse_mode='HTML',
+            reply_markup=reply_markup,
+        )
+        return True, msg.message_id, None
     except Exception as e:
-        logger.error(f'❌ Telegram Send Error: {e}')
+        return False, None, str(e)
 
 
-def send_telegram_trade_alert(signal_data: dict):
-    _send_to_owner(build_nds_message(signal_data), reply_markup=MAIN_KEYBOARD)
+def try_send_signal(signal_data: dict) -> tuple:
+    """ارسال سیگنال (توسط notification_service.py صدا زده می‌شود)"""
+    try:
+        message = build_nds_message(signal_data)
+        return asyncio.run(_try_send_async(message, reply_markup=MAIN_KEYBOARD))
+    except Exception as e:
+        return False, None, f"asyncio wrapper error: {e}"
 
 
-def send_telegram_text(text: str):
-    """پیام ساده (مثلاً گزارش آموزش مدل). توسط nds_trainer استفاده می‌شه."""
-    _send_to_owner(html.escape(text))
+def try_send_text(text: str) -> tuple:
+    """ارسال پیام متنی ساده (مثلاً گزارش آموزش مدل توسط nds_trainer.py)"""
+    try:
+        return asyncio.run(_try_send_async(html.escape(text)))
+    except Exception as e:
+        return False, None, f"asyncio wrapper error: {e}"

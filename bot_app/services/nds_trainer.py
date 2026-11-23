@@ -121,8 +121,8 @@ def retrain_nds_model(symbol: str, time_frame: str, bars: int = TRAIN_BARS, noti
     logger.info(text)
     if notify:
         try:
-            from .telegram_service import send_telegram_text   # <-- real module path of your telegram functions
-            send_telegram_text(text)
-        except ImportError:
-            logger.warning("send_telegram_text import path is wrong - fix it in nds_trainer.retrain_nds_model")
+            from .telegram_service import try_send_text   # <-- real module path of your telegram functions
+            try_send_text(text)
+        except Exception as e:
+            logger.warning(f"Failed to send training report: {e}")
     return result

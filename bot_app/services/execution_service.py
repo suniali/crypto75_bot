@@ -4,6 +4,7 @@ from bot_app.models import TradeDecisionLog, MarketCandle,TelegramUser
 from bot_app.services.analysis_service import get_user_progression_plan
 from bot_app.services.mt5_service import get_broker_contract_size
 from bot_app.services.market_data_service import prepare_and_update_candles
+from bot_app.services.notification_service import enqueue_signal_for_notification
 from .nds_strategy_service import NDS_BARS, evaluate_nds_strategy, sanitize, norm_tf, HTF_FOR
 
 logger=logger = logging.getLogger(__name__)
@@ -96,6 +97,8 @@ def evaluate_market_and_execute(symbol, time_frame:str = 'M1'):
                      'calculated_volume': volume, 'risk_amount_usd': risk_usd})
     log.features_snapshot = snapshot
     log.save(update_fields=['features_snapshot'])
+
+    enqueue_signal_for_notification(log.id)
 
     return {'status': 'approved_signal', 'log_id': log.id, 'symbol': symbol, 'action': action,
             'setup_type': res['setup_type'], 'ai_confidence': 100.0,

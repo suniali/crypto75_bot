@@ -10,7 +10,7 @@ from bot_app.workers import ACTIVE_WORKERS
 
 from bot_app.loops.alert_loop import check_alerts_loop
 from bot_app.loops.sl_tp_monitor_loop import sl_tp_monitor_loop
-from bot_app.loops.worker import start_ai_analysis_job,shutdown_ai_jobs
+from bot_app.loops.worker import start_ai_analysis_job,shutdown_ai_jobs,start_notification_retry_job
 
 from bot_app.models import TelegramUser
 
@@ -47,8 +47,9 @@ async def on_startup(app):
         watchlist = await get_all_watchlist()
 
         for item in watchlist:
-            start_ai_analysis_job(item.symbol)
-
+            start_ai_analysis_job(item.symbol,item.time_frame)
+        
+        start_notification_retry_job()
 
     except Exception as e:
         logger.exception("Error during background tasks startup: %s", e)

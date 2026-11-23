@@ -255,7 +255,12 @@ class TradeDecisionLog(models.Model):
         ('SELL', 'Sell'),
         ('HOLD', 'Hold / Neutral'),
     ]
-
+    NOTIFICATION_STATUS_CHOICES = [
+        ('none', 'None'),
+        ('pending', 'Pending'),
+        ('sent', 'Sent'),
+        ('failed', 'Failed'),
+    ]
     symbol = models.CharField(max_length=20,verbose_name="نماد معاملاتی")
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="زمان تصمیم‌گیری")
     action = models.CharField(max_length=10, choices=ACTION_CHOICES, verbose_name='اقدام')
@@ -276,6 +281,13 @@ class TradeDecisionLog(models.Model):
     net_profit = models.DecimalField(
         max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="سود خالص"
     )
+    notification_status = models.CharField(
+        max_length=20, choices=NOTIFICATION_STATUS_CHOICES, default='none', db_index=True
+    )
+    notification_attempts = models.PositiveIntegerField(default=0)
+    notification_sent_at = models.DateTimeField(null=True, blank=True)
+    telegram_message_id = models.BigIntegerField(null=True, blank=True)
+    last_notification_error = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f'{self.symbol} -> {self.action} (Confidence: {self.ai_confidence:.2f}) at {self.timestamp}'

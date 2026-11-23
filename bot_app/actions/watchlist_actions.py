@@ -303,7 +303,7 @@ async def add_watchlist_get_symbol_step(update: Update, context: ContextTypes.DE
 
     # ۳. شروع تسک جدید (در صورت ثبت موفق)
     worker_key = f"{chat_id}_{symbol}_{market_type}"  # بهتره chat_id هم کلید ورکر اضافه بشه تا مجزا باشه
-    start_ai_analysis_job(symbol=symbol)
+    start_ai_analysis_job(symbol=symbol,time_frame='M1')
     logger.info("Created new worker task for key: %s", worker_key)
 
     await query.edit_message_text(

@@ -2,15 +2,30 @@ import asyncio
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
-
+from bot_app.services.notification_service import process_pending_notifications
 from bot_app.tasks import run_market_ai_analysis_task
 
 logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
- 
 
-def start_ai_analysis_job(symbol:str):
+
+def start_notification_retry_job():
+    """جاب دائمی برای retry سیگنال‌های ناموفق (مستقل از تحلیل بازار)"""
+    if not scheduler.running:
+        scheduler.start()
+    scheduler.add_job(
+        process_pending_notifications,
+        'interval',
+        seconds=30,
+        id='nds_notification_retry',
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info('✅ Notification retry job started (every 30s).')
+
+def start_ai_analysis_job(symbol:str, time_frame:str):
   logger.info(f"⚡ Starting AI Analysis Engine For {symbol} ...")
 
   # بررسی اینکه شجولر قبلاً استارت نخورده باشد (برای جلوگیری از تداخل احتمالی)
@@ -26,7 +41,7 @@ def start_ai_analysis_job(symbol:str):
       run_market_ai_analysis_task,
       'interval',
       minutes=1,
-      args=[symbol],
+      args=[symbol,time_frame],
       id=f'ai_trade_analysis_{symbol}',
       replace_existing=True,
       max_instances=1,
@@ -63,3 +78,11 @@ async def shutdown_ai_jobs():
       logger.info('🛑 APScheduler stopped successfully.')
   except Exception as e:
     logger.error(f'Error stopping scheduler: {e}')
+
+def _health_heartbeat():
+    from bot_app.models import TradeDecisionLog
+    pending = TradeDecisionLog.objects.filter(notification_status='pending').count()
+    failed = TradeDecisionLog.objects.filter(notification_status='failed').count()
+    logger.info(f"💓 Heartbeat | Pending: {pending} | Failed: {failed}")
+
+scheduler.add_job(_health_heartbeat, 'interval', minutes=5, id='health_heartbeat')

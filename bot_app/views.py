@@ -12,7 +12,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 
-from .models import TradeJournal
+from .models import TradeJournal,TradeDecisionLog
 from .services.bakup_restore_service import backup_database,get_backups,restore_backup
 from bot_app.services.analysis_service import calculate_trading_metrics, analyze_trades_with_gemini
 
@@ -23,6 +23,38 @@ CACHE_DIR.mkdir(exist_ok=True)
 
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 VERSION=config("VERSION", default="1.0.0")
+
+@login_required
+def api_check_new_signals(request):
+    last_seen_id = request.GET.get('last_seen_id')
+    
+    if last_seen_id is None:
+        # درخواست اول: فقط آخرین ID را برمی‌گردانیم تا سیگنال‌های قدیمی هشدار ندهند
+        latest = TradeDecisionLog.objects.filter(action__in=['BUY', 'SELL']).order_by('-id').first()
+        latest_id = latest.id if latest else 0
+        return JsonResponse({'status': 'init', 'last_id': latest_id})
+    
+    last_seen_id = int(last_seen_id)
+    
+    # دریافت سیگنال‌های جدیدی که بعد از آخرین ID ثبت شده‌اند
+    new_signals = TradeDecisionLog.objects.filter(
+        id__gt=last_seen_id,
+        action__in=['BUY', 'SELL']
+    ).order_by('id')
+    
+    signals_data = []
+    for sig in new_signals:
+        features = sig.features_snapshot or {}
+        signals_data.append({
+            'id': sig.id,
+            'action': sig.action,
+            'symbol': sig.symbol,
+            'entry_price': features.get('entry_price', 0),
+            'calculated_volume': features.get('calculated_volume', 0),
+        })
+        
+    return JsonResponse({'status': 'success', 'new_signals': signals_data})
+
 
 def generate_trades_hash(processed_trades) -> str:
     """تولید یک اثر انگشت (Hash) یکتا بر اساس شناسه، زمان و وضعیت تریدها"""
