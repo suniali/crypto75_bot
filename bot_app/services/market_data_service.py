@@ -41,25 +41,46 @@ def _fetch_and_save(symbol, tf, limit):
     return True
 
 def prepare_and_update_candles(symbol, time_frame, full_limit=1500, short_limit=50):
-    """دریافت و آپدیت کندل‌ها برای هر دو تایم‌فریم LTF و HTF"""
-    ltf = time_frame
-    htf = HTF_FOR.get(ltf)
+    """
+    دریافت و آپدیت کندل‌ها برای هر دو تایم‌فریم LTF و HTF.
+    مقدار limit به صورت داینامیک بر اساس فاصله زمانی محاسبه می‌شود
+    تا در صورت خاموشی طولانی ربات، داده‌ای گم نشود.
+    """
+    from datetime import datetime, timezone as dt_tz
+    from django.utils import timezone
     
-    if not htf:
+    ltf = time_frame.strip().lower() if time_frame.islower() else time_frame
+    if ltf not in HTF_FOR:
         logger.error(f'تایم‌فریم {ltf} در نقشه NDS تعریف نشده است.')
         return False
-
-    # 1. آپدیت کندل‌های LTF (مثلاً M1)
-    ltf_count = MarketCandle.objects.filter(symbol=symbol, timeframe=ltf).count()
-    ltf_limit = full_limit if ltf_count < 200 else short_limit
+    
+    htf = HTF_FOR.get(ltf)
+    
+    def calculate_needed_limit(tf, default_min=50, max_limit=5000):
+        """محاسبه تعداد کندل موردنیاز بر اساس فاصله زمانی از آخرین کندل دیتابیس."""
+        last = MarketCandle.objects.filter(symbol=symbol, timeframe=tf).order_by('-open_time').first()
+        if not last:
+            return full_limit  # اگر دیتابیس خالی است، از full_limit استفاده کن
+        
+        # فاصله زمانی بین الان و آخرین کندل (به دقیقه)
+        tf_minutes = {"M1": 1, "M5": 5, "M15": 15, "M30": 30, "H1": 60, "H4": 240}[tf]
+        now = timezone.now()
+        gap_minutes = (now - last.open_time).total_seconds() / 60
+        needed = int(gap_minutes / tf_minutes) + default_min
+        
+        # حداقل 50، حداکثر max_limit
+        return min(max(needed, default_min), max_limit)
+    
+    # 1. آپدیت LTF با limit داینامیک
+    ltf_limit = calculate_needed_limit(ltf, default_min=short_limit)
+    logger.info(f"📊 LTF ({ltf}): درخواست {ltf_limit} کندل (به دلیل فاصله زمانی)")
     if not _fetch_and_save(symbol, ltf, ltf_limit):
         return False
-
-    # 2. آپدیت کندل‌های HTF (مثلاً M30)
-    # برای HTF نیازی به 1500 کندل نیست، 500 کندل کافی است
-    htf_count = MarketCandle.objects.filter(symbol=symbol, timeframe=htf).count()
-    htf_limit = 500 if htf_count < 100 else 50 
+    
+    # 2. آپدیت HTF با limit داینامیک
+    htf_limit = calculate_needed_limit(htf, default_min=50)
+    logger.info(f"📊 HTF ({htf}): درخواست {htf_limit} کندل")
     if not _fetch_and_save(symbol, htf, htf_limit):
         return False
-
+    
     return True
