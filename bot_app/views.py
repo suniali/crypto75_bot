@@ -56,6 +56,45 @@ def api_check_new_signals(request):
     return JsonResponse({'status': 'success', 'new_signals': signals_data})
 
 
+@login_required
+def api_latest_signal(request):
+    """آخرین سیگنال و وضعیت ارسال آن را برمی‌گرداند."""
+    latest = TradeDecisionLog.objects.filter(
+        action__in=['BUY', 'SELL']
+    ).order_by('-id').first()
+    
+    if not latest:
+        return JsonResponse({'status': 'no_signal'})
+    
+    features = latest.features_snapshot or {}
+    
+    # نگاشت وضعیت به متن فارسی و رنگ
+    status_map = {
+        'none': {'text': 'ثبت شده', 'color': 'text-slate-400'},
+        'pending': {'text': 'در حال ارسال', 'color': 'text-amber-400'},
+        'sent': {'text': 'ارسال شد', 'color': 'text-emerald-400'},
+        'failed': {'text': 'خطا در ارسال', 'color': 'text-rose-400'},
+    }
+    status_info = status_map.get(latest.notification_status, status_map['none'])
+    
+    return JsonResponse({
+        'status': 'success',
+        'signal': {
+            'id': latest.id,
+            'symbol': latest.symbol,
+            'action': latest.action,
+            'entry_price': features.get('entry_price', 0),
+            'stop_loss': features.get('stop_loss', 0),
+            'take_profit': features.get('take_profit', 0),
+            'calculated_volume': features.get('calculated_volume', 0),
+            'time': latest.timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(latest, 'timestamp') else '-',
+            'notification_status': latest.notification_status,
+            'notification_text': status_info['text'],
+            'notification_color': status_info['color'],
+            'notification_attempts': latest.notification_attempts,
+        }
+    })
+
 def generate_trades_hash(processed_trades) -> str:
     """تولید یک اثر انگشت (Hash) یکتا بر اساس شناسه، زمان و وضعیت تریدها"""
     hasher = hashlib.sha256()

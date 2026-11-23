@@ -8,7 +8,8 @@ from .views import (
     restore_backup_view,
     day_trades_api_view,
     api_get_ai_analysis,
-    api_check_new_signals
+    api_check_new_signals,
+    api_latest_signal
 )
 
 urlpatterns = [
@@ -24,5 +25,6 @@ urlpatterns = [
     path('api/restore-backup/', restore_backup_view, name='restore_backup'),
     path('api/day-trades/', day_trades_api_view, name='day_trades_api'),
     path('api/ai-analysis/', api_get_ai_analysis, name='api_ai_analysis'),
-    path('api/check-signals/', api_check_new_signals, name='api_check_signals')
+    path('api/check-signals/', api_check_new_signals, name='api_check_signals'),
+    path('api/latest-signal/', api_latest_signal, name='api_latest_signal'),
 ]

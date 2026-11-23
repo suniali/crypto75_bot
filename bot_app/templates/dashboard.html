@@ -874,7 +874,7 @@
                     </button>
                 </div>
             </div>
-
+            
             <!-- ================= فیلترهای زمانی و دکمه دیتابیس ================= -->
             <div class="flex flex-wrap items-center justify-between xl:justify-end gap-3 w-full xl:w-auto">
                 <!-- فیلترهای زمانی (Pills) -->
@@ -2191,6 +2191,34 @@
         </div>
     </div>
 
+    <!-- 🎯 ویجت شناور آخرین سیگنال (گوشه پایین چپ) -->
+    <div id="latestSignalWidget" class="fixed bottom-5 left-5 z-[90] hidden transition-all duration-500 ease-out">
+        <div class="bg-[#050812]/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(0,243,255,0.15)] flex items-center gap-4 min-w-[280px]">
+            <!-- آیکون -->
+            <div id="widgetIcon" class="w-12 h-12 rounded-xl flex items-center justify-center bg-cyan-500/10 border border-cyan-500/30">
+                <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                </svg>
+            </div>
+            
+            <!-- اطلاعات -->
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2 mb-1">
+                    <span id="widgetSymbol" class="text-sm font-bold text-white">---</span>
+                    <span id="widgetAction" class="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400">BUY</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="widgetStatus" class="text-[11px] font-mono text-slate-400">در حال دریافت...</span>
+                </div>
+                <div class="flex items-center gap-2 mt-1">
+                    <span id="widgetEntry" class="text-[10px] font-mono text-slate-400">ورود: -</span>
+                    <span class="text-slate-600">|</span>
+                    <span id="widgetVolume" class="text-[10px] font-mono text-slate-400">حجم: -</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- اسکریپت رندر نمودارها -->
     <script>
         // تنظیم فونت سراسری برای تمامی نمودارها
@@ -3169,6 +3197,60 @@
             setTimeout(checkForNewSignals, 2000);
             setInterval(checkForNewSignals, 5000);
         });
+
+            // 🎯 به‌روزرسانی ویجت آخرین سیگنال
+            function updateLatestSignalWidget() {
+                fetch("{% url 'api_latest_signal' %}")
+                    .then(res => res.json())
+                    .then(data => {
+                        const widget = document.getElementById('latestSignalWidget');
+                        
+                        if (data.status === 'no_signal' || !data.signal) {
+                            widget.classList.add('hidden');
+                            return;
+                        }
+                        
+                        const sig = data.signal;
+                        
+                        // نمایش ویجت
+                        widget.classList.remove('hidden');
+                        
+                        document.getElementById('widgetSymbol').innerText = sig.symbol;
+                        
+                        // رنگ‌بندی دکمه خرید/فروش
+                        const actionEl = document.getElementById('widgetAction');
+                        actionEl.innerText = sig.action;
+                        actionEl.className = sig.action === 'BUY' 
+                            ? 'text-xs font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400'
+                            : 'text-xs font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-400';
+                        
+                        // وضعیت ارسال (ارسال شده / در حال ارسال / خطا)
+                        const statusEl = document.getElementById('widgetStatus');
+                        statusEl.innerText = sig.notification_text;
+                        statusEl.className = `text-[11px] font-mono ${sig.notification_color}`;
+                        
+                        document.getElementById('widgetEntry').innerText = `ورود: ${sig.entry_price}`;
+                        document.getElementById('widgetVolume').innerText = `حجم: ${sig.calculated_volume}`;
+                        
+                        // تغییر رنگ آیکون
+                        const iconEl = document.getElementById('widgetIcon');
+                        if (sig.action === 'BUY') {
+                            iconEl.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-emerald-500/10 border border-emerald-500/30';
+                            iconEl.querySelector('svg').className = 'w-6 h-6 text-emerald-400';
+                        } else {
+                            iconEl.className = 'w-12 h-12 rounded-xl flex items-center justify-center bg-rose-500/10 border border-rose-500/30';
+                            iconEl.querySelector('svg').className = 'w-6 h-6 text-rose-400';
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Widget update error:", err);
+                        document.getElementById('latestSignalWidget').classList.add('hidden');
+                    });
+            }
+
+            // به‌روزرسانی اولیه و هر 10 ثانیه
+            setTimeout(updateLatestSignalWidget, 1000);
+            setInterval(updateLatestSignalWidget, 10000);
     </script>
 </body>
 </html>
