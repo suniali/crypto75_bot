@@ -18,7 +18,7 @@ class NDSConfig:
     tp_percent: float = 0.86
     # Symmetry tolerance (e.g., 7.5% deviation allowed)
     symmetry_tol: float = 0.075
-    min_rr: float = 2.0 
+    # min_rr: float = 2.0 
     # Risk management
     risk_per_trade: float = 0.01   # 1% of account
     # Kalman filter initial parameters

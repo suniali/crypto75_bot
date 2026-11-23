@@ -198,9 +198,9 @@ def detect_setup(piv: list[Pivot], B: Bars, c: int, htf: HTFInfo, cfg, issued: s
         # Actually AB=BC is a different pattern. The 123 flag is three nodes. We'll skip symmetry filter for now.
         risk = abs(entry - sl)
         if risk <= 0: continue
-        reward = abs(tp - entry)
-        if reward / risk < cfg.min_rr:
-            continue
+        # reward = abs(tp - entry)
+        # if reward / risk < cfg.min_rr:
+        #     continue
         # Check if TP is in correct direction
         if nd * tp > nd * entry: continue  # TP should be below entry for SELL
         lvl864 = tp
