@@ -67,21 +67,25 @@ def simulate_trade(s, B, cfg):
     risk = abs(s.entry - s.sl)
     tp = s.tp
     sl = s.sl
+    # 🔴 تبدیل هزینه اسپرد به واحد R
+    cost_r = cfg.cost_price / risk if risk > 0 else 0.0
+    
     end = min(len(B.h), s.c + 1 + cfg.max_hold_bars)
     for b in range(s.c+1, end):
         hi, lo = B.h[b], B.l[b]
         # Check SL first (conservative)
         if d == 1:  # BUY
             if lo <= sl:
-                return {"r": -1.0, "outcome": "sl", "bars_held": b - s.c}
+                return {"r": -1.0 - cost_r, "outcome": "sl", "bars_held": b - s.c}
             if hi >= tp:
-                return {"r": (tp - s.entry)/risk, "outcome": "tp", "bars_held": b - s.c}
+                return {"r": (tp - s.entry)/risk - cost_r, "outcome": "tp", "bars_held": b - s.c}
         else:  # SELL
             if hi >= sl:
-                return {"r": -1.0, "outcome": "sl", "bars_held": b - s.c}
+                return {"r": -1.0 - cost_r, "outcome": "sl", "bars_held": b - s.c}
             if lo <= tp:
-                return {"r": (s.entry - tp)/risk, "outcome": "tp", "bars_held": b - s.c}
-    # Timeout
+                return {"r": (s.entry - tp)/risk - cost_r, "outcome": "tp", "bars_held": b - s.c}
+    
+    # Timeout (اگر تا انتهای بازه نه SL و نه TP لمس نشد)
     last_close = B.c[end-1]
     r = d * (last_close - s.entry) / risk
-    return {"r": float(r), "outcome": "timeout", "bars_held": end - s.c - 1}
+    return {"r": float(r - cost_r), "outcome": "timeout", "bars_held": end - s.c - 1}

@@ -6,19 +6,65 @@ import pandas as pd
 
 def load_csv(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, sep=None, engine="python")
+    # نرمال‌سازی نام ستون‌ها
     df.columns = [str(c).strip().lower().strip("<>") for c in df.columns]
-    if "time" in df.columns and "date" in df.columns:          # MT5 export: DATE + TIME
+    
+    print(f"🔎 ستون‌های شناسایی‌شده: {list(df.columns)}")
+    
+    # 1. حالت متاتریدر: ستون‌های جداگانه date و time
+    if "time" in df.columns and "date" in df.columns:
         t = pd.to_datetime(df["date"].astype(str) + " " + df["time"].astype(str))
     else:
-        col = next(c for c in ("time", "datetime", "date", "timestamp") if c in df.columns)
-        t = pd.to_datetime(df[col])
+        # 2. حالت‌های رایج دیگر: time/datetime/date/timestamp/gmt time
+        candidates = ("time", "datetime", "date", "timestamp", "gmt time", "gmt_time", "local time", "local_time")
+        col = next((c for c in candidates if c in df.columns), None)
+        if col is None:
+            raise ValueError(f"❌ هیچ ستون زمانی شناخته‌شده‌ای یافت نشد. ستون‌های موجود: {list(df.columns)}")
+        
+        raw = df[col]
+        
+        # 3. اگر ستون عددی است: احتمالاً Unix Timestamp است
+        if pd.api.types.is_numeric_dtype(raw):
+            # مقادیر بزرگتر از 1e17 را نانوثانیه، 1e14 را میکروثانیه، 1e11 را میلی‌ثانیه، و کمتر را ثانیه در نظر بگیر
+            sample = float(raw.iloc[0])
+            if sample > 1e17:
+                unit = 'ns'
+            elif sample > 1e14:
+                unit = 'us'
+            elif sample > 1e11:
+                unit = 'ms'
+            else:
+                unit = 's'
+            print(f"⏱ ستون زمانی عددی تشخیص داده شد. واحد: {unit} (مقدار نمونه: {sample})")
+            t = pd.to_datetime(raw, unit=unit)
+        else:
+            # 4. اگر رشته است: پارس معمولی
+            t = pd.to_datetime(raw, errors='coerce')
+    
+    # حذف ردیف‌های با تاریخ نامعتبر
+    valid_mask = t.notna()
+    if not valid_mask.all():
+        print(f"⚠️ {len(t) - valid_mask.sum()} ردیف با تاریخ نامعتبر حذف شد.")
+        df = df[valid_mask]
+        t = t[valid_mask]
+    
+    # ستون حجم
     if "volume" not in df.columns:
         df["volume"] = df["tickvol"] if "tickvol" in df.columns else df.get("tick_volume", 1.0)
-    out = pd.DataFrame({"open": df["open"], "high": df["high"], "low": df["low"],
-                        "close": df["close"], "volume": df["volume"]}).astype(float)
+    
+    out = pd.DataFrame({
+        "open": df["open"].astype(float),
+        "high": df["high"].astype(float),
+        "low": df["low"].astype(float),
+        "close": df["close"].astype(float),
+        "volume": df["volume"].astype(float),
+    })
     out.index = pd.DatetimeIndex(t, name="time")
-    return out[~out.index.duplicated()].sort_index()
-
+    out = out[~out.index.duplicated()].sort_index()
+    
+    print(f"📅 محدوده زمانی نهایی: {out.index[0]} → {out.index[-1]}")
+    print(f"📊 تعداد نهایی کندل: {len(out)}")
+    return out
 
 def _mt5():
     try:
