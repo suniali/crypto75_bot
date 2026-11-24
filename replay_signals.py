@@ -613,33 +613,51 @@ def run_replay(
     start_bar: int = 0,
 ):
     if ohlc_ltf is None or ohlc_htf is None:
-        print("⏳ در حال خواندن آخرین داده‌ها از دیتابیس...")
+        print("⏳ در حال خواندن داده‌های از ابتدای روز از دیتابیس...")
+
+        latest_ltf = (
+            MarketCandle.objects.filter(symbol=symbol, timeframe="M1")
+            .order_by("-open_time")
+            .values_list("open_time", flat=True)
+            .first()
+        )
+        if not latest_ltf:
+            print("❌ داده‌ای در دیتابیس یافت نشد.")
+            return []
+
+        start_of_day = latest_ltf.replace(hour=0, minute=0, second=0, microsecond=0)
+        print(f"🌅 شروع بازه از ابتدای روز: {start_of_day}")
 
         rows_ltf = list(
-            MarketCandle.objects.filter(symbol=symbol, timeframe="M1")
-            .order_by('-open_time')
-            .values('open_price', 'high_price', 'low_price', 'close_price', 'volume', 'open_time')[:1500]
+            MarketCandle.objects.filter(
+                symbol=symbol,
+                timeframe="M1",
+                open_time__gte=start_of_day,
+            )
+            .order_by("open_time")
+            .values("open_price", "high_price", "low_price", "close_price", "volume", "open_time")
         )
+
+        # کمی قبل‌تر از ابتدای روز برای M30 می‌گیریم تا ساختار HTF از ابتدای روز دقیق باشد
+        htf_warmup_start = start_of_day - pd.Timedelta(hours=12)
         rows_htf = list(
-            MarketCandle.objects.filter(symbol=symbol, timeframe="M30")
-            .order_by('-open_time')
-            .values('open_price', 'high_price', 'low_price', 'close_price', 'volume', 'open_time')[:500]
+            MarketCandle.objects.filter(
+                symbol=symbol,
+                timeframe="M30",
+                open_time__gte=htf_warmup_start,
+            )
+            .order_by("open_time")
+            .values("open_price", "high_price", "low_price", "close_price", "volume", "open_time")
         )
 
         if not rows_ltf or not rows_htf:
-            print("❌ داده‌ای در دیتابیس یافت نشد.")
+            print("❌ داده‌ای در دیتابیس برای بازه ابتدای روز یافت نشد.")
             return []
 
         ohlc_ltf = rows_to_ohlc(rows_ltf)
         ohlc_htf = rows_to_ohlc(rows_htf)
-        print(f"📊 آخرین کندل M1 در دیتابیس: {ohlc_ltf.index[-1]}")
-        print(f"📊 آخرین کندل M30 در دیتابیس: {ohlc_htf.index[-1]}")
-    else:
-        print("📂 استفاده از داده‌های CSV برای بررسی تمام ستاپ‌ها...")
-        ohlc_ltf = ohlc_ltf.sort_index()
-        ohlc_htf = ohlc_htf.sort_index()
-        print(f"📊 بازه کندل M1 در CSV: {ohlc_ltf.index[0]} → {ohlc_ltf.index[-1]} ({len(ohlc_ltf)} کندل)")
-        print(f"📊 بازه کندل M30 در CSV: {ohlc_htf.index[0]} → {ohlc_htf.index[-1]} ({len(ohlc_htf)} کندل)")
+        print(f"📊 بازه کندل M1 در دیتابیس: {ohlc_ltf.index[0]} → {ohlc_ltf.index[-1]} ({len(ohlc_ltf)} کندل)")
+        print(f"📊 بازه کندل M30 در دیتابیس: {ohlc_htf.index[0]} → {ohlc_htf.index[-1]} ({len(ohlc_htf)} کندل)")
 
     cfg = NDSConfig(ltf="M1", htf="M30")
     B = make_bars(ohlc_ltf, cfg)
