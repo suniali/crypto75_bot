@@ -1,49 +1,61 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
-TF_MINUTES = {"M1": 1, "M2": 2, "M3": 3, "M5": 5, "M10": 10, "M15": 15, "M30": 30,
-              "H1": 60, "H4": 240, "D1": 1440}
+TF_MINUTES = {
+    "M1": 1, "M2": 2, "M3": 3, "M5": 5, "M10": 10, "M15": 15, "M30": 30,
+    "H1": 60, "H4": 240, "D1": 1440
+}
 
 
 @dataclass
 class NDSConfig:
-    # --- timeframes (the course: HTF gives direction + final target, LTF hunts the 123Flag)
+    # --- Timeframes (M30 = Strategic Direction & Final Target, M1 = Tactical 123Flag Entry)
     htf: str = "M30"
     ltf: str = "M1"
-    # --- node (pivot) detection: a node = local extreme (sign change of the derivative).
-    # The course gives no size, so strength = bars on each side is a parameter.
+
+    # --- Node (Pivot) detection strength (bars on each side)
     pivot_htf: int = 3
     pivot_ltf: int = 3
     atr_period: int = 14
-    tp_percent: float = 0.86
-    # Symmetry tolerance (e.g., 7.5% deviation allowed)
-    symmetry_tol: float = 0.075
-    # min_rr: float = 2.0 
-    # Risk management
-    risk_per_trade: float = 0.01   # 1% of account
-    # Kalman filter initial parameters
+
+    # --- NDS Cycle & Retracement Constants
+    cycle_retrace_pct: float = 0.864   # 86.4% reference cycle retracement level
+    cycle_tolerance: float = 0.08      # +/- 8% zone around 86.4% for secondary re-entry flags
+    symmetry_tol: float = 0.25         # Max allowed relative deviation between measured leg & Kalman L*
+
+    # --- Flag / Trigger (BABI = Break And Back Inside)
+    min_flag_atr: float = 0.5          # Min pullback Z depth in ATR
+    babi_max_bars: int = 5             # Max bars allowed between spike F beyond N3 and close back inside N3
+    signal_max_age: int = 1            # 0 for strict backtest bar, 1-2 for live polling tolerance
+    max_flag_bars: int = 200           # Max bars after N3 for flag completion
+    sl_buffer_atr: float = 0.15        # Buffer behind spike F (NOT N3!) so wick doesn't stop out immediately
+
+    # --- Sequence Exit Rules (Priority: Closing Open Nodes 1 & 2 -> Node 3)
+    tp1_mode: str = "both"             # "both" = furthest open node (1 & 2 closed), "first" = nearest open node
+    tp1_fraction: float = 1.0 / 3.0    # Course rule: close 1/3 at Open Nodes 1 & 2 closure
+    move_be_after_tp1: bool = True     # Protect remaining position after sequence closes Open Nodes 1 & 2
+    max_hold_bars: int = 600           # Max LTF bars to hold before timeout
+
+    # --- Fractal (DFA Hurst) & LML Risk Filters
+    use_fractal_filter: bool = True
+    hurst_window: int = 120            # Rolling window for DFA Hurst calculation
+    hurst_random_low: float = 0.45     # Avoid pure random walk zone [0.45, 0.55] on HTF
+    hurst_random_high: float = 0.55
+    min_tail_alpha: float = 1.15       # LML tail index threshold (below = extreme crisis regime)
+
+    # --- Kalman Filter & AI Meta-Labeling / QR Predictor
     kalman_Q_init: float = 1e-4
     kalman_R_init: float = 1e-2
-    # AI model
-    model_path: str = "nds_model.pt"
-    # --- flag / trigger
-    min_flag_atr: float = 0.5      # ASSUMPTION (not in the PDFs): min depth of pullback Z, in ATR
-    babi_max_bars: int = 5         # bars allowed between break of node 3 and close back inside
-    signal_max_age: int = 0        # 0 = signal only on the BABI bar itself (backtest). Live: 1
-    max_flag_bars: int = 200       # engineering limit: flag must form within N bars after node 3
-    sl_buffer_atr: float = 0.1     # buffer behind the flag (ATR)
-    tp1_mode: str = "both"         # "both" = both open nodes closed, "first" = nearest open node
-    # --- optional filters (0 / False = off)
-    max_sl_atr: float = 0.0
-    max_reject_atr: float = 0.0
-    require_low_volume: bool = False
-    lvs_ratio: float = 1.0
-    # --- trade plan used by the outcome simulator (course: 1/3 at TP1, rest at final target)
-    tp1_fraction: float = 1.0 / 3.0
-    move_be_after_tp1: bool = False
-    max_hold_bars: int = 400
-    same_bar_sl_first: bool = True  # SL and a target inside one bar: True = SL first (conservative)
-    cost_price: float = 0.0        # spread + commission in price units, charged once per trade
+    model_dir: str = "models"
+    ai_min_samples: int = 120
+    force_ai: bool = True              # روشن نگه داشتن اجباری فیلتر AI حتی وقتی ai_useful=False باشد
+    ai_advisory_only: bool = True       # True = فقط نظر می‌دهد و سیگنال را رد نمی‌کند
+    ai_min_prob: float = 0.45          # کف آستانه احتمال برد هنگام فعال بودن اجباری فیلتر AI
+    
+    # --- Backtest Execution Realism
+    risk_per_trade: float = 0.01       # 1% base risk per trade
+    same_bar_sl_first: bool = True     # Conservative intra-bar conflict resolution
+    cost_price: float = 0.0            # Spread + commission in price units
 
     @property
     def htf_min(self) -> int:

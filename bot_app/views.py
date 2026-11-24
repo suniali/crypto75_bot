@@ -24,24 +24,33 @@ CACHE_DIR.mkdir(exist_ok=True)
 CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 VERSION=config("VERSION", default="1.0.0")
 
+def _pick_num(features: dict, keys: list[str], default=0):
+    for k in keys:
+        val = features.get(k)
+        if val is not None and val != "":
+            return val
+    return default
+
+
 @login_required
 def api_check_new_signals(request):
     last_seen_id = request.GET.get('last_seen_id')
-    
+
     if last_seen_id is None:
-        # درخواست اول: فقط آخرین ID را برمی‌گردانیم تا سیگنال‌های قدیمی هشدار ندهند
         latest = TradeDecisionLog.objects.filter(action__in=['BUY', 'SELL']).order_by('-id').first()
         latest_id = latest.id if latest else 0
         return JsonResponse({'status': 'init', 'last_id': latest_id})
-    
-    last_seen_id = int(last_seen_id)
-    
-    # دریافت سیگنال‌های جدیدی که بعد از آخرین ID ثبت شده‌اند
+
+    try:
+        last_seen_id = int(last_seen_id)
+    except (TypeError, ValueError):
+        return JsonResponse({'status': 'error', 'message': 'Invalid last_seen_id'}, status=400)
+
     new_signals = TradeDecisionLog.objects.filter(
         id__gt=last_seen_id,
         action__in=['BUY', 'SELL']
     ).order_by('id')
-    
+
     signals_data = []
     for sig in new_signals:
         features = sig.features_snapshot or {}
@@ -49,10 +58,16 @@ def api_check_new_signals(request):
             'id': sig.id,
             'action': sig.action,
             'symbol': sig.symbol,
-            'entry_price': features.get('entry_price', 0),
-            'calculated_volume': features.get('calculated_volume', 0),
+            'entry_price': _pick_num(features, ['entry_price', 'entry'], 0),
+            'stop_loss': _pick_num(features, ['stop_loss', 'sl'], 0),
+            'tp1': _pick_num(features, ['tp1'], 0),
+            'take_profit': _pick_num(features, ['take_profit', 'tp_final', 'tp'], 0),
+            'calculated_volume': _pick_num(features, ['calculated_volume', 'volume'], 0),
+            'is_reentry_864': bool(features.get('is_reentry_864', False)),
+            'ai_prob': features.get('ai_prob'),
+            'ai_approved': features.get('ai_approved'),
         })
-        
+
     return JsonResponse({'status': 'success', 'new_signals': signals_data})
 
 
@@ -62,13 +77,12 @@ def api_latest_signal(request):
     latest = TradeDecisionLog.objects.filter(
         action__in=['BUY', 'SELL']
     ).order_by('-id').first()
-    
+
     if not latest:
         return JsonResponse({'status': 'no_signal'})
-    
+
     features = latest.features_snapshot or {}
-    
-    # نگاشت وضعیت به متن فارسی و رنگ
+
     status_map = {
         'none': {'text': 'ثبت شده', 'color': 'text-slate-400'},
         'pending': {'text': 'در حال ارسال', 'color': 'text-amber-400'},
@@ -76,22 +90,26 @@ def api_latest_signal(request):
         'failed': {'text': 'خطا در ارسال', 'color': 'text-rose-400'},
     }
     status_info = status_map.get(latest.notification_status, status_map['none'])
-    
+
     return JsonResponse({
         'status': 'success',
         'signal': {
             'id': latest.id,
             'symbol': latest.symbol,
             'action': latest.action,
-            'entry_price': features.get('entry_price', 0),
-            'stop_loss': features.get('stop_loss', 0),
-            'take_profit': features.get('take_profit', 0),
-            'calculated_volume': features.get('calculated_volume', 0),
-            'time': latest.timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(latest, 'timestamp') else '-',
+            'entry_price': _pick_num(features, ['entry_price', 'entry'], 0),
+            'stop_loss': _pick_num(features, ['stop_loss', 'sl'], 0),
+            'tp1': _pick_num(features, ['tp1'], 0),
+            'take_profit': _pick_num(features, ['take_profit', 'tp_final', 'tp'], 0),
+            'calculated_volume': _pick_num(features, ['calculated_volume', 'volume'], 0),
+            'is_reentry_864': bool(features.get('is_reentry_864', False)),
+            'ai_prob': features.get('ai_prob'),
+            'time': latest.timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(latest, 'timestamp') and latest.timestamp else '-',
             'notification_status': latest.notification_status,
             'notification_text': status_info['text'],
             'notification_color': status_info['color'],
             'notification_attempts': latest.notification_attempts,
+            'ai_approved': features.get('ai_approved'),
         }
     })
 

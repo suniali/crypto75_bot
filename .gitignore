@@ -11,6 +11,7 @@ __pycache__/
 *.db
 *.pkl
 *.age
+*.csv
 
 # Media & Static local files
 /media/

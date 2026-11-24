@@ -1,8 +1,5 @@
-"""Human readable reasoning for every signal (Persian default, English optional)."""
 from __future__ import annotations
-
 from typing import Optional
-
 from .config import NDSConfig
 from .structure import Setup
 
@@ -19,47 +16,35 @@ def explain(s: Setup, cfg: NDSConfig, prob: Optional[float] = None, thr: Optiona
     o1, o2 = (x.price for x in s.o)
     hn = [x.price for x in s.htf.nodes]
     ho = [x.price for x in s.htf.opens]
-    
-    # 🔴 اصلاح: استفاده از s.tp به جای s.tp1 و s.tp2
-    rr = abs(s.entry - s.tp) / abs(s.entry - s.sl) 
-    
+
+    risk = abs(s.entry - s.sl)
+    rr1 = abs(s.entry - s.tp1) / risk
+    rr_final = abs(s.entry - s.tp_final) / risk
+
     ai = ""
     if prob is not None:
-        ai = (f"AI: P(win)={prob:.0%}" + (f" (threshold {thr:.0%})" if thr is not None else ""))
-        
-    if lang == "en":
-        side = "SELL" if sell else "BUY"
-        kind = ("rising peaks", "valleys") if sell else ("falling valleys", "peaks")
-        lines = [
-            f"NDS {side} {symbol} @ {f(s.entry)}  [{s.time:%Y-%m-%d %H:%M}]",
-            f"SL {f(s.sl)} | TP {f(s.tp)} | R:R 1:{rr:.2f}", 
-            f"WHY: HTF {cfg.htf}: three {kind[0]} N1 {f(hn[0])} / N2 {f(hn[1])} / N3 {f(hn[2])}; open {kind[1]} {f(ho[0])}, {f(ho[1])} not closed yet -> {side} setups only.",
-            f"LTF {cfg.ltf}: nodes 1-2-3 = {f(p1)} / {f(p2)} / {f(p3)}, open nodes {f(o1)} and {f(o2)}.",
-            f"Flag: pullback Z {f(s.z)}, spike F {f(s.f)} beyond node 3; a bar closed back inside node 3 (BABI) = exhaustion.",
-            f"Levels: SL behind flag F + {cfg.sl_buffer_atr} ATR; TP = {cfg.tp_percent*100}% of flag.", 
-        ]
-        if s.lvl864 == s.lvl864:
-            lines.append(f"Cycle 86.4% level: {f(s.lvl864)}")
-        if ai:
-            lines.append(ai)
-        return "\n".join(lines)
+        ai = f"AI Meta-Filter: P(win)={prob:.0%}" + (f" (threshold {thr:.0%})" if thr is not None else "")
 
     side = "فروش (SELL)" if sell else "خرید (BUY)"
     pk = "قله‌های صعودی" if sell else "دره‌های نزولی"
     op = "دره‌های" if sell else "قله‌های"
+    reentry_tag = " [ورود دوم روی تراز ۸۶.۴٪]" if s.is_reentry_864 else " [ورود اول سکانس]"
+
     lines = [
-        f"🔔 NDS {side} | {symbol} | قیمت ورود {f(s.entry)} | {s.time:%Y-%m-%d %H:%M}",
-        f"حد ضرر: {f(s.sl)} | هدف: {f(s.tp)} | R:R = 1:{rr:.2f}", 
+        f"🔔 NDS {side}{reentry_tag} | {symbol} | ورود: {f(s.entry)} | {s.time:%Y-%m-%d %H:%M}",
+        f"🛑 حد ضرر (پشت اسپایک F): {f(s.sl)}",
+        f"🎯 هدف ۱ (نقاط ۱ و ۲ باز - خروج ۱/۳ حجم): {f(s.tp1)} (R:R = 1:{rr1:.2f})",
+        f"🏁 هدف نهایی (نود ۳ تایم‌فریم {cfg.htf}): {f(s.tp_final)} (R:R = 1:{rr_final:.2f})",
         "",
         "چرا این سیگنال صادر شد؟",
-        f"۱) جهت (تایم‌فریم {cfg.htf}): سه {pk} N1={f(hn[0])}، N2={f(hn[1])}، N3={f(hn[2])} شکل گرفته و {op} باز {f(ho[0])} و {f(ho[1])} هنوز بسته نشده‌اند؛ پس NDS فقط معاملهٔ {side} را مجاز می‌داند.",
-        f"۲) ستاپ (تایم‌فریم {cfg.ltf}): نودهای ۱-۲-۳ = {f(p1)} / {f(p2)} / {f(p3)} و نودهای باز {f(o1)} و {f(o2)}.",
-        f"۳) فلگ: بعد از نود ۳ قیمت تا Z={f(s.z)} اصلاح کرد (بدون بستن نودهای باز) و اسپایک تا F={f(s.f)} از نود ۳ عبور کرد؛ سپس یک کندل داخل نود ۳ برگشت و بست (BABI/ریجکت) = پایان تلاش حرکت.",
-        f"۴) سطوح: استاپ پشت فلگ (F ± {cfg.sl_buffer_atr} ATR). هدف = {cfg.tp_percent*100}% از طول فلگ.", 
+        f"۱) جهت کلان ({cfg.htf}): سه {pk} N1={f(hn[0])}، N2={f(hn[1])}، N3={f(hn[2])} شکل گرفته و {op} باز {f(ho[0])} و {f(ho[1])} هنوز بسته نشده‌اند (Hurst={s.htf.hurst:.2f}).",
+        f"۲) ساختار ({cfg.ltf}): نودهای ۱-۲-۳ = {f(p1)} / {f(p2)} / {f(p3)} و نقاط باز ۱ و ۲ = {f(o1)} و {f(o2)}.",
+        f"۳) تایید BABI: پس از پولبک Z={f(s.z)} و اسپایک F={f(s.f)} فراتر از نود ۳، کندل داخل نود ۳ بسته شد.",
+        "۴) اولویت سکانس: به محض بسته شدن نقاط ۱ و ۲ باز با نود ۳ جدید، ۱/۳ حجم خارج می‌شود و منتظر تراز ۸۶.۴٪ نمی‌مانیم.",
     ]
     if s.lvl864 == s.lvl864:
-        lines.append(f"۵) سطح بستن سایکل ۸۶.۴٪ برای مرجع: {f(s.lvl864)}")
+        lines.append(f"۵) تراز مرجع ۸۶.۴٪ لگ قبلی برای شکار ستاپ بعدی: {f(s.lvl864)}")
     if ai:
         lines.append(f"🤖 {ai}")
-    lines.append("⚠️ فقط سیگنال است؛ هیچ معامله‌ای خودکار باز نمی‌شود.")
+    lines.append("⚠️ فقط سیگنال تحلیلی است؛ معامله خودکار باز نمی‌شود.")
     return "\n".join(lines)
