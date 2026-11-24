@@ -1,7 +1,11 @@
 import os
+import json
 import django
 import numpy as np
 import pandas as pd
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
 # 1. تنظیمات محیط جنگو
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -15,13 +19,9 @@ from nds_bot.structure import make_bars, raw_pivots, PivotTracker, group_by_conf
 
 
 def _evaluate_setup_outcome(B, start_idx: int, direction: int, entry: float, sl: float, tp: float) -> dict:
-    """
-    بررسی سرنوشت ستاپ روی کندل‌های بعدی تا برخورد به SL یا TP.
-    direction: 1 برای BUY و -1 برای SELL
-    """
     risk = abs(entry - sl)
     if risk <= 0:
-        return {"status": "INVALID", "r": 0.0, "exit_bar": start_idx}
+        return {"status": "INVALID", "r": 0.0, "exit_bar": start_idx, "exit_time": B.t[start_idx], "exit_price": entry}
 
     reward_dist = abs(tp - entry)
     planned_rr = reward_dist / risk if risk > 0 else 0.0
@@ -33,28 +33,22 @@ def _evaluate_setup_outcome(B, start_idx: int, direction: int, entry: float, sl:
         if direction == 1:  # BUY
             hit_sl = low_i <= sl
             hit_tp = high_i >= tp
-            # اگر در یک کندل هر دو بخورند، محافظه‌کارانه اول SL را لحاظ می‌کنیم
-            if hit_sl and hit_tp:
-                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "planned_rr": planned_rr}
             if hit_sl:
-                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "planned_rr": planned_rr}
+                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "exit_time": B.t[idx], "exit_price": sl}
             if hit_tp:
-                return {"status": "WIN", "r": planned_rr, "exit_bar": idx, "planned_rr": planned_rr}
+                return {"status": "WIN", "r": planned_rr, "exit_bar": idx, "exit_time": B.t[idx], "exit_price": tp}
 
         elif direction == -1:  # SELL
             hit_sl = high_i >= sl
             hit_tp = low_i <= tp
-            if hit_sl and hit_tp:
-                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "planned_rr": planned_rr}
             if hit_sl:
-                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "planned_rr": planned_rr}
+                return {"status": "LOSS", "r": -1.0, "exit_bar": idx, "exit_time": B.t[idx], "exit_price": sl}
             if hit_tp:
-                return {"status": "WIN", "r": planned_rr, "exit_bar": idx, "planned_rr": planned_rr}
+                return {"status": "WIN", "r": planned_rr, "exit_bar": idx, "exit_time": B.t[idx], "exit_price": tp}
 
-    # اگر تا پایان داده نه SL بخورد نه TP، بر اساس قیمت بسته شدن آخرین کندل مقدار شناور R را حساب می‌کنیم
     last_close = float(B.c[-1])
     floating_r = ((last_close - entry) * direction) / risk
-    return {"status": "OPEN", "r": float(floating_r), "exit_bar": len(B.c) - 1, "planned_rr": planned_rr}
+    return {"status": "OPEN", "r": float(floating_r), "exit_bar": len(B.c) - 1, "exit_time": B.t[-1], "exit_price": last_close}
 
 
 def _max_consecutive(bool_array: np.ndarray) -> int:
@@ -187,7 +181,431 @@ def _build_htf_from_ltf(ohlc_ltf: pd.DataFrame, rule: str = "30min") -> pd.DataF
         "volume": "sum",
     }).dropna(subset=["open", "high", "low", "close"])
 
+import os
+import json
+import math
+import pandas as pd
 
+
+def _normalize_ts_seconds(idx: pd.DatetimeIndex) -> list[int]:
+    """تبدیل ایندکس زمانی به لیست ثانیه یونیکس بدون وابستگی به Timezone."""
+    dt_idx = pd.DatetimeIndex(idx)
+    if dt_idx.tz is not None:
+        dt_idx = dt_idx.tz_convert("UTC").tz_localize(None)
+    ns = dt_idx.as_unit("ns").asi8
+    return (ns // 1_000_000_000).tolist()
+
+
+def _df_to_candles(df_ohlc: pd.DataFrame) -> list[dict]:
+    """تبدیل دیتافریم OHLC به لیست کندل‌های معتبر برای Lightweight Charts."""
+    if df_ohlc is None or df_ohlc.empty:
+        return []
+
+    sub = df_ohlc[["open", "high", "low", "close"]].apply(pd.to_numeric, errors="coerce").dropna()
+    sub = sub[~sub.index.isna()]
+    sub = sub[~sub.index.duplicated(keep="last")].sort_index()
+    if sub.empty:
+        return []
+
+    ts_list = _normalize_ts_seconds(sub.index)
+    candles = []
+    seen = set()
+
+    for t, o, h, l, c in zip(ts_list, sub["open"], sub["high"], sub["low"], sub["close"]):
+        t_int = int(t)
+        if t_int in seen:
+            continue
+        vals = [float(o), float(h), float(l), float(c)]
+        if any(math.isnan(v) or math.isinf(v) for v in vals):
+            continue
+        seen.add(t_int)
+        candles.append({
+            "time": t_int,
+            "open": round(vals[0], 5),
+            "high": round(vals[1], 5),
+            "low": round(vals[2], 5),
+            "close": round(vals[3], 5),
+        })
+
+    return candles
+
+
+def generate_backtest_chart(
+    ohlc_ltf: pd.DataFrame,
+    setups_results: list[dict],
+    ohlc_htf: pd.DataFrame | None = None,
+    output_html: str = "backtest_chart.html",
+    auto_open: bool = True,
+):
+    """
+    چارت کندلی تعاملی شبیه TradingView با قابلیت سوییچ بین 1m و 30m:
+    - جابه‌جایی سریع بین تایم‌فریم 1m و 30m از نوار ابزار بالای چارت
+    - دکمه‌های Forward (سیگنال بعدی) و سیگنال قبلی + کلیدهای ArrowRight / ArrowLeft
+    - قابلیت Expand / Zoom آزادانه با اسکرول موس، درگ محورها و دکمه‌های زوم
+    """
+    if not setups_results:
+        print("⚠️ معامله‌ای برای رسم چارت وجود ندارد.")
+        return
+
+    df_1m = ohlc_ltf.copy()
+    if not isinstance(df_1m.index, pd.DatetimeIndex):
+        df_1m.index = pd.to_datetime(df_1m.index, errors="coerce")
+    df_1m = df_1m[~df_1m.index.isna()].sort_index()
+
+    candles_1m = _df_to_candles(df_1m)
+    if not candles_1m:
+        print("❌ کندل 1m معتبری برای رسم چارت پیدا نشد.")
+        return
+
+    if ohlc_htf is not None and len(ohlc_htf) > 0:
+        df_30m = ohlc_htf.copy()
+        if not isinstance(df_30m.index, pd.DatetimeIndex):
+            df_30m.index = pd.to_datetime(df_30m.index, errors="coerce")
+        df_30m = df_30m[~df_30m.index.isna()].sort_index()
+    else:
+        df_30m = (
+            df_1m[["open", "high", "low", "close"]]
+            .apply(pd.to_numeric, errors="coerce")
+            .dropna()
+            .resample("30min")
+            .agg({"open": "first", "high": "max", "low": "min", "close": "last"})
+            .dropna()
+        )
+
+    candles_30m = _df_to_candles(df_30m)
+    if not candles_30m:
+        candles_30m = candles_1m
+
+    min_1m, max_1m = candles_1m[0]["time"], candles_1m[-1]["time"]
+    min_30m, max_30m = candles_30m[0]["time"], candles_30m[-1]["time"]
+
+    markers_1m = []
+    markers_30m = []
+    trades_payload = []
+
+    for idx, s in enumerate(setups_results):
+        entry_ts = int(pd.Timestamp(s["time"]).tz_localize(None).timestamp())
+        exit_ts = int(pd.Timestamp(s["exit_time"]).tz_localize(None).timestamp())
+        entry_30m_ts = entry_ts - (entry_ts % 1800)
+        exit_30m_ts = exit_ts - (exit_ts % 1800)
+
+        is_buy = s["direction"] == 1
+        is_win = s["status"] == "WIN"
+
+        # مارکرهای 1m
+        if min_1m <= entry_ts <= max_1m:
+            markers_1m.append({
+                "time": entry_ts,
+                "position": "belowBar" if is_buy else "aboveBar",
+                "color": "#00e676" if is_buy else "#ff1744",
+                "shape": "arrowUp" if is_buy else "arrowDown",
+                "text": f"#{idx + 1} {'BUY' if is_buy else 'SELL'}",
+            })
+        if s["status"] in ("WIN", "LOSS") and (min_1m <= exit_ts <= max_1m):
+            markers_1m.append({
+                "time": exit_ts,
+                "position": "aboveBar" if is_buy else "belowBar",
+                "color": "#00e676" if is_win else "#ff5252",
+                "shape": "circle",
+                "text": f"#{idx + 1} {s['status']} ({s['r']:+.2f}R)",
+            })
+
+        # مارکرهای 30m (گرد شده به ابتدای کندل 30 دقیقه‌ای)
+        if min_30m <= entry_30m_ts <= max_30m:
+            markers_30m.append({
+                "time": entry_30m_ts,
+                "position": "belowBar" if is_buy else "aboveBar",
+                "color": "#00e676" if is_buy else "#ff1744",
+                "shape": "arrowUp" if is_buy else "arrowDown",
+                "text": f"#{idx + 1} {'BUY' if is_buy else 'SELL'}",
+            })
+        if s["status"] in ("WIN", "LOSS") and (min_30m <= exit_30m_ts <= max_30m):
+            markers_30m.append({
+                "time": exit_30m_ts,
+                "position": "aboveBar" if is_buy else "belowBar",
+                "color": "#00e676" if is_win else "#ff5252",
+                "shape": "circle",
+                "text": f"#{idx + 1} {s['status']} ({s['r']:+.2f}R)",
+            })
+
+        trades_payload.append({
+            "id": idx + 1,
+            "side": "BUY" if is_buy else "SELL",
+            "status": s["status"],
+            "r": round(float(s["r"]), 2),
+            "entry_time": entry_ts,
+            "exit_time": exit_ts,
+            "entry_time_30m": entry_30m_ts,
+            "exit_time_30m": exit_30m_ts,
+            "entry_time_str": str(s["time"]),
+            "exit_time_str": str(s["exit_time"]),
+            "entry": round(float(s["entry"]), 5),
+            "sl": round(float(s["sl"]), 5),
+            "tp": round(float(s["tp"]), 5),
+            "exit_price": round(float(s["exit_price"]), 5),
+        })
+
+    markers_1m.sort(key=lambda m: m["time"])
+    markers_30m.sort(key=lambda m: m["time"])
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>NDS Backtest Chart (1m / 30m)</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: Tahoma, sans-serif; }}
+  body {{ background: #131722; color: #d1d4dc; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }}
+  #toolbar {{
+    background: #1e222d; border-bottom: 1px solid #2a2e39; padding: 8px 14px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 10;
+  }}
+  button {{
+    background: #2962ff; color: #fff; border: none; padding: 6px 12px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;
+  }}
+  button:hover {{ background: #1e53e5; }}
+  button.secondary {{ background: #2a2e39; color: #d1d4dc; }}
+  button.secondary:hover {{ background: #363a45; }}
+  select {{
+    background: #2a2e39; color: #fff; border: 1px solid #363a45;
+    padding: 6px 10px; border-radius: 4px; font-size: 13px;
+  }}
+  #trade-select {{ min-width: 260px; }}
+  #tf-select {{ min-width: 95px; font-weight: bold; }}
+  #trade-info {{
+    margin-right: auto; font-size: 13px; background: #131722;
+    padding: 6px 12px; border-radius: 4px; border: 1px solid #2a2e39; direction: ltr;
+  }}
+  .win {{ color: #00e676; font-weight: bold; }}
+  .loss {{ color: #ff5252; font-weight: bold; }}
+  #chart-container {{ flex: 1; width: 100%; height: 100%; position: relative; }}
+  #debug-err {{
+    display: none; position: fixed; bottom: 10px; left: 10px; right: 10px;
+    background: #4a151b; color: #ffb4b4; border: 1px solid #ff5252;
+    padding: 10px; border-radius: 6px; font-size: 12px; direction: ltr; z-index: 99;
+  }}
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button class="secondary" onclick="prevTrade()">⏮ سیگنال قبلی</button>
+  <button onclick="nextTrade()">سیگنال بعدی (Forward) ⏭</button>
+  <select id="tf-select" onchange="switchTimeframe(this.value)" title="تغییر تایم‌فریم">
+    <option value="1m" selected>1m</option>
+    <option value="30m">30m</option>
+  </select>
+  <select id="trade-select" onchange="jumpToTrade(parseInt(this.value))"></select>
+  <button class="secondary" onclick="expandView()">🔍 Expand / زوم بازتر</button>
+  <button class="secondary" onclick="fitAll()">🌐 کل چارت</button>
+  <div id="trade-info">در حال بارگذاری چارت...</div>
+</div>
+
+<div id="chart-container"></div>
+<div id="debug-err"></div>
+
+<script>
+  const errBox = document.getElementById('debug-err');
+  function showError(msg) {{
+    errBox.style.display = 'block';
+    errBox.innerText = msg;
+  }}
+  window.addEventListener('error', (e) => showError('JS Error: ' + e.message));
+
+  const candlesByTf = {{
+    "1m": {json.dumps(candles_1m)},
+    "30m": {json.dumps(candles_30m)}
+  }};
+  const markersByTf = {{
+    "1m": {json.dumps(markers_1m)},
+    "30m": {json.dumps(markers_30m)}
+  }};
+  const trades = {json.dumps(trades_payload)};
+
+  const cdnUrls = [
+    "https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js",
+    "https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"
+  ];
+
+  function loadScriptSequential(urls, idx = 0) {{
+    if (idx >= urls.length) {{
+      showError("بارگذاری کتابخانه Lightweight Charts از اینترنت ممکن نشد. اتصال اینترنت یا فایروال/پروکسی را بررسی کنید.");
+      return;
+    }}
+    const s = document.createElement('script');
+    s.src = urls[idx];
+    s.onload = () => initChart();
+    s.onerror = () => loadScriptSequential(urls, idx + 1);
+    document.head.appendChild(s);
+  }}
+
+  let chart, candleSeries, activeLines = [], currentIdx = -1, currentTf = "1m";
+
+  function applyTimeframeData(tf) {{
+    currentTf = tf;
+    candleSeries.setData(candlesByTf[tf] || []);
+    if (typeof candleSeries.setMarkers === 'function') {{
+      candleSeries.setMarkers(markersByTf[tf] || []);
+    }}
+  }}
+
+  function initChart() {{
+    if (typeof LightweightCharts === 'undefined') {{
+      showError("LightweightCharts تعریف نشده است.");
+      return;
+    }}
+    const container = document.getElementById('chart-container');
+    chart = LightweightCharts.createChart(container, {{
+      width: container.clientWidth || window.innerWidth,
+      height: container.clientHeight || (window.innerHeight - 50),
+      layout: {{ background: {{ color: '#131722' }}, textColor: '#d1d4dc' }},
+      grid: {{ vertLines: {{ color: '#1f2943' }}, horzLines: {{ color: '#1f2943' }} }},
+      crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
+      rightPriceScale: {{ borderColor: '#2a2e39', autoScale: true }},
+      timeScale: {{
+        borderColor: '#2a2e39',
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 15,
+        barSpacing: 8,
+      }},
+    }});
+
+    candleSeries = typeof chart.addCandlestickSeries === 'function'
+      ? chart.addCandlestickSeries({{
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          borderVisible: false,
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+        }})
+      : chart.addSeries(LightweightCharts.CandlestickSeries, {{
+          upColor: '#26a69a',
+          downColor: '#ef5350',
+          wickUpColor: '#26a69a',
+          wickDownColor: '#ef5350',
+        }});
+
+    applyTimeframeData(currentTf);
+
+    const selectEl = document.getElementById('trade-select');
+    trades.forEach((t, i) => {{
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.text = `#${{t.id}} | ${{t.side}} | ${{t.status}} (${{t.r >= 0 ? '+' : ''}}${{t.r}}R) | ${{t.entry_time_str}}`;
+      selectEl.appendChild(opt);
+    }});
+
+    if (trades.length > 0) jumpToTrade(0);
+    else chart.timeScale().fitContent();
+  }}
+
+  function switchTimeframe(tf) {{
+    if (!candleSeries || !candlesByTf[tf]) return;
+    applyTimeframeData(tf);
+    if (currentIdx >= 0) {{
+      jumpToTrade(currentIdx);
+    }} else {{
+      chart.timeScale().fitContent();
+    }}
+  }}
+
+  function clearPriceLines() {{
+    activeLines.forEach(line => candleSeries.removePriceLine(line));
+    activeLines = [];
+  }}
+
+  function jumpToTrade(idx) {{
+    if (!candleSeries || idx < 0 || idx >= trades.length) return;
+    currentIdx = idx;
+    document.getElementById('trade-select').value = idx;
+    const t = trades[idx];
+
+    clearPriceLines();
+    activeLines.push(candleSeries.createPriceLine({{
+      price: t.entry, color: '#2962ff', lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: `ENTRY #${{t.id}}`
+    }}));
+    activeLines.push(candleSeries.createPriceLine({{
+      price: t.sl, color: '#ff5252', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: `SL #${{t.id}}`
+    }}));
+    activeLines.push(candleSeries.createPriceLine({{
+      price: t.tp, color: '#00e676', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: `TP #${{t.id}}`
+    }}));
+
+    const is30m = currentTf === "30m";
+    const entryT = is30m ? t.entry_time_30m : t.entry_time;
+    const exitT = is30m ? t.exit_time_30m : t.exit_time;
+    const paddingBefore = is30m ? (25 * 1800) : (40 * 60);
+    const paddingAfter = is30m ? (20 * 1800) : (30 * 60);
+    const minSpan = is30m ? (30 * 1800) : (60 * 60);
+
+    chart.timeScale().setVisibleRange({{
+      from: entryT - paddingBefore,
+      to: Math.max(exitT + paddingAfter, entryT + minSpan),
+    }});
+
+    const statusClass = t.status === 'WIN' ? 'win' : 'loss';
+    document.getElementById('trade-info').innerHTML =
+      `<b>[${{currentTf}}] #${{t.id}} ${{t.side}}</b> | <span class="${{statusClass}}">${{t.status}} (${{t.r >= 0 ? '+' : ''}}${{t.r}}R)</span> | ` +
+      `Entry: <b>${{t.entry}}</b> | SL: <b>${{t.sl}}</b> | TP: <b>${{t.tp}}</b> | ` +
+      `In: ${{t.entry_time_str}} → Out: ${{t.exit_time_str}}`;
+  }}
+
+  function nextTrade() {{
+    if (!trades.length) return;
+    jumpToTrade((currentIdx + 1) % trades.length);
+  }}
+
+  function prevTrade() {{
+    if (!trades.length) return;
+    jumpToTrade(currentIdx <= 0 ? trades.length - 1 : currentIdx - 1);
+  }}
+
+  function expandView() {{
+    if (!chart) return;
+    const range = chart.timeScale().getVisibleRange();
+    if (!range) return;
+    const span = range.to - range.from;
+    chart.timeScale().setVisibleRange({{
+      from: range.from - Math.floor(span * 0.5),
+      to: range.to + Math.floor(span * 0.5),
+    }});
+  }}
+
+  function fitAll() {{
+    if (chart) chart.timeScale().fitContent();
+  }}
+
+  window.addEventListener('keydown', (e) => {{
+    if (e.key === 'ArrowRight') nextTrade();
+    if (e.key === 'ArrowLeft') prevTrade();
+  }});
+
+  window.addEventListener('resize', () => {{
+    if (!chart) return;
+    const container = document.getElementById('chart-container');
+    chart.applyOptions({{
+      width: container.clientWidth || window.innerWidth,
+      height: container.clientHeight || (window.innerHeight - 50),
+    }});
+  }});
+
+  loadScriptSequential(cdnUrls);
+</script>
+</body>
+</html>
+"""
+
+    with open(output_html, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"📈 چارت تعاملی (1m / 30m) ساخته شد: {os.path.abspath(output_html)}")
+
+    if auto_open:
+        import webbrowser
+        webbrowser.open(f"file://{os.path.abspath(output_html)}")
+        
 def run_replay(
     ohlc_ltf: pd.DataFrame | None = None,
     ohlc_htf: pd.DataFrame | None = None,
@@ -279,6 +697,8 @@ def run_replay(
                 "status": outcome["status"],
                 "r": outcome["r"],
                 "key": s.key,
+                "exit_time": outcome["exit_time"],
+                "exit_price": outcome["exit_price"],
             }
             setups_results.append(record)
 
@@ -294,7 +714,9 @@ def run_replay(
 
     metrics = compute_backtest_metrics(setups_results)
     print_backtest_report(metrics)
+    generate_backtest_chart(ohlc_ltf, setups_results, ohlc_htf=ohlc_htf, output_html="backtest_chart.html")
     return setups_results
+
 
 
 if __name__ == "__main__":
