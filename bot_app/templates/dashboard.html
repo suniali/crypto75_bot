@@ -2173,18 +2173,21 @@
 
     <!-- 🟢 نوتیفیکیشن شناور سیگنال -->
     <div id="signalToast" class="fixed bottom-5 right-5 z-[100] transform translate-y-20 opacity-0 transition-all duration-500 ease-out">
-        <div class="bg-[#050812] border border-[#00f3ff] rounded-xl p-4 shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-start gap-4 min-w-[340px] max-w-[420px] relative">
+        <div id="toastCard" class="bg-[#050812] border border-[#00f3ff] rounded-xl p-4 shadow-[0_0_20px_rgba(0,243,255,0.3)] flex items-start gap-4 min-w-[350px] max-w-[440px] relative">
             <button onclick="document.getElementById('signalToast').classList.add('translate-y-20', 'opacity-0'); document.getElementById('signalToast').classList.remove('translate-y-0', 'opacity-100');" class="absolute top-2 left-2 text-slate-500 hover:text-white transition-colors">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
             </button>
 
-            <div class="w-12 h-12 rounded-full flex items-center justify-center bg-cyan-900/50 text-cyan-400 shrink-0 mt-1">
+            <div id="toastIconBox" class="w-12 h-12 rounded-full flex items-center justify-center bg-cyan-900/50 text-cyan-400 shrink-0 mt-1">
                 <svg class="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                 </svg>
             </div>
             <div class="flex-1 min-w-0">
-                <h4 id="toastTitle" class="text-sm font-bold text-white pl-4">سیگنال جدید!</h4>
+                <div class="flex items-center gap-2 pl-4">
+                    <h4 id="toastTitle" class="text-sm font-bold text-white">سیگنال جدید!</h4>
+                    <span id="toastStrategyBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">NDS</span>
+                </div>
                 <p id="toastDesc" class="text-xs text-slate-300 font-mono mt-1 pl-4">...</p>
                 <p id="toastSub" class="text-[11px] text-slate-400 font-mono mt-1 pl-4">...</p>
             </div>
@@ -2193,7 +2196,7 @@
 
     <!-- 🎯 ویجت شناور آخرین سیگنال (گوشه پایین چپ) -->
     <div id="latestSignalWidget" class="fixed bottom-5 left-5 z-[90] hidden transition-all duration-500 ease-out">
-        <div class="bg-[#050812]/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(0,243,255,0.15)] flex items-start gap-4 min-w-[310px]">
+        <div id="widgetCard" class="bg-[#050812]/95 backdrop-blur-md border border-cyan-500/40 rounded-2xl p-4 shadow-[0_0_25px_rgba(0,243,255,0.15)] flex items-start gap-4 min-w-[320px]">
             <div id="widgetIcon" class="w-12 h-12 rounded-xl flex items-center justify-center bg-cyan-500/10 border border-cyan-500/30 shrink-0 mt-0.5">
                 <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
@@ -3126,29 +3129,75 @@
                 }
             }, { once: true });
 
-            function fmtNum(val) {
+            function fmtPrice(val) {
                 if (val === null || val === undefined || val === "") return "-";
                 const num = Number(val);
-                if (Number.isNaN(num)) return String(val);
-                return num.toFixed(2).replace(/\.?0+$/, "");
+                if (Number.isNaN(num) || num === 0) return "-";
+                return num >= 50 ? num.toFixed(2) : num.toFixed(5).replace(/\.?0+$/, "");
             }
 
-            function fmtAi(prob) {
+            function fmtLot(val) {
+                if (val === null || val === undefined || val === "") return "-";
+                const num = Number(val);
+                if (Number.isNaN(num) || num === 0) return "-";
+                return num.toFixed(2);
+            }
+
+            function fmtAi(prob, approved) {
                 if (prob === null || prob === undefined || prob === "") return "AI: -";
                 const num = Number(prob);
                 if (Number.isNaN(num)) return "AI: -";
-                return `AI: ${(num * 100).toFixed(0)}%`;
+                const pct = num <= 1 ? (num * 100).toFixed(0) : num.toFixed(0);
+                const tag = approved === true ? " ✓" : (approved === false ? " ✕" : "");
+                return `AI: ${pct}%${tag}`;
             }
 
-            function playAlertSound() {
+            function isScalpSignal(sig) {
+                return Boolean(sig.is_super_scalp || sig.strategy_type === "SUPER_SCALP");
+            }
+
+            function shouldPlayAlertSound(signal) {
+                if (!isScalpSignal(signal)) {
+                    return true;
+                }
+                return signal.ai_approved === true;
+            }
+
+            function getStrategyLabel(sig) {
+                if (isScalpSignal(sig)) {
+                    return sig.timeframe ? `SCALP · ${sig.timeframe}` : "SCALP";
+                }
+                if (sig.is_reentry_864) {
+                    return sig.timeframe ? `★ NDS · ${sig.timeframe} · 86.4%` : "★ NDS · 86.4%";
+                }
+                return sig.timeframe ? `★ NDS · ${sig.timeframe}` : "★ NDS";
+            }
+
+            function formatVolumeOrRisk(sig) {
+                const volNum = Number(sig.calculated_volume);
+                if (!Number.isNaN(volNum) && volNum > 0) {
+                    return `حجم: ${fmtLot(volNum)} لات`;
+                }
+                const riskPct = Number(sig.risk_percentage);
+                if (!Number.isNaN(riskPct) && riskPct > 0) {
+                    return `ریسک: ${fmtLot(riskPct)}%`;
+                }
+                const finalRr = Number(sig.final_rr);
+                if (!Number.isNaN(finalRr) && finalRr > 0) {
+                    return `R:R: 1:${fmtLot(finalRr)}`;
+                }
+                return "حجم: تحلیلی";
+            }
+
+            function playAlertSound(isScalp = false) {
                 if (audioCtx.state === "suspended") {
                     audioCtx.resume();
                 }
                 try {
-                    const playBeep = (freq, startTime, duration, volume) => {
+                    const playBeep = (freq, startTime, duration, volume, type = "sine") => {
                         const osc = audioCtx.createOscillator();
                         const gain = audioCtx.createGain();
-                        osc.type = "sine";
+                        osc.type = type;
                         osc.frequency.value = freq;
 
                         gain.gain.setValueAtTime(volume, startTime);
@@ -3161,9 +3210,14 @@
                     };
 
                     const now = audioCtx.currentTime;
-                    playBeep(880.00, now, 0.25, 0.8);
-                    playBeep(1046.50, now + 0.3, 0.25, 0.8);
-                    playBeep(1318.51, now + 0.6, 0.5, 0.8);
+                    if (isScalp) {
+                        playBeep(1174.66, now, 0.12, 0.45, "triangle");
+                        playBeep(1567.98, now + 0.15, 0.16, 0.45, "triangle");
+                    } else {
+                        playBeep(659.25, now, 0.25, 0.85, "sine");
+                        playBeep(880.00, now + 0.28, 0.25, 0.85, "sine");
+                        playBeep(1174.66, now + 0.56, 0.45, 0.9, "sine");
+                    }
                 } catch (e) {
                     console.error("Audio Error:", e);
                 }
@@ -3171,30 +3225,46 @@
 
             function showToast(signal) {
                 const toast = document.getElementById("signalToast");
+                const toastCard = document.getElementById("toastCard");
+                const badge = document.getElementById("toastStrategyBadge");
                 const title = document.getElementById("toastTitle");
                 const desc = document.getElementById("toastDesc");
                 const sub = document.getElementById("toastSub");
 
                 const isBuy = signal.action === "BUY";
+                const isScalp = isScalpSignal(signal);
                 const actionColor = isBuy ? "text-emerald-400" : "text-rose-400";
                 const sideFa = isBuy ? "خرید (BUY)" : "فروش (SELL)";
-                const seqType = signal.is_reentry_864 ? "ورود دوم 86.4%" : "سکانس اصلی";
+
+                badge.innerText = getStrategyLabel(signal);
+                badge.className = isScalp
+                    ? "text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                    : "text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/50";
+
+                toastCard.className = isScalp
+                    ? "bg-[#050812] border border-amber-400/70 rounded-xl p-4 shadow-[0_0_16px_rgba(251,191,36,0.2)] flex items-start gap-4 min-w-[350px] max-w-[440px] relative"
+                    : "bg-[#050812] border-2 border-[#00f3ff] rounded-xl p-4 shadow-[0_0_26px_rgba(0,243,255,0.4)] flex items-start gap-4 min-w-[350px] max-w-[440px] relative";
 
                 title.innerHTML = `سیگنال <span class="${actionColor}">${sideFa}</span> — ${signal.symbol}`;
-                desc.innerText = `ورود: ${fmtNum(signal.entry_price)} | SL: ${fmtNum(signal.stop_loss)} | TP1: ${fmtNum(signal.tp1)} | TP: ${fmtNum(signal.take_profit)}`;
-                sub.innerText = `حجم: ${fmtNum(signal.calculated_volume)} لات | ${seqType} | ${fmtAi(signal.ai_prob)}`;
+
+                const tp1Text = (!isScalp && Number(signal.tp1) > 0) ? ` | TP1: ${fmtPrice(signal.tp1)}` : "";
+                desc.innerText = `ورود: ${fmtPrice(signal.entry_price)} | SL: ${fmtPrice(signal.stop_loss)}${tp1Text} | TP: ${fmtPrice(signal.take_profit)}`;
+                sub.innerText = `${formatVolumeOrRisk(signal)} | ${fmtAi(signal.ai_prob, signal.ai_approved)}`;
 
                 toast.classList.remove("translate-y-20", "opacity-0");
                 toast.classList.add("translate-y-0", "opacity-100");
 
-                playAlertSound();
+                if (shouldPlayAlertSound(signal)) {
+                    playAlertSound(isScalp);
+                }
 
                 if (toastTimeout) clearTimeout(toastTimeout);
 
+                const displayDuration = isScalp ? 10000 : 18000;
                 toastTimeout = setTimeout(() => {
                     toast.classList.remove("translate-y-0", "opacity-100");
                     toast.classList.add("translate-y-20", "opacity-0");
-                }, 15000);
+                }, displayDuration);
             }
 
             function checkForNewSignals() {
@@ -3209,7 +3279,14 @@
                         if (data.status === "init") {
                             lastSignalId = data.last_id;
                         } else if (data.status === "success" && data.new_signals.length > 0) {
-                            data.new_signals.forEach(sig => {
+                            const ordered = [...data.new_signals].sort((a, b) => {
+                                const prioA = isScalpSignal(a) ? 1 : 0;
+                                const prioB = isScalpSignal(b) ? 1 : 0;
+                                if (prioA !== prioB) return prioA - prioB;
+                                return a.id - b.id;
+                            });
+
+                            ordered.forEach(sig => {
                                 showToast(sig);
                                 lastSignalId = Math.max(lastSignalId, sig.id);
                             });
@@ -3223,6 +3300,7 @@
                     .then(res => res.json())
                     .then(data => {
                         const widget = document.getElementById("latestSignalWidget");
+                        const widgetCard = document.getElementById("widgetCard");
 
                         if (data.status === "no_signal" || !data.signal) {
                             widget.classList.add("hidden");
@@ -3231,10 +3309,21 @@
 
                         const sig = data.signal;
                         const isBuy = sig.action === "BUY";
+                        const isScalp = isScalpSignal(sig);
 
                         widget.classList.remove("hidden");
+                        widgetCard.className = isScalp
+                            ? "bg-[#050812]/95 backdrop-blur-md border border-amber-400/50 rounded-2xl p-4 shadow-[0_0_20px_rgba(251,191,36,0.15)] flex items-start gap-4 min-w-[320px]"
+                            : "bg-[#050812]/95 backdrop-blur-md border-2 border-cyan-400/60 rounded-2xl p-4 shadow-[0_0_28px_rgba(0,243,255,0.22)] flex items-start gap-4 min-w-[320px]";
+
                         document.getElementById("widgetSymbol").innerText = sig.symbol;
-                        document.getElementById("widgetBadge").innerText = sig.is_reentry_864 ? "86.4%" : "123+BABI";
+
+                        const badgeEl = document.getElementById("widgetBadge");
+                        badgeEl.innerText = getStrategyLabel(sig);
+                        badgeEl.className = isScalp
+                            ? "text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : "text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-200 border border-cyan-400/40";
+
                         document.getElementById("widgetTime").innerText = sig.time || "--:--";
 
                         const actionEl = document.getElementById("widgetAction");
@@ -3247,12 +3336,21 @@
                         statusEl.innerText = sig.notification_text;
                         statusEl.className = `text-[11px] font-mono ${sig.notification_color}`;
 
-                        document.getElementById("widgetEntry").innerText = `ورود: ${fmtNum(sig.entry_price)}`;
-                        document.getElementById("widgetSl").innerText = `حد ضرر: ${fmtNum(sig.stop_loss)}`;
-                        document.getElementById("widgetTp1").innerText = `TP1 (1/3): ${fmtNum(sig.tp1)}`;
-                        document.getElementById("widgetTpFinal").innerText = `هدف نهایی: ${fmtNum(sig.take_profit)}`;
-                        document.getElementById("widgetVolume").innerText = `حجم: ${fmtNum(sig.calculated_volume)} لات`;
-                        document.getElementById("widgetAi").innerText = fmtAi(sig.ai_prob);
+                        document.getElementById("widgetEntry").innerText = `ورود: ${fmtPrice(sig.entry_price)}`;
+                        document.getElementById("widgetSl").innerText = `حد ضرر: ${fmtPrice(sig.stop_loss)}`;
+
+                        const tp1El = document.getElementById("widgetTp1");
+                        if (isScalp || Number(sig.tp1) <= 0) {
+                            tp1El.innerText = "TP1: تک‌تارگت";
+                            tp1El.className = "text-slate-500";
+                        } else {
+                            tp1El.innerText = `TP1 (1/3): ${fmtPrice(sig.tp1)}`;
+                            tp1El.className = "text-amber-300";
+                        }
+
+                        document.getElementById("widgetTpFinal").innerText = `هدف نهایی: ${fmtPrice(sig.take_profit)}`;
+                        document.getElementById("widgetVolume").innerText = formatVolumeOrRisk(sig);
+                        document.getElementById("widgetAi").innerText = fmtAi(sig.ai_prob, sig.ai_approved);
 
                         const iconEl = document.getElementById("widgetIcon");
                         if (isBuy) {

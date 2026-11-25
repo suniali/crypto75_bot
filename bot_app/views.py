@@ -1,3 +1,4 @@
+import re
 import json
 import logging
 import hashlib
@@ -25,92 +26,155 @@ CURENCY_UNIT=config("CURENCY_UNIT", default="$")
 VERSION=config("VERSION", default="1.0.0")
 
 def _pick_num(features: dict, keys: list[str], default=0):
+    if not isinstance(features, dict):
+        return default
     for k in keys:
         val = features.get(k)
         if val is not None and val != "":
-            return val
+            try:
+                num = float(val)
+                if num != 0:
+                    return num
+            except (TypeError, ValueError):
+                return val
     return default
 
 
+def _parse_nds_explanation_prices(text: str) -> dict[str, float]:
+    """استخراج قیمت‌های ورود، حد ضرر، هدف ۱ و هدف نهایی از متن nds_explanation."""
+    if not isinstance(text, str) or not text:
+        return {}
+
+    patterns = {
+        "entry_price": r"ورود:\s*([0-9]+(?:\.[0-9]+)?)",
+        "stop_loss": r"حد ضرر[^:]*:\s*([0-9]+(?:\.[0-9]+)?)",
+        "tp1": r"هدف\s*۱[^:]*:\s*([0-9]+(?:\.[0-9]+)?)",
+        "take_profit": r"هدف نهایی[^:]*:\s*([0-9]+(?:\.[0-9]+)?)",
+    }
+
+    parsed: dict[str, float] = {}
+    for field, pat in patterns.items():
+        match = re.search(pat, text)
+        if match:
+            try:
+                parsed[field] = float(match.group(1))
+            except ValueError:
+                pass
+    return parsed
+
+
+def _serialize_signal(sig, include_notification: bool = False) -> dict:
+    features = sig.features_snapshot or {}
+    raw_strategy = str(features.get("strategy_type") or features.get("strategy") or "").upper()
+    is_super_scalp = "SCALP" in raw_strategy
+    strategy_type = "SUPER_SCALP" if is_super_scalp else "NDS"
+
+    # استخراج تایم‌فریم از features یا nds_key (مثلاً XAUUSD_l_M1_...)
+    timeframe = str(features.get("timeframe") or "")
+    if not timeframe and isinstance(features.get("nds_key"), str):
+        parts = features["nds_key"].split("_")
+        if len(parts) >= 3:
+            timeframe = parts[2]
+    if not timeframe and is_super_scalp:
+        timeframe = "M1"
+
+    parsed_prices = _parse_nds_explanation_prices(features.get("nds_explanation", ""))
+
+    entry_price = _pick_num(features, ["entry_price", "entry", "price"], parsed_prices.get("entry_price", 0))
+    stop_loss = _pick_num(features, ["stop_loss", "sl"], parsed_prices.get("stop_loss", 0))
+    tp1 = _pick_num(features, ["tp1"], parsed_prices.get("tp1", 0))
+    take_profit = _pick_num(features, ["take_profit", "tp_final", "tp"], parsed_prices.get("take_profit", 0))
+    calculated_volume = _pick_num(features, ["calculated_volume", "volume", "lot"], 0)
+    risk_amount_usd = _pick_num(features, ["risk_amount_usd", "risk_usd"], 0)
+    risk_percentage = _pick_num(features, ["risk_percentage"], 0)
+    tp1_rr = _pick_num(features, ["tp1_rr"], 0)
+    final_rr = _pick_num(features, ["final_rr"], 0)
+
+    ai_prob = _pick_num(features, ["ai_prob", "ai_confidence"], None)
+    if ai_prob is None and getattr(sig, "ai_confidence", None) is not None:
+        ai_prob = float(sig.ai_confidence)
+
+    ai_approved = features.get("ai_approved")
+    if ai_approved is None and ai_prob is not None:
+        threshold = _pick_num(features, ["ai_threshold"], 0.55)
+        ai_approved = bool(ai_prob >= threshold)
+
+    payload = {
+        "id": sig.id,
+        "action": sig.action,
+        "symbol": sig.symbol,
+        "strategy_type": strategy_type,
+        "strategy_raw": raw_strategy,
+        "is_super_scalp": is_super_scalp,
+        "timeframe": timeframe,
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "tp1": tp1,
+        "take_profit": take_profit,
+        "calculated_volume": calculated_volume,
+        "risk_amount_usd": risk_amount_usd,
+        "risk_percentage": risk_percentage,
+        "tp1_rr": tp1_rr,
+        "final_rr": final_rr,
+        "is_reentry_864": bool(float(features.get("is_reentry_864") or 0) == 1),
+        "ai_prob": ai_prob,
+        "ai_approved": ai_approved,
+    }
+
+    if include_notification:
+        status_map = {
+            "none": {"text": "ثبت شده", "color": "text-slate-400"},
+            "pending": {"text": "در حال ارسال", "color": "text-amber-400"},
+            "sent": {"text": "ارسال شد", "color": "text-emerald-400"},
+            "failed": {"text": "خطا در ارسال", "color": "text-rose-400"},
+        }
+        status_info = status_map.get(sig.notification_status, status_map["none"])
+        payload.update({
+            "time": sig.timestamp.strftime("%Y-%m-%d %H:%M") if getattr(sig, "timestamp", None) else "-",
+            "notification_status": sig.notification_status,
+            "notification_text": status_info["text"],
+            "notification_color": status_info["color"],
+            "notification_attempts": sig.notification_attempts,
+        })
+
+    return payload
+
 @login_required
 def api_check_new_signals(request):
-    last_seen_id = request.GET.get('last_seen_id')
+    last_seen_id = request.GET.get("last_seen_id")
 
     if last_seen_id is None:
-        latest = TradeDecisionLog.objects.filter(action__in=['BUY', 'SELL']).order_by('-id').first()
+        latest = TradeDecisionLog.objects.filter(action__in=["BUY", "SELL"]).order_by("-id").first()
         latest_id = latest.id if latest else 0
-        return JsonResponse({'status': 'init', 'last_id': latest_id})
+        return JsonResponse({"status": "init", "last_id": latest_id})
 
     try:
         last_seen_id = int(last_seen_id)
     except (TypeError, ValueError):
-        return JsonResponse({'status': 'error', 'message': 'Invalid last_seen_id'}, status=400)
+        return JsonResponse({"status": "error", "message": "Invalid last_seen_id"}, status=400)
 
     new_signals = TradeDecisionLog.objects.filter(
         id__gt=last_seen_id,
-        action__in=['BUY', 'SELL']
-    ).order_by('id')
+        action__in=["BUY", "SELL"],
+    ).order_by("id")
 
-    signals_data = []
-    for sig in new_signals:
-        features = sig.features_snapshot or {}
-        signals_data.append({
-            'id': sig.id,
-            'action': sig.action,
-            'symbol': sig.symbol,
-            'entry_price': _pick_num(features, ['entry_price', 'entry'], 0),
-            'stop_loss': _pick_num(features, ['stop_loss', 'sl'], 0),
-            'tp1': _pick_num(features, ['tp1'], 0),
-            'take_profit': _pick_num(features, ['take_profit', 'tp_final', 'tp'], 0),
-            'calculated_volume': _pick_num(features, ['calculated_volume', 'volume'], 0),
-            'is_reentry_864': bool(features.get('is_reentry_864', False)),
-            'ai_prob': features.get('ai_prob'),
-            'ai_approved': features.get('ai_approved'),
-        })
-
-    return JsonResponse({'status': 'success', 'new_signals': signals_data})
+    signals_data = [_serialize_signal(sig, include_notification=False) for sig in new_signals]
+    return JsonResponse({"status": "success", "new_signals": signals_data})
 
 
 @login_required
 def api_latest_signal(request):
     """آخرین سیگنال و وضعیت ارسال آن را برمی‌گرداند."""
     latest = TradeDecisionLog.objects.filter(
-        action__in=['BUY', 'SELL']
-    ).order_by('-id').first()
+        action__in=["BUY", "SELL"],
+    ).order_by("-id").first()
 
     if not latest:
-        return JsonResponse({'status': 'no_signal'})
-
-    features = latest.features_snapshot or {}
-
-    status_map = {
-        'none': {'text': 'ثبت شده', 'color': 'text-slate-400'},
-        'pending': {'text': 'در حال ارسال', 'color': 'text-amber-400'},
-        'sent': {'text': 'ارسال شد', 'color': 'text-emerald-400'},
-        'failed': {'text': 'خطا در ارسال', 'color': 'text-rose-400'},
-    }
-    status_info = status_map.get(latest.notification_status, status_map['none'])
+        return JsonResponse({"status": "no_signal"})
 
     return JsonResponse({
-        'status': 'success',
-        'signal': {
-            'id': latest.id,
-            'symbol': latest.symbol,
-            'action': latest.action,
-            'entry_price': _pick_num(features, ['entry_price', 'entry'], 0),
-            'stop_loss': _pick_num(features, ['stop_loss', 'sl'], 0),
-            'tp1': _pick_num(features, ['tp1'], 0),
-            'take_profit': _pick_num(features, ['take_profit', 'tp_final', 'tp'], 0),
-            'calculated_volume': _pick_num(features, ['calculated_volume', 'volume'], 0),
-            'is_reentry_864': bool(features.get('is_reentry_864', False)),
-            'ai_prob': features.get('ai_prob'),
-            'time': latest.timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(latest, 'timestamp') and latest.timestamp else '-',
-            'notification_status': latest.notification_status,
-            'notification_text': status_info['text'],
-            'notification_color': status_info['color'],
-            'notification_attempts': latest.notification_attempts,
-            'ai_approved': features.get('ai_approved'),
-        }
+        "status": "success",
+        "signal": _serialize_signal(latest, include_notification=True),
     })
 
 def generate_trades_hash(processed_trades) -> str:
