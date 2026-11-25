@@ -91,7 +91,7 @@ def evaluate_market_and_execute(symbol, time_frame:str = 'M1'):
         return {'status': 'error', 'reason': 'فاصله حد ضرر صفر است.'}
         
     volume = calculate_dynamic_lot_size(symbol, account_balance, risk_percentage, entry, sl)
-    risk_usd = float(round(Decimal(str(account_balance)) * Decimal(str(risk_percentage / 100.0)), 2))
+    risk_usd = Decimal(round(Decimal(str(account_balance)) * Decimal(str(risk_percentage / 100.0)), 2))
     
     snapshot.update({'entry_price': entry, 'stop_loss': sl, 'take_profit': tp,
                      'calculated_volume': volume, 'risk_amount_usd': risk_usd})
