@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+
 import numpy as np
 import pandas as pd
 
 
 @dataclass
 class DVAARConfig:
-    """پیکربندی مدل DVA-AR و مدیریت ریسک پویای NDS."""
+    """پیکربندی مدل DVA-AR و مدیریت ریسک پویای NDS و Super-Scalp."""
     profile: str = "conservative"  # "conservative" | "moderate" | "aggressive"
     base_risk_pct: float = 0.005  # 0.50% ریسک پایه
     recovery_horizon_trades: int = 8  # افق بازیابی زیان (تعداد معامله)
@@ -23,6 +24,16 @@ class DVAARConfig:
     max_lot: float = 50.0
     advisory_reject_risk_scale: float = 0.5  # ضریب کاهش ریسک وقتی AI نظر مردود می‌دهد
 
+    # تنظیمات اختصاصی DVA برای اسکالپ
+    dva_enabled: bool = True
+    dva_equity: float = 1000.0
+    dva_base_risk_pct: float = 0.25
+    dva_min_risk_pct: float = 0.10
+    dva_max_risk_pct: float = 0.40
+    dva_atr_ref_pct: float = 0.0010
+    dva_breakeven_r: float | None = 0.8   # مثلاً 0.8 یا None برای غیرفعال بودن سر‌به‌سر
+    dva_breakeven_lock_r: float = 0.0    # 0.0 یعنی دقیقاً روی نقطه ورود (entry)
+
     @classmethod
     def from_profile(cls, profile: str | None) -> "DVAARConfig":
         p = (profile or "conservative").lower().strip()
@@ -33,6 +44,9 @@ class DVAARConfig:
                 recovery_horizon_trades=4,
                 max_recovery_add_pct=0.0075,
                 circuit_breaker_dd_pct=0.12,
+                dva_base_risk_pct=0.35,
+                dva_min_risk_pct=0.15,
+                dva_max_risk_pct=0.55,
             )
         if p in ("aggressive", "پرریسک", "تهاجمی"):
             return cls(
@@ -41,6 +55,9 @@ class DVAARConfig:
                 recovery_horizon_trades=2,
                 max_recovery_add_pct=0.015,
                 circuit_breaker_dd_pct=0.20,
+                dva_base_risk_pct=0.50,
+                dva_min_risk_pct=0.20,
+                dva_max_risk_pct=0.80,
             )
         return cls(
             profile="conservative",
@@ -48,7 +65,43 @@ class DVAARConfig:
             recovery_horizon_trades=8,
             max_recovery_add_pct=0.0025,
             circuit_breaker_dd_pct=0.06,
+            dva_base_risk_pct=0.25,
+            dva_min_risk_pct=0.10,
+            dva_max_risk_pct=0.40,
         )
+
+def compute_dva_stop_loss(
+    *,
+    direction: int,
+    entry_price: float,
+    atr_value: float | None = None,
+    ohlc_ltf: pd.DataFrame | None = None,
+    cfg: DVAARConfig | None = None,
+    atr_mult: float = 1.2,
+    min_sl_dist: float = 0.5,
+    max_sl_dist: float = 8.0,
+) -> tuple[float, float]:
+    """تعیین قیمت حد ضرر (SL) و فاصله آن توسط DVA بر اساس نوسان بازار."""
+    cfg = cfg or DVAARConfig()
+    entry_px = float(entry_price)
+    if entry_px <= 0:
+        return entry_px, 0.0
+
+    if atr_value is not None and float(atr_value) > 0:
+        vol_unit = float(atr_value)
+    else:
+        yz = compute_yang_zhang_volatility(ohlc_ltf, window=cfg.vol_ref_window)
+        vol_unit = entry_px * yz if yz > 0 else max(min_sl_dist, entry_px * float(cfg.dva_atr_ref_pct))
+
+    sl_dist = vol_unit * float(atr_mult)
+    sl_dist = max(float(min_sl_dist), min(float(max_sl_dist), sl_dist))
+
+    if int(direction) == 1:  # BUY
+        sl_price = entry_px - sl_dist
+    else:  # SELL
+        sl_price = entry_px + sl_dist
+
+    return round(float(sl_price), 5), round(float(sl_dist), 5)
 
 
 def compute_yang_zhang_volatility(ohlc: pd.DataFrame | None, window: int = 20) -> float:
@@ -85,12 +138,108 @@ def compute_yang_zhang_volatility(ohlc: pd.DataFrame | None, window: int = 20) -
     return math.sqrt(yz_var)
 
 
+def _round_lot_down(raw_volume: float, min_lot: float, max_lot: float, step: float) -> float:
+    step = max(float(step), 1e-6)
+    stepped = math.floor(max(0.0, raw_volume) / step) * step
+    if stepped < float(min_lot):
+        return 0.0
+    return round(min(stepped, float(max_lot)), 4)
+
+
+def compute_dva_scalp_position(
+    *,
+    equity: float,
+    entry_price: float,
+    stop_price: float,
+    atr_value: float | None = None,
+    ohlc_ltf: pd.DataFrame | None = None,
+    point_value_per_lot: float = 100.0,
+    cfg: DVAARConfig | None = None,
+    ai_prob: float | None = None,
+    ai_approved: bool | None = None,
+) -> dict:
+    """محاسبه حجم و ریسک پویای اسکالپ با منطق DVA (تنظیم بر اساس نوسان و احتمال AI)."""
+    cfg = cfg or DVAARConfig()
+    equity = max(float(equity), 0.0)
+    entry_price = float(entry_price)
+    stop_price = float(stop_price)
+    stop_dist = abs(entry_price - stop_price)
+
+    risk_pct = float(cfg.dva_base_risk_pct)
+    min_pct = float(cfg.dva_min_risk_pct)
+    max_pct = float(cfg.dva_max_risk_pct)
+    atr_ref = max(float(cfg.dva_atr_ref_pct), 1e-7)
+
+    vol_ratio_pct = 0.0
+    vol_factor = 1.0
+
+    if cfg.dva_enabled and entry_price > 0:
+        if atr_value is not None and float(atr_value) > 0:
+            vol_ratio_pct = float(atr_value) / entry_price
+        else:
+            yz = compute_yang_zhang_volatility(ohlc_ltf, window=cfg.vol_ref_window)
+            vol_ratio_pct = yz if yz > 0 else atr_ref
+
+        vol_factor = max(0.5, min(1.4, atr_ref / max(vol_ratio_pct, 1e-7)))
+
+        ai_factor = 1.0
+        if ai_prob is not None:
+            p = float(ai_prob)
+            if p >= 0.65:
+                ai_factor = 1.15
+            elif p < 0.50:
+                ai_factor = 0.80
+        elif ai_approved is False:
+            ai_factor = max(0.1, min(1.0, float(cfg.advisory_reject_risk_scale)))
+
+        risk_pct = max(min_pct, min(max_pct, risk_pct * vol_factor * ai_factor))
+
+    risk_usd = max(0.0, equity * (risk_pct / 100.0))
+    if stop_dist <= 1e-9 or point_value_per_lot <= 1e-9 or risk_usd <= 0:
+        return {
+            "allowed": False,
+            "reason": "فاصله حد ضرر یا پارامترهای محاسبه حجم نامعتبر است.",
+            "volume": 0.0,
+            "risk_amount_usd": 0.0,
+            "dva_risk_pct": round(risk_pct, 4),
+            "vol_factor": round(vol_factor, 4),
+            "breakeven_r": cfg.dva_breakeven_r,
+        }
+
+    raw_volume = risk_usd / (stop_dist * float(point_value_per_lot))
+    final_volume = _round_lot_down(raw_volume, cfg.min_lot, cfg.max_lot, cfg.lot_step)
+    if final_volume <= 0:
+        return {
+            "allowed": False,
+            "reason": f"حجم محاسبه‌شده کمتر از حداقل مجاز بروکر ({cfg.min_lot:.2f}) است.",
+            "volume": 0.0,
+            "risk_amount_usd": 0.0,
+            "dva_risk_pct": round(risk_pct, 4),
+            "vol_factor": round(vol_factor, 4),
+            "breakeven_r": cfg.dva_breakeven_r,
+        }
+
+    actual_risk_usd = final_volume * stop_dist * float(point_value_per_lot)
+    return {
+        "allowed": True,
+        "reason": "تایید شد",
+        "volume": final_volume,
+        "risk_amount_usd": round(actual_risk_usd, 2),
+        "dva_risk_pct": round(risk_pct, 4),
+        "vol_factor": round(vol_factor, 4),
+        "breakeven_r": cfg.dva_breakeven_r,
+    }
+
+
 def compute_dva_ar_position(
     *,
     equity: float,
     peak_equity: float,
     entry_price: float,
     stop_price: float,
+    strategy_mode: str = "nds",
+    atr_value: float | None = None,
+    ai_prob: float | None = None,
     reversal_price: float | None = None,
     target_price: float | None = None,
     ohlc_ltf: pd.DataFrame | None = None,
@@ -98,15 +247,28 @@ def compute_dva_ar_position(
     cfg: DVAARConfig | None = None,
     ai_approved: bool | None = None,
 ) -> dict:
-    """محاسبه حجم پویا، نوسان یانگ-ژانگ، بازیابی مستهلک‌شونده زیان و قطع‌کننده مدار."""
+    """نقطه ورود یکپارچه برای محاسبه حجم پویا در حالت NDS یا Super-Scalp."""
     cfg = cfg or DVAARConfig()
+
+    if str(strategy_mode).lower().strip() in ("scalp", "super_scalp", "super_scalp_ha"):
+        return compute_dva_scalp_position(
+            equity=equity,
+            entry_price=entry_price,
+            stop_price=stop_price,
+            atr_value=atr_value,
+            ohlc_ltf=ohlc_ltf,
+            point_value_per_lot=point_value_per_lot,
+            cfg=cfg,
+            ai_prob=ai_prob,
+            ai_approved=ai_approved,
+        )
+
     equity = max(float(equity), 0.0)
     peak_equity = max(float(peak_equity), equity, 1e-9)
 
     dd_pct = max(0.0, (peak_equity - equity) / peak_equity)
     cb_limit = max(float(cfg.circuit_breaker_dd_pct), 1e-6)
 
-    # ۱. قطع‌کننده مدار (Circuit Breaker)
     if dd_pct >= cb_limit:
         return {
             "allowed": False,
@@ -114,6 +276,7 @@ def compute_dva_ar_position(
             "volume": 0.0,
             "risk_amount_usd": 0.0,
             "risk_pct_effective": 0.0,
+            "base_risk_source": "dva_config",
             "drawdown_pct": round(dd_pct, 6),
             "yz_vol": 0.0,
             "vol_dampener": 0.0,
@@ -121,7 +284,6 @@ def compute_dva_ar_position(
             "nds_proximity_factor": 1.0,
         }
 
-    # ۲. فیلتر نوسان یانگ-ژانگ
     yz_vol = compute_yang_zhang_volatility(ohlc_ltf, window=cfg.vol_ref_window)
     baseline = max(float(cfg.vol_baseline), 1e-9)
     if yz_vol > 0:
@@ -133,18 +295,17 @@ def compute_dva_ar_position(
     else:
         vol_dampener = 1.0
 
-    # ۳. بازیابی مستهلک‌شونده زیان (ADR) با ترمز سهموی نزدیک آستانه خطر
+    base_risk_usd = equity * float(cfg.base_risk_pct)
     loss_amount = max(0.0, peak_equity - equity)
     dd_ratio = min(1.0, dd_pct / cb_limit)
     parabolic_brake = max(0.0, 1.0 - (dd_ratio ** 2))
     recovery_dampener = parabolic_brake * (1.0 - 0.84 * (dd_ratio ** 1.5))
-
     horizon = max(1, int(cfg.recovery_horizon_trades))
     raw_recovery_usd = (loss_amount / horizon) * recovery_dampener
     max_recovery_usd = equity * float(cfg.max_recovery_add_pct)
     recovery_add_usd = max(0.0, min(raw_recovery_usd, max_recovery_usd))
+    base_risk_source = "dva_config"
 
-    # ۴. تعدیل نزدیکی به هدف در NDS (نقطه‌میانی / 86.4%)
     nds_factor = 1.0
     if reversal_price is not None and target_price is not None:
         denom = float(target_price) - float(reversal_price)
@@ -155,13 +316,10 @@ def compute_dva_ar_position(
                 delta = max(0.0, min(0.85, delta))
                 nds_factor = 1.0 - delta
 
-    # ۵. تعدیل مشورتی AI
     ai_factor = 1.0
     if ai_approved is False:
         ai_factor = max(0.1, min(1.0, float(cfg.advisory_reject_risk_scale)))
 
-    # ۶. محاسبه حجم نهایی گسسته
-    base_risk_usd = equity * float(cfg.base_risk_pct)
     total_risk_usd = (base_risk_usd + recovery_add_usd) * vol_dampener * nds_factor * ai_factor
 
     stop_dist = abs(float(entry_price) - float(stop_price))
@@ -172,6 +330,7 @@ def compute_dva_ar_position(
             "volume": 0.0,
             "risk_amount_usd": 0.0,
             "risk_pct_effective": 0.0,
+            "base_risk_source": base_risk_source,
             "drawdown_pct": round(dd_pct, 6),
             "yz_vol": round(yz_vol, 8),
             "vol_dampener": round(vol_dampener, 4),
@@ -180,16 +339,16 @@ def compute_dva_ar_position(
         }
 
     raw_volume = total_risk_usd / (stop_dist * float(point_value_per_lot))
-    step = max(float(cfg.lot_step), 1e-6)
-    stepped_volume = math.floor(raw_volume / step) * step
+    final_volume = _round_lot_down(raw_volume, cfg.min_lot, cfg.max_lot, cfg.lot_step)
 
-    if stepped_volume < cfg.min_lot:
+    if final_volume <= 0:
         return {
             "allowed": False,
-            "reason": f"حجم محاسبه‌شده ({stepped_volume:.2f}) کمتر از حداقل مجاز بروکر ({cfg.min_lot:.2f}) است.",
+            "reason": f"حجم محاسبه‌شده کمتر از حداقل مجاز بروکر ({cfg.min_lot:.2f}) است.",
             "volume": 0.0,
             "risk_amount_usd": 0.0,
             "risk_pct_effective": 0.0,
+            "base_risk_source": base_risk_source,
             "drawdown_pct": round(dd_pct, 6),
             "yz_vol": round(yz_vol, 8),
             "vol_dampener": round(vol_dampener, 4),
@@ -197,16 +356,16 @@ def compute_dva_ar_position(
             "nds_proximity_factor": round(nds_factor, 4),
         }
 
-    final_volume = min(stepped_volume, float(cfg.max_lot))
     actual_risk_usd = final_volume * stop_dist * float(point_value_per_lot)
     eff_risk_pct = (actual_risk_usd / equity) if equity > 0 else 0.0
 
     return {
         "allowed": True,
         "reason": "تایید شد",
-        "volume": round(final_volume, 4),
+        "volume": final_volume,
         "risk_amount_usd": round(actual_risk_usd, 2),
         "risk_pct_effective": round(eff_risk_pct, 6),
+        "base_risk_source": base_risk_source,
         "drawdown_pct": round(dd_pct, 6),
         "yz_vol": round(yz_vol, 8),
         "vol_dampener": round(vol_dampener, 4),

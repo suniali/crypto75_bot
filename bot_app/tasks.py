@@ -51,8 +51,8 @@ def run_market_ai_analysis_task(symbol, time_frame: str):
             logger.info(f"ℹ️ Reason: {result.get('reason')}")
 
         # اجرای موتور مستقل Super-Scalp بعد از استراتژی قبلی
-        scalp_res = evaluate_super_scalp_and_execute(symbol=symbol, time_frame=time_frame,require_all_5_checks=False)
-        logger.info(f"⚡ [SuperScalp] Status: {scalp_res.get('status')} | {scalp_res.get('reason', '')}")
+        # scalp_res = evaluate_super_scalp_and_execute(symbol=symbol, time_frame=time_frame,require_all_5_checks=False)
+        # logger.info(f"⚡ [SuperScalp] Status: {scalp_res.get('status')} | {scalp_res.get('reason', '')}")
     except Exception as e:
         logger.exception(f"❌ Error in task: {e}")
     finally:

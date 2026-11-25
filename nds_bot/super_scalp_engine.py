@@ -44,8 +44,8 @@ class SuperScalpConfig:
     max_lot: float = 20.0
 
     # حالت مشورتی AI
-    ai_advisory_only: bool = True
-    ai_min_prob: float = 0.50
+    ai_advisory_only: bool = False
+    ai_min_prob: float = 0.55
     extra: dict[str, Any] = field(default_factory=dict)
 
 
@@ -294,12 +294,8 @@ def detect_super_scalp_setup(
     cfg: SuperScalpConfig,
 ) -> dict[str, Any] | None:
     """
-    تشخیص ستاپ Super-Scalping بر اساس چک‌لیست اسلاید 114 روی Heikin Ashi:
-    1. Flag
-    2. Sequencing (1-2-3 با پنجره کندلی در بر گیرنده ستاپ)
-    3. %86.4 Hook
-    4. Symmetry (Legs & Nodes)
-    5. Hook-Hook-Rally (HHRR)
+    تشخیص ستاپ Super-Scalping بر اساس چک‌لیست اسلاید 114 روی Heikin Ashi
+    (تعیین مقدار حد ضرر SL به ماژول DVA واگذار شده است).
     """
     start_i = max(0, bar_idx - cfg.max_setup_bars)
     ha_win = ha.iloc[start_i : bar_idx + 1]
@@ -370,13 +366,15 @@ def detect_super_scalp_setup(
         if not (seq_ok and f_info["flag_ok"]) and score < cfg.min_checklist_score:
             return None
 
-        sl_price = max(f_info["flag_high"], n3_price) + max(0.05 * f_info["flag_span"], 0.2)
         waist_price = 0.5 * (open_low[2] + min(open_high[2], n3_price))
-        tp_price = min(waist_price, entry_raw - 0.35 * abs(sl_price - entry_raw))
-        if tp_price >= entry_raw or sl_price <= entry_raw:
+        fallback_tp = entry_raw - max(float(atr_val) * 1.2, 0.4)
+        tp_price = waist_price if waist_price < entry_raw else fallback_tp
+        if tp_price >= entry_raw:
             return None
 
-        rr = (entry_raw - tp_price) / max(entry_raw - sl_price, 1e-9)
+        # تخمین اولیه RR بر اساس ATR برای غربالگری ستاپ پیش از تعیین SL نهایی توسط DVA
+        est_sl_dist = max(float(atr_val) * 1.0, 0.2)
+        rr = (entry_raw - tp_price) / max(est_sl_dist, 1e-9)
         if rr < cfg.min_rr:
             return None
 
@@ -391,7 +389,7 @@ def detect_super_scalp_setup(
             "side": "SELL",
             "direction": -1,
             "entry": entry_raw,
-            "sl": float(sl_price),
+            "sl": None,
             "tp": float(tp_price),
             "rr": round(float(rr), 2),
             "level_864": float(level_864),
@@ -455,13 +453,14 @@ def detect_super_scalp_setup(
         if not (seq_ok and f_info["flag_ok"]) and score < cfg.min_checklist_score:
             return None
 
-        sl_price = min(f_info["flag_low"], n3_price) - max(0.05 * f_info["flag_span"], 0.2)
         waist_price = 0.5 * (open_high[2] + max(open_low[2], n3_price))
-        tp_price = max(waist_price, entry_raw + 0.35 * abs(entry_raw - sl_price))
-        if tp_price <= entry_raw or sl_price >= entry_raw:
+        fallback_tp = entry_raw + max(float(atr_val) * 1.2, 0.4)
+        tp_price = waist_price if waist_price > entry_raw else fallback_tp
+        if tp_price <= entry_raw:
             return None
 
-        rr = (tp_price - entry_raw) / max(entry_raw - sl_price, 1e-9)
+        est_sl_dist = max(float(atr_val) * 1.0, 0.2)
+        rr = (tp_price - entry_raw) / max(est_sl_dist, 1e-9)
         if rr < cfg.min_rr:
             return None
 
@@ -476,7 +475,7 @@ def detect_super_scalp_setup(
             "side": "BUY",
             "direction": 1,
             "entry": entry_raw,
-            "sl": float(sl_price),
+            "sl": None,
             "tp": float(tp_price),
             "rr": round(float(rr), 2),
             "level_864": float(level_864),

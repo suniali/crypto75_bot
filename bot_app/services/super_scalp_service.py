@@ -113,6 +113,11 @@ def evaluate_super_scalp_strategy(
     if callable(ai_predict_fn):
         ai_prob = float(ai_predict_fn(setup))
         ai_approved = bool(ai_prob >= ai_threshold)
+        if not getattr(cfg, "ai_advisory_only", False) and not ai_approved:
+            return {
+                "has_signal": False,
+                "reason": f"ستاپ توسط فیلتر AI رد شد (prob={ai_prob:.2f} < {ai_threshold:.2f}).",
+            }
 
     risk_pct = round((risk_usd / max(cfg.account_balance, 1.0)) * 100.0, 2)
     explanation = (

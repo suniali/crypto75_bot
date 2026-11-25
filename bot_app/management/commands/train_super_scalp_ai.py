@@ -1,4 +1,4 @@
-# python manage.py train_super_scalp_ai --symbol XAUUSD_l --timeframe M1 --limit 30000 
+# python manage.py train_super_scalp_ai --symbol XAUUSD_l --timeframe M1 --limit 30000
 # python manage.py train_super_scalp_ai --symbol XAUUSD_l --timeframe M1 --limit 30000 --all-5
 # python manage.py train_super_scalp_ai --csv data/xauusd_m1.csv --all-5
 
@@ -13,6 +13,7 @@ from sklearn.metrics import classification_report, roc_auc_score
 from bot_app.models import MarketCandle
 from super_scalp_backtest import load_ohlc_from_csv, run_super_scalp_backtest
 from nds_bot.super_scalp_engine import SuperScalpConfig
+from nds_bot.dva_ar_risk import DVAARConfig
 from bot_app.services.super_scalp_service import extract_scalp_ai_features
 
 
@@ -67,9 +68,14 @@ class Command(BaseCommand):
             require_all_5_checks=all_5,
             ai_advisory_only=True,
         )
+        raw_dva_cfg = DVAARConfig(dva_enabled=False, dva_breakeven_r=None)
 
-        # استخراج تمیز معاملات بدون دخالت مدل قبلی
-        bt = run_super_scalp_backtest(ohlc, cfg=cfg, ai_predict_fn=None)
+        bt = run_super_scalp_backtest(
+            ohlc_ltf=ohlc,
+            cfg=cfg,
+            dva_cfg=raw_dva_cfg,
+            ai_predict_fn=None,
+        )
         trades = bt.get("trades") or []
 
         if len(trades) < 30:
@@ -95,7 +101,6 @@ class Command(BaseCommand):
         X = pd.DataFrame([pair[0] for pair in valid_pairs]).apply(pd.to_numeric, errors="coerce").fillna(0.0)
         y = np.array([pair[1] for pair in valid_pairs], dtype=int)
 
-        # تقسیم زمانی بدون نشت آینده: ۸۰٪ اول آموزش، ۲۰٪ آخر ارزیابی
         split = int(len(X) * 0.8)
         X_train, X_test = X.iloc[:split], X.iloc[split:]
         y_train, y_test = y[:split], y[split:]
@@ -117,7 +122,6 @@ class Command(BaseCommand):
             self.stdout.write(classification_report(y_test, preds, digits=3))
             self.stdout.write(f"🎯 ROC-AUC روی بخش تست: {auc:.3f}\n")
 
-        # آموزش نهایی روی کل نمونه‌های استخراج‌شده
         clf.fit(X, y)
         os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
         joblib.dump(
