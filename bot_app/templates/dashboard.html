@@ -3108,7 +3108,15 @@
             function tick() {
                 const now = new Date();
                 zones.forEach(z => { if(z.el) z.el.textContent = z.fmt.format(now); });
-                if(dateEl) dateEl.textContent = dateFmt.format(now).replace(/-/g, '.');
+                if(dateEl) {
+                    dateEl.textContent = new Intl.DateTimeFormat('en-US', {
+                        timeZone: 'Asia/Tehran',
+                        weekday: 'short',
+                        month: 'short',
+                        day: '2-digit',
+                        year: 'numeric'
+                    }).format(now); 
+                }
             }
             tick();
             setInterval(tick, 1000);
